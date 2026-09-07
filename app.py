@@ -400,16 +400,10 @@ else:
                         floatingTexts.push({ x: meteor.x, y: meteor.y - 140, text: "🔴 FASE 2: LUNA CÍCLOPE ACTIVADA 🔴", color: "#FF0000", life: 180, size: 36 });
                     }
 
-                    // Transición de Música en Fase 2 (Sustituye la música base solo por la del jefe)
+                    // Transición de Música en Fase 2
                     if (meteor.isPhase2 && !meteor.phase2MusicStarted) {
                         meteor.phase2MusicStarted = true;
-                        if (bgMusic && sfxData["boss_music"] && sfxData["boss_music"].length > 0) {
-                            bgMusic.pause();
-                            bgMusic.src = sfxData["boss_music"][0];
-                            bgMusic.loop = true;
-                            bgMusic.playbackRate = 1.0;
-                            bgMusic.play().catch(e => console.log("Error de audio:", e));
-                        }
+                        // La música lunafase2 ya se encuentra sonando de fondo.
                     }
 
                     // Movimiento de la Luna (Mucho más lenta en Fase 2)
@@ -546,8 +540,15 @@ else:
                             
                             // TRANSICIÓN A JEFE LUNA SANGRIENTA
                             meteor.isBoss = true; cinematicTimer = 180;
-                            if(bgMusic) bgMusic.playbackRate = 1.3; 
-                            playSfx("boss_music", 1.5);
+                            
+                            if (bgMusic && sfxData["luna_musica"] && sfxData["luna_musica"].length > 0) {
+                                bgMusic.pause();
+                                bgMusic.src = sfxData["luna_musica"][0];
+                                bgMusic.currentTime = 0;
+                                bgMusic.playbackRate = 1.0;
+                                bgMusic.play().catch(e => console.log(e));
+                            }
+                            
                             floatingTexts.push({ x: meteor.x, y: meteor.y - 120, text: "⚠️ LA LUNA DESPIERTA ⚠️", color: "#FF4500", life: 180, size: 40 });
                         } 
                         hit = true;
@@ -564,6 +565,7 @@ else:
                             if (bgMusic && audioSrc) {
                                 bgMusic.pause();
                                 bgMusic.src = audioSrc;
+                                bgMusic.currentTime = 0;
                                 bgMusic.loop = true;
                                 bgMusic.playbackRate = 1.0;
                                 bgMusic.play().catch(e => console.log(e));
@@ -607,7 +609,15 @@ else:
                             if(s.r > blackHole.r * 1.25) { 
                                 blackHole.dead = true; s.r += 35; 
                                 playSfx("bh_death", 2.5);
-                                meteor.isBoss = true; cinematicTimer = 180; if(bgMusic) bgMusic.playbackRate = 1.3; playSfx("boss_music", 1.5);
+                                meteor.isBoss = true; cinematicTimer = 180;
+                                
+                                if (bgMusic && sfxData["luna_musica"] && sfxData["luna_musica"].length > 0) {
+                                    bgMusic.pause();
+                                    bgMusic.src = sfxData["luna_musica"][0];
+                                    bgMusic.currentTime = 0;
+                                    bgMusic.playbackRate = 1.0;
+                                    bgMusic.play().catch(e => console.log(e));
+                                }
                             } 
                             else { 
                                 if(s === player && !player.dead) { player.hp = 0; player.dead = true; handlePlayerDeath(); } else if(s !== player) { s.dead = true; } 
