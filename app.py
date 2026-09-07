@@ -10,7 +10,7 @@ st.title("🌟 Star.io - Batalla Galáctica")
 st.write("¡Sobrevive, domina el Top, destruye al Agujero Negro y enfréntate a la Luna!")
 
 # ==========================================
-# 🎵 CONFIGURACIÓN DE AUDIO (MÚSICA Y EFECTOS)
+# 🎵 CONFIGURACIÓN DE AUDIO
 # ==========================================
 RUTA_MUSICA = "test.wav" 
 
@@ -23,10 +23,8 @@ def obtener_audio_b64(ruta):
             return f"data:audio/{extension};base64,{audio_base64}"
     return None
 
-# Cargar música de fondo
 audio_src = obtener_audio_b64(RUTA_MUSICA) or ""
 
-# Rutas de efectos de sonido
 rutas_sfx = {
     "laser": ["sonidos/laser1.wav", "laser1.wav", "laser1.mp3"],
     "death": ["sonidos/muerte.wav", "muerte.wav", "death1.wav"],
@@ -48,7 +46,6 @@ for cat, rutas in rutas_sfx.items():
             sfx_data[cat].append(b64_str)
 
 sfx_json = json.dumps(sfx_data)
-# ==========================================
 
 if 'jugando' not in st.session_state:
     st.session_state.jugando = False
@@ -87,7 +84,7 @@ else:
             .lb-item.me { color: #00FFFF; font-weight: bold; text-shadow: 0 0 5px rgba(0, 255, 255, 0.5); }
             #gameover { display: none; position: absolute; color: white; top: 40%; left: 50%; transform: translateX(-50%); text-align: center; font-size: 24px; text-shadow: 2px 2px 10px #000; pointer-events: none; z-index: 5; width: 100%; }
             #orb-modal { display: none; position: absolute; top: 50%; left: 40%; transform: translate(-50%, -50%); background: rgba(10, 10, 25, 0.95); padding: 30px; border-radius: 12px; border: 3px solid white; text-align: center; z-index: 10; }
-            .orb-btn { width: 140px; height: 140px; background: #151525; color: white; border: 2px solid #555; border-radius: 10px; font-size: 16px; font-weight: bold; cursor: pointer; transition: 0.2s; }
+            .orb-btn { width: 160px; height: 160px; background: #151525; color: white; border: 2px solid #555; border-radius: 10px; font-size: 16px; font-weight: bold; cursor: pointer; transition: 0.2s; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.4; }
             .orb-btn:hover { background: #2a2a40; transform: scale(1.05); }
             #audio-controls { position: absolute; top: 15px; left: 15px; background: rgba(10, 10, 20, 0.85); border: 2px solid #00FFFF; border-radius: 8px; padding: 8px 15px; display: flex; align-items: center; gap: 12px; z-index: 15; box-shadow: 0 0 10px rgba(0, 255, 255, 0.2); }
             #mute-btn { background: none; border: none; font-size: 22px; cursor: pointer; padding: 0; margin: 0; outline: none; transition: transform 0.2s; color: white; }
@@ -203,7 +200,7 @@ else:
             const dashCooldown = 5000; 
             let dashTimer = 0; 
 
-            let floatingTexts = []; let lasers = []; let particles = []; let boxes = []; let hearts = []; let orbs = [];
+            let floatingTexts = []; let lasers = []; let particles = []; let boxes = []; let redBoxes = []; let hearts = []; let orbs = [];
             let bgStarsLayer1 = []; let bgStarsLayer2 = [];
             
             for(let i=0; i<120; i++) {
@@ -253,7 +250,8 @@ else:
                 player.x = Math.random() * (worldW - 200) + 100; player.y = Math.random() * (worldH - 200) + 100;
                 player.r = 18; player.hp = 200; player.maxHp = 200; player.shields = 0; player.dead = false;
                 player.invulnTimer = 0; player.fireTimer = 0; player.speedBoostTimer = 0; player.hasInvulnCharge = false;
-                player.laserRange = 1.0; player.laserDamage = 1.0; player.shotType = 'normal';
+                player.laserRange = 1.0; player.laserDamage = 1.0; 
+                player.multiLevel = 1; player.crossLevel = 0; player.continuousLaserTimer = 0;
                 isGameOver = false; overScreen.style.display = 'none';
                 
                 playSfx("respawn");
@@ -276,6 +274,10 @@ else:
                 }
             }
 
+            function fireLaserProjectile(owner, ang, speed, life, color, damageMult) {
+                lasers.push({ x: owner.x, y: owner.y, vx: Math.cos(ang) * speed, vy: Math.sin(ang) * speed, life: life, owner: owner, color: color, damageMult: damageMult, isStar: false });
+            }
+
             function shootLaser() {
                 if(player.dead || player.r <= 12) return;
                 let targetX = (screenMouseX - canvas.width / 2) / zoom + camX + canvas.width / 2;
@@ -284,17 +286,33 @@ else:
                 if(dist === 0) return;
 
                 let angle = Math.atan2(dy, dx); let speed = 15; let baseLife = 75 * player.laserRange;
+                let costPerShot = 0;
 
-                function fireAt(ang) {
-                    lasers.push({ x: player.x, y: player.y, vx: Math.cos(ang) * speed, vy: Math.sin(ang) * speed, life: baseLife, owner: player, color: "#00FFFF", damageMult: player.laserDamage, isStar: false });
+                // Disparo Múltiple (Frontal)
+                let multiCount = player.multiLevel; 
+                let spread = 0.15;
+                let startAngle = angle - (spread * (multiCount - 1)) / 2;
+                for(let i=0; i<multiCount; i++) {
+                    fireLaserProjectile(player, startAngle + i * spread, speed, baseLife, "#00FFFF", player.laserDamage);
+                    costPerShot += 0.2;
                 }
 
-                if(player.shotType === 'normal') { fireAt(angle); } 
-                else if(player.shotType === 'triple') { fireAt(angle - 0.20); fireAt(angle); fireAt(angle + 0.20); } 
-                else if(player.shotType === 'cross') { fireAt(angle); fireAt(angle + Math.PI/2); fireAt(angle + Math.PI); fireAt(angle - Math.PI/2); }
+                // Disparo Cruzado (Laterales y Atras)
+                if(player.crossLevel > 0) {
+                    let crossCount = player.crossLevel;
+                    for(let i=1; i<=3; i++) {
+                        let crossAng = angle + (Math.PI/2) * i;
+                        let cSpread = 0.10;
+                        let cStartAngle = crossAng - (cSpread * (crossCount - 1)) / 2;
+                        for(let c=0; c<crossCount; c++) {
+                            fireLaserProjectile(player, cStartAngle + c * cSpread, speed, baseLife, "#CC33FF", player.laserDamage * 0.8);
+                            costPerShot += 0.1;
+                        }
+                    }
+                }
 
                 playSfx("laser");
-                player.r = Math.max(10, player.r - 0.4);
+                player.r = Math.max(10, player.r - Math.min(1.5, costPerShot));
             }
 
             const nombres = ["Alpha", "Nova", "Sirius", "Vega", "Orion", "Cosmos", "Apollo", "Zeta", "Pulsar"];
@@ -303,6 +321,7 @@ else:
             function randomName() { return nombres[Math.floor(Math.random() * nombres.length)]; }
 
             function spawnBox() { boxes.push({ x: Math.random() * (worldW - 100) + 50, y: Math.random() * (worldH - 100) + 50, r: 16 }); }
+            function spawnRedBox() { redBoxes.push({ x: Math.random() * (worldW - 100) + 50, y: Math.random() * (worldH - 100) + 50, r: 18 }); }
             function spawnHeart() { hearts.push({ x: Math.random() * (worldW - 100) + 50, y: Math.random() * (worldH - 100) + 50, r: 10 }); }
             function spawnOrb() { orbs.push({ x: Math.random() * (worldW - 100) + 50, y: Math.random() * (worldH - 100) + 50, r: 14, type: Math.random() < 0.5 ? 'celeste' : 'morado' }); }
 
@@ -311,7 +330,7 @@ else:
 
             function init() {
                 isGameOver = false; isPaused = false; playerLives = 5; cinematicTimer = 0; orbModal.style.display = 'none'; overScreen.style.display = 'none';
-                floatingTexts = []; lasers = []; particles = []; boxes = []; hearts = []; orbs = [];
+                floatingTexts = []; lasers = []; particles = []; boxes = []; redBoxes = []; hearts = []; orbs = [];
                 
                 meteor = { 
                     orbitAngle: 0, orbitRadius: 450, x: worldW / 2, y: worldH / 2, r: 100, angle: 0, 
@@ -323,14 +342,14 @@ else:
                 player = { 
                     x: Math.random() * worldW, y: Math.random() * worldH, r: 18, color: '#FFFFFF', name: "__PLAYER_NICKNAME__", speed: 3.5, dead: false,
                     hp: 200, maxHp: 200, shields: 0, hasInvulnCharge: false, invulnTimer: 0, fireTimer: 0, speedBoostTimer: 0,
-                    laserRange: 1.0, laserDamage: 1.0, shotType: 'normal'
+                    laserRange: 1.0, laserDamage: 1.0, multiLevel: 1, crossLevel: 0, continuousLaserTimer: 0
                 };
                 
                 bots = []; for(let i=0; i<maxBots; i++) spawnBot();
                 foods = []; for(let i=0; i<maxFoods; i++) spawnFood();
                 for(let i=0; i<35; i++) spawnHeart();
                 
-                spawnBox(); spawnBox(); spawnOrb();
+                spawnBox(); spawnBox(); spawnRedBox(); spawnOrb();
                 loop();
             }
 
@@ -357,8 +376,14 @@ else:
             function applyUpgrade(type) {
                 if(type === 'range') player.laserRange += 0.4;
                 if(type === 'damage') player.laserDamage += 0.5;
-                if(type === 'triple') player.shotType = 'triple';
-                if(type === 'cross') player.shotType = 'cross';
+                if(type === 'multi') { 
+                    player.multiLevel = Math.min(10, player.multiLevel + 1); 
+                    floatingTexts.push({ x: player.x, y: player.y - 40, text: `MÚLTIPLE Nv.${player.multiLevel}`, color: "#CC33FF", life: 60, size: 20 });
+                }
+                if(type === 'cross') { 
+                    player.crossLevel = Math.min(10, player.crossLevel + 1); 
+                    floatingTexts.push({ x: player.x, y: player.y - 40, text: `CRUZ Nv.${player.crossLevel}`, color: "#CC33FF", life: 60, size: 20 });
+                }
                 orbModal.style.display = 'none'; isPaused = false;
             }
 
@@ -372,8 +397,16 @@ else:
                     btn2.style.borderColor = '#00FFFF'; btn2.innerHTML = "💥<br>MAYOR DAÑO"; btn2.onclick = () => applyUpgrade('damage');
                 } else {
                     orbTitle.style.color = '#CC33FF'; orbTitle.innerText = "🟣 ORBE MORADO";
-                    btn1.style.borderColor = '#CC33FF'; btn1.innerHTML = "🔱<br>DISPARO TRIPLE"; btn1.onclick = () => applyUpgrade('triple');
-                    btn2.style.borderColor = '#CC33FF'; btn2.innerHTML = "➕<br>DISPARO EN CRUZ"; btn2.onclick = () => applyUpgrade('cross');
+                    let nextMulti = Math.min(10, player.multiLevel + 1);
+                    let nextCross = Math.min(10, player.crossLevel + 1);
+                    
+                    btn1.style.borderColor = '#CC33FF'; 
+                    btn1.innerHTML = `🔱<br>DISPARO MÚLTIPLE<br><span style="color:#FFD700;font-size:14px;margin-top:6px;display:block;">Nv. ${nextMulti}</span>`; 
+                    btn1.onclick = () => applyUpgrade('multi');
+                    
+                    btn2.style.borderColor = '#CC33FF'; 
+                    btn2.innerHTML = `➕<br>DISPARO EN CRUZ<br><span style="color:#FFD700;font-size:14px;margin-top:6px;display:block;">Nv. ${nextCross}</span>`; 
+                    btn2.onclick = () => applyUpgrade('cross');
                 }
             }
 
@@ -385,7 +418,24 @@ else:
 
             function update() {
                 if(Math.random() < 0.003 && boxes.length < 5) spawnBox();
+                if(Math.random() < 0.0015 && redBoxes.length < 2) spawnRedBox();
                 if(Math.random() < 0.002 && orbs.length < 3) spawnOrb();
+
+                // Lógica del Disparo Láser Continuo
+                if (!player.dead && player.continuousLaserTimer > 0) {
+                    player.continuousLaserTimer--;
+                    if (player.continuousLaserTimer % 4 === 0 && player.r > 12) {
+                        let targetX = (screenMouseX - canvas.width / 2) / zoom + camX + canvas.width / 2;
+                        let targetY = (screenMouseY - canvas.height / 2) / zoom + camY + canvas.height / 2;
+                        let dx = targetX - player.x, dy = targetY - player.y;
+                        let angle = Math.atan2(dy, dx);
+                        
+                        // Láser ultra rápido, continuo, color rojo, no gasta casi masa
+                        fireLaserProjectile(player, angle, 20, 60 * player.laserRange, "#FF0000", player.laserDamage * 0.6);
+                        if (player.continuousLaserTimer % 12 === 0) playSfx("laser", 0.3); // Sonido espaciado para no saturar
+                        player.r = Math.max(10, player.r - 0.1); 
+                    }
+                }
 
                 // Lógica de la Luna y su Fase Jefe
                 if (!meteor.isBoss) {
@@ -393,70 +443,46 @@ else:
                     meteor.x = (worldW / 2) + Math.cos(meteor.orbitAngle) * meteor.orbitRadius; 
                     meteor.y = (worldH / 2) + Math.sin(meteor.orbitAngle) * meteor.orbitRadius;
                 } else if (!meteor.dead && cinematicTimer <= 0) {
-                    
-                    // Activar Fase 2 al llegar a 50% de HP o menos
                     if (meteor.hp <= meteor.maxHp * 0.5 && !meteor.isPhase2) {
                         meteor.isPhase2 = true;
                         floatingTexts.push({ x: meteor.x, y: meteor.y - 140, text: "🔴 FASE 2: LUNA CÍCLOPE ACTIVADA 🔴", color: "#FF0000", life: 180, size: 36 });
                     }
+                    if (meteor.isPhase2 && !meteor.phase2MusicStarted) { meteor.phase2MusicStarted = true; }
 
-                    // Transición de Música en Fase 2
-                    if (meteor.isPhase2 && !meteor.phase2MusicStarted) {
-                        meteor.phase2MusicStarted = true;
-                        // La música lunafase2 ya se encuentra sonando de fondo.
-                    }
-
-                    // Movimiento de la Luna (Mucho más lenta en Fase 2)
                     let bossSpeed = meteor.isPhase2 ? 0.45 : 1.2;
                     if (!player.dead) {
                         let dx = player.x - meteor.x; let dy = player.y - meteor.y; let dist = Math.hypot(dx, dy);
                         if (dist > 0) { meteor.x += (dx/dist) * bossSpeed; meteor.y += (dy/dist) * bossSpeed; }
                     }
 
-                    // La Luna dispara estrellas en espiral
                     meteor.shootAngle += 0.22;
                     if (Date.now() % 4 === 0) {
                         lasers.push({ x: meteor.x, y: meteor.y, vx: Math.cos(meteor.shootAngle) * 5, vy: Math.sin(meteor.shootAngle) * 5, life: 160, owner: meteor, color: "#FFA500", damageMult: 1.5, r: 9, isStar: true });
                     }
 
-                    // ATAQUE CÍCLOPE CADA 30 SEGUNDOS (Solo en Fase 2)
                     if (meteor.isPhase2) {
                         meteor.laserTimer++;
-                        
-                        // 30 segundos = 1800 frames a 60 FPS
                         if (meteor.laserTimer >= 1800 && meteor.laserChargeTimer <= 0 && meteor.laserSweepTimer <= 0) {
-                            meteor.laserChargeTimer = 60; // 1 segundo de aviso / carga
+                            meteor.laserChargeTimer = 60; 
                             let angleToPlayer = Math.atan2(player.y - meteor.y, player.x - meteor.x);
-                            meteor.laserAngle = angleToPlayer - 0.7; // Inicia desfasado para dar tiempo de reaccionar
+                            meteor.laserAngle = angleToPlayer - 0.7; 
                             floatingTexts.push({ x: meteor.x, y: meteor.y - 100, text: "👁️ ¡LÁSER CÍCLOPE INMINENTE!", color: "#FF0055", life: 60, size: 28 });
                         }
-
                         if (meteor.laserChargeTimer > 0) {
                             meteor.laserChargeTimer--;
-                            if (meteor.laserChargeTimer === 0) {
-                                meteor.laserSweepTimer = 240; // 4 segundos de rayo activo barriendo
-                                meteor.laserTimer = 0; // Reiniciar contador de 30 segundos
-                            }
+                            if (meteor.laserChargeTimer === 0) { meteor.laserSweepTimer = 240; meteor.laserTimer = 0; }
                         }
-
                         if (meteor.laserSweepTimer > 0) {
                             meteor.laserSweepTimer--;
-                            meteor.laserAngle += 0.010; // Rotación progresiva (girar hacia donde va para esquivar)
-
-                            // Detectar colisión con el rayo estilo Cíclope
+                            meteor.laserAngle += 0.010; 
                             if (!player.dead) {
-                                let ux = Math.cos(meteor.laserAngle);
-                                let uy = Math.sin(meteor.laserAngle);
-                                let vx = player.x - meteor.x;
-                                let vy = player.y - meteor.y;
+                                let ux = Math.cos(meteor.laserAngle), uy = Math.sin(meteor.laserAngle);
+                                let vx = player.x - meteor.x, vy = player.y - meteor.y;
                                 let proj = vx * ux + vy * uy;
-
-                                if (proj > 0) { // Jugador frente al láser
+                                if (proj > 0) { 
                                     let distSq = (vx * vx + vy * vy) - (proj * proj);
                                     let beamRadius = 35; 
-                                    if (distSq < (beamRadius + player.r) * (beamRadius + player.r)) {
-                                        takeDamage(player, 5); // Daño continuo por frame al tocar el rayo
-                                    }
+                                    if (distSq < (beamRadius + player.r) * (beamRadius + player.r)) { takeDamage(player, 5); }
                                 }
                             }
                         }
@@ -513,14 +539,13 @@ else:
                     }
                 });
 
-                // Control de Cámara: Paneo cinemático a la Luna
+                // Control de Cámara
                 if (cinematicTimer > 0) {
                     cinematicTimer--;
                     meteor.r += (150 - meteor.r) * 0.03; 
-                    let focusTarget = meteor;
                     zoom += (0.6 - zoom) * 0.05;
-                    camX += (focusTarget.x - canvas.width / 2 - camX) * 0.06; 
-                    camY += (focusTarget.y - canvas.height / 2 - camY) * 0.06;
+                    camX += (meteor.x - canvas.width / 2 - camX) * 0.06; 
+                    camY += (meteor.y - canvas.height / 2 - camY) * 0.06;
                 } else {
                     let focusTarget = (!player.dead) ? player : (allStars[0] || {x: worldW/2, y: worldH/2, r: 15});
                     let targetZoom = Math.max(0.25, 25 / Math.max(25, focusTarget.r * 0.6));
@@ -537,18 +562,10 @@ else:
                         if(blackHole.hp <= 0 && !blackHole.dead) { 
                             blackHole.dead = true; 
                             playSfx("bh_death", 2.5); 
-                            
-                            // TRANSICIÓN A JEFE LUNA SANGRIENTA
                             meteor.isBoss = true; cinematicTimer = 180;
-                            
                             if (bgMusic && sfxData["luna_musica"] && sfxData["luna_musica"].length > 0) {
-                                bgMusic.pause();
-                                bgMusic.src = sfxData["luna_musica"][0];
-                                bgMusic.currentTime = 0;
-                                bgMusic.playbackRate = 1.0;
-                                bgMusic.play().catch(e => console.log(e));
+                                bgMusic.pause(); bgMusic.src = sfxData["luna_musica"][0]; bgMusic.currentTime = 0; bgMusic.play().catch(e => console.log(e));
                             }
-                            
                             floatingTexts.push({ x: meteor.x, y: meteor.y - 120, text: "⚠️ LA LUNA DESPIERTA ⚠️", color: "#FF4500", life: 180, size: 40 });
                         } 
                         hit = true;
@@ -557,19 +574,9 @@ else:
                     if(meteor.isBoss && !meteor.dead && l.owner !== meteor && Math.hypot(l.x - meteor.x, l.y - meteor.y) < meteor.r) {
                         meteor.hp -= dmg; hit = true;
                         if(meteor.hp <= 0 && !meteor.dead) {
-                            meteor.dead = true;
-                            playSfx("bh_death", 2.5); 
+                            meteor.dead = true; playSfx("bh_death", 2.5); 
                             floatingTexts.push({ x: meteor.x, y: meteor.y, text: "🌟 VICTORIA GALÁCTICA 🌟", color: "#FFD700", life: 300, size: 50 });
-
-                            // Restablecer música base tras derrotar a la luna
-                            if (bgMusic && audioSrc) {
-                                bgMusic.pause();
-                                bgMusic.src = audioSrc;
-                                bgMusic.currentTime = 0;
-                                bgMusic.loop = true;
-                                bgMusic.playbackRate = 1.0;
-                                bgMusic.play().catch(e => console.log(e));
-                            }
+                            if (bgMusic && audioSrc) { bgMusic.pause(); bgMusic.src = audioSrc; bgMusic.currentTime = 0; bgMusic.play().catch(e => console.log(e)); }
                         }
                     }
 
@@ -586,7 +593,18 @@ else:
                     if(hit || l.life <= 0) lasers.splice(i, 1);
                 }
 
+                // Recolección de Power-ups
                 for(let i = orbs.length - 1; i >= 0; i--) { let o = orbs[i]; if(!player.dead && Math.hypot(player.x - o.x, player.y - o.y) < player.r + o.r) { playSfx("orb"); showOrbMenu(o.type); orbs.splice(i, 1); } }
+                
+                for(let i = redBoxes.length - 1; i >= 0; i--) {
+                    let rb = redBoxes[i];
+                    if(!player.dead && Math.hypot(player.x - rb.x, player.y - rb.y) < player.r + rb.r) {
+                        redBoxes.splice(i, 1); playSfx("box");
+                        player.continuousLaserTimer = 300; 
+                        floatingTexts.push({x: player.x, y: player.y - 40, text: "🔴 ¡MODO LÁSER CONTINUO!", color: "#FF0000", life: 60, size: 22});
+                    }
+                }
+                
                 for(let i = boxes.length - 1; i >= 0; i--) {
                     let b = boxes[i];
                     if(!player.dead && Math.hypot(player.x - b.x, player.y - b.y) < player.r + b.r) {
@@ -610,13 +628,8 @@ else:
                                 blackHole.dead = true; s.r += 35; 
                                 playSfx("bh_death", 2.5);
                                 meteor.isBoss = true; cinematicTimer = 180;
-                                
                                 if (bgMusic && sfxData["luna_musica"] && sfxData["luna_musica"].length > 0) {
-                                    bgMusic.pause();
-                                    bgMusic.src = sfxData["luna_musica"][0];
-                                    bgMusic.currentTime = 0;
-                                    bgMusic.playbackRate = 1.0;
-                                    bgMusic.play().catch(e => console.log(e));
+                                    bgMusic.pause(); bgMusic.src = sfxData["luna_musica"][0]; bgMusic.currentTime = 0; bgMusic.play().catch(e => console.log(e));
                                 }
                             } 
                             else { 
@@ -665,38 +678,16 @@ else:
                 ctx.save(); ctx.translate(canvas.width / 2 + shakeX, canvas.height / 2 + shakeY); ctx.scale(zoom, zoom); ctx.translate(-camX - canvas.width / 2, -camY - canvas.height / 2);
                 ctx.strokeStyle = "#FF3366"; ctx.lineWidth = 6; ctx.strokeRect(0, 0, worldW, worldH);
 
-                // Dibujar Láser Cíclope (Fase 2 de la Luna)
                 if (meteor.isBoss && !meteor.dead && meteor.isPhase2) {
-                    // Carga/Aviso de dirección del láser
                     if (meteor.laserChargeTimer > 0) {
-                        ctx.save();
-                        ctx.strokeStyle = "rgba(255, 0, 85, 0.6)";
-                        ctx.lineWidth = 4;
-                        ctx.setLineDash([12, 12]);
-                        ctx.beginPath();
-                        ctx.moveTo(meteor.x, meteor.y);
-                        ctx.lineTo(meteor.x + Math.cos(meteor.laserAngle) * 2500, meteor.y + Math.sin(meteor.laserAngle) * 2500);
-                        ctx.stroke();
-                        ctx.restore();
+                        ctx.save(); ctx.strokeStyle = "rgba(255, 0, 85, 0.6)"; ctx.lineWidth = 4; ctx.setLineDash([12, 12]);
+                        ctx.beginPath(); ctx.moveTo(meteor.x, meteor.y); ctx.lineTo(meteor.x + Math.cos(meteor.laserAngle) * 2500, meteor.y + Math.sin(meteor.laserAngle) * 2500); ctx.stroke(); ctx.restore();
                     }
-                    // Rayo Cíclope Activo
                     if (meteor.laserSweepTimer > 0) {
-                        ctx.save();
-                        let endX = meteor.x + Math.cos(meteor.laserAngle) * 2500;
-                        let endY = meteor.y + Math.sin(meteor.laserAngle) * 2500;
-
-                        ctx.strokeStyle = "rgba(255, 0, 85, 0.35)";
-                        ctx.lineWidth = 70;
-                        ctx.beginPath(); ctx.moveTo(meteor.x, meteor.y); ctx.lineTo(endX, endY); ctx.stroke();
-
-                        ctx.strokeStyle = "#FF0055";
-                        ctx.lineWidth = 35;
-                        ctx.beginPath(); ctx.moveTo(meteor.x, meteor.y); ctx.lineTo(endX, endY); ctx.stroke();
-
-                        ctx.strokeStyle = "#FFFFFF";
-                        ctx.lineWidth = 12;
-                        ctx.beginPath(); ctx.moveTo(meteor.x, meteor.y); ctx.lineTo(endX, endY); ctx.stroke();
-                        ctx.restore();
+                        ctx.save(); let endX = meteor.x + Math.cos(meteor.laserAngle) * 2500; let endY = meteor.y + Math.sin(meteor.laserAngle) * 2500;
+                        ctx.strokeStyle = "rgba(255, 0, 85, 0.35)"; ctx.lineWidth = 70; ctx.beginPath(); ctx.moveTo(meteor.x, meteor.y); ctx.lineTo(endX, endY); ctx.stroke();
+                        ctx.strokeStyle = "#FF0055"; ctx.lineWidth = 35; ctx.beginPath(); ctx.moveTo(meteor.x, meteor.y); ctx.lineTo(endX, endY); ctx.stroke();
+                        ctx.strokeStyle = "#FFFFFF"; ctx.lineWidth = 12; ctx.beginPath(); ctx.moveTo(meteor.x, meteor.y); ctx.lineTo(endX, endY); ctx.stroke(); ctx.restore();
                     }
                 }
 
@@ -708,7 +699,6 @@ else:
                     meteor.craters.forEach(c => { ctx.beginPath(); ctx.arc(c.x, c.y, c.r, 0, Math.PI * 2); ctx.fillStyle = meteor.isBoss ? "#990000" : "#696969"; ctx.fill(); }); 
                     ctx.restore();
 
-                    // Barra de Jefe Final (Luna)
                     if(meteor.isBoss) {
                         ctx.save(); ctx.translate(meteor.x, meteor.y);
                         let bossHpPct = Math.max(0, meteor.hp / meteor.maxHp); let barW = 220, barH = 14; 
@@ -730,11 +720,14 @@ else:
                 }
 
                 boxes.forEach(b => { ctx.save(); ctx.translate(b.x, b.y); ctx.fillStyle = "#FFD700"; ctx.strokeStyle = "#FF8C00"; ctx.lineWidth = 3; ctx.fillRect(-b.r, -b.r, b.r*2, b.r*2); ctx.strokeRect(-b.r, -b.r, b.r*2, b.r*2); ctx.fillStyle = "#000"; ctx.font = "bold 16px sans-serif"; ctx.textAlign = "center"; ctx.fillText("?", 0, 5); ctx.restore(); });
+                
+                // Dibujar cajas rojas (Láser Continuo)
+                redBoxes.forEach(rb => { ctx.save(); ctx.translate(rb.x, rb.y); ctx.fillStyle = "#FF0000"; ctx.strokeStyle = "#8B0000"; ctx.lineWidth = 3; ctx.fillRect(-rb.r, -rb.r, rb.r*2, rb.r*2); ctx.strokeRect(-rb.r, -rb.r, rb.r*2, rb.r*2); ctx.fillStyle = "#FFF"; ctx.font = "bold 16px sans-serif"; ctx.textAlign = "center"; ctx.fillText("🔥", 0, 6); ctx.restore(); });
+
                 orbs.forEach(o => { ctx.save(); ctx.translate(o.x, o.y); ctx.beginPath(); ctx.arc(0, 0, o.r, 0, Math.PI * 2); ctx.fillStyle = o.type === 'celeste' ? '#00FFFF' : '#CC33FF'; ctx.fill(); ctx.strokeStyle = "white"; ctx.lineWidth = 2; ctx.stroke(); ctx.globalAlpha = 0.5; ctx.beginPath(); ctx.arc(0, 0, o.r + Math.sin(Date.now() / 150)*4, 0, Math.PI * 2); ctx.strokeStyle = o.type === 'celeste' ? '#00FFFF' : '#CC33FF'; ctx.lineWidth = 2; ctx.stroke(); ctx.restore(); });
                 hearts.forEach(h => { ctx.font = "16px sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText("❤️", h.x, h.y); });
                 particles.forEach(p => { ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, Math.PI * 2); ctx.fillStyle = p.color; ctx.fill(); });
                 
-                // Dibujar Láseres y Estrellas en Espiral
                 lasers.forEach(l => { 
                     if(l.isStar) {
                         ctx.save(); ctx.translate(l.x, l.y); ctx.rotate(Date.now() / 150); ctx.beginPath(); ctx.fillStyle = l.color;
@@ -775,7 +768,11 @@ else:
                 ctx.fillStyle = "#FFF"; ctx.font = "bold 11px sans-serif"; ctx.textAlign = "center"; ctx.fillText(`SALUD: ${Math.ceil(player.hp)} / ${Math.ceil(player.maxHp)} HP`, x + 110, y + 13);
 
                 for(let i = 0; i < 4; i++) { ctx.beginPath(); ctx.arc(x + (i * 22) + 10, y - 14, 7, 0, Math.PI * 2); ctx.fillStyle = i < player.shields ? "#A0A0A0" : "rgba(80, 80, 80, 0.3)"; ctx.fill(); ctx.strokeStyle = "#FFF"; ctx.lineWidth = 1; ctx.stroke(); }
-                if(player.hasInvulnCharge || player.invulnTimer > 0) { ctx.fillStyle = player.invulnTimer > 0 ? "#00FFFF" : "#FFD700"; ctx.font = "bold 12px sans-serif"; ctx.textAlign = "left"; ctx.fillText(player.invulnTimer > 0 ? `👻 FANTASMA: ${(player.invulnTimer/60).toFixed(1)}s` : "👻 [ESPACIO]: FANTASMA LISTO", x, y - 55); }
+                
+                let buffStatus = "";
+                if(player.hasInvulnCharge || player.invulnTimer > 0) { buffStatus += (player.invulnTimer > 0 ? `👻 FANTASMA: ${(player.invulnTimer/60).toFixed(1)}s   ` : "👻 [ESPACIO] FANTASMA LISTO   "); }
+                if(player.continuousLaserTimer > 0) { buffStatus += `🔴 LÁSER CONTINUO: ${(player.continuousLaserTimer/60).toFixed(1)}s`; }
+                if(buffStatus !== "") { ctx.fillStyle = "#FFD700"; ctx.font = "bold 12px sans-serif"; ctx.textAlign = "left"; ctx.fillText(buffStatus, x, y - 55); }
                 ctx.restore();
             }
 
