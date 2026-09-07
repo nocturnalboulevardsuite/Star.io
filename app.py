@@ -1,10 +1,10 @@
 import streamlit as st
 import streamlit.components.v1 as components
 
-st.set_page_config(page_title="Star.io - Mejoras de Vida y Fuego", layout="wide")
+st.set_page_config(page_title="Star.io - Agujero Negro & Top Lateral", layout="wide")
 
-st.title("🌟 Star.io - Vida Escalable y Aura de Fuego")
-st.write("¡Hazte más grande para resistir daño, quema a tus enemigos y supera tus límites de salud!")
+st.title("🌟 Star.io - Gravedad y Ranking Lateral")
+st.write("¡Esquiva la fuerza de atracción del Agujero Negro y domina la galaxia!")
 
 if 'jugando' not in st.session_state:
     st.session_state.jugando = False
@@ -20,11 +20,10 @@ if not st.session_state.jugando:
     with col2:
         st.button("▶️ JUGAR AHORA", on_click=iniciar_juego, type="primary", use_container_width=True)
         st.info("""
-        💡 **ÚLTIMOS CAMBIOS:**
-        - **🛡️ TAMAÑO = DEFENSA:** Mientras más grande seas, menos daño recibirás de los ataques.
-        - **❤️ VIDA BASE 200:** Comienzas con 200 HP. ¡Agarrar vida cuando estás al máximo aumenta tu límite!
-        - **🔥 AURA QUEMANTE:** El poder de fuego de la caja misteriosa ahora hace 40 de daño por toque a los enemigos.
-        - **💥 NÚMEROS GIGANTES:** Los indicadores de daño y curación son mucho más visibles.
+        💡 **NOVEDADES:**
+        - **👑 TOP ESTRELLAS EXTERNO:** Ubicado a la derecha del canvas para una experiencia visual limpia.
+        - **🌌 GRAVEDAD REAL:** El Agujero Negro genera una atracción gravitatoria activa. ¡Usa tu Dash si te absorbe!
+        - **❤️ VIDA DEL JEFE:** Barra de salud clara sobre el Agujero Negro con regeneración ralentizada.
         """)
 
 else:
@@ -35,16 +34,66 @@ else:
     <html>
     <head>
         <style>
-            body { margin: 0; overflow: hidden; background-color: #050508; display: flex; justify-content: center; user-select: none; font-family: sans-serif; }
-            canvas { background-color: #080812; cursor: crosshair; border-radius: 8px; }
+            body { margin: 0; overflow: hidden; background-color: #050508; display: flex; justify-content: center; align-items: center; height: 100vh; user-select: none; font-family: sans-serif; }
             
+            #game-container {
+                display: flex;
+                gap: 15px;
+                align-items: center;
+                position: relative;
+            }
+
+            canvas { background-color: #080812; cursor: crosshair; border-radius: 8px; border: 1px solid #222; }
+            
+            /* Leaderboard Lateral */
+            #leaderboard-panel {
+                width: 220px;
+                height: 600px;
+                background: rgba(12, 12, 28, 0.92);
+                border: 2px solid #00FFFF;
+                border-radius: 10px;
+                padding: 15px;
+                box-sizing: border-box;
+                color: white;
+                box-shadow: 0 0 20px rgba(0, 255, 255, 0.2);
+                display: flex;
+                flex-direction: column;
+            }
+
+            .lb-title {
+                font-size: 16px;
+                font-weight: bold;
+                color: #00FFFF;
+                text-align: center;
+                border-bottom: 2px solid rgba(0, 255, 255, 0.3);
+                padding-bottom: 8px;
+                margin-top: 0;
+                margin-bottom: 12px;
+            }
+
+            .lb-item {
+                display: flex;
+                justify-content: space-between;
+                font-size: 13px;
+                margin-bottom: 8px;
+                padding: 4px 6px;
+                border-radius: 4px;
+            }
+
+            .lb-item.me {
+                background: rgba(255, 255, 0, 0.15);
+                border: 1px solid #FFFF00;
+                color: #FFFF00;
+                font-weight: bold;
+            }
+
             #gameover { 
-                display: none; position: absolute; color: white; top: 40%; text-align: center; 
+                display: none; position: absolute; color: white; top: 40%; left: 35%; text-align: center; 
                 font-size: 24px; text-shadow: 2px 2px 10px #000; pointer-events: none; z-index: 5;
             }
             
             #orb-modal {
-                display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+                display: none; position: absolute; top: 50%; left: 40%; transform: translate(-50%, -50%);
                 background: rgba(10, 10, 25, 0.95); padding: 30px; border-radius: 12px; border: 3px solid white;
                 text-align: center; z-index: 10; box-shadow: 0px 0px 30px rgba(0, 255, 255, 0.4);
             }
@@ -57,21 +106,28 @@ else:
         </style>
     </head>
     <body>
-        <canvas id="gameCanvas" width="900" height="600"></canvas>
-        
-        <div id="gameover">
-            <h2>¡HAS MUERTO! 💥</h2>
-            <p style="font-size: 22px; color: #00FFFF; font-weight: bold; margin-top: 10px;">
-                👉 DALE CLICK A LA PANTALLA PARA REAPARECER 👈
-            </p>
-        </div>
+        <div id="game-container">
+            <canvas id="gameCanvas" width="900" height="600"></canvas>
+            
+            <div id="leaderboard-panel">
+                <h3 class="lb-title">👑 TOP ESTRELLAS</h3>
+                <div id="lb-list"></div>
+            </div>
 
-        <div id="orb-modal">
-            <h2 id="orb-title" style="margin-top:0;">NUEVA MEJORA</h2>
-            <p style="color:#DDD; margin-bottom:20px;">Elige una habilidad para tus láseres:</p>
-            <div style="display:flex; gap:20px; justify-content:center;">
-                <button id="orb-btn1" class="orb-btn"></button>
-                <button id="orb-btn2" class="orb-btn"></button>
+            <div id="gameover">
+                <h2>¡HAS MUERTO! 💥</h2>
+                <p style="font-size: 22px; color: #00FFFF; font-weight: bold; margin-top: 10px;">
+                    👉 DALE CLICK A LA PANTALLA PARA REAPARECER 👈
+                </p>
+            </div>
+
+            <div id="orb-modal">
+                <h2 id="orb-title" style="margin-top:0;">NUEVA MEJORA</h2>
+                <p style="color:#DDD; margin-bottom:20px;">Elige una habilidad para tus láseres:</p>
+                <div style="display:flex; gap:20px; justify-content:center;">
+                    <button id="orb-btn1" class="orb-btn"></button>
+                    <button id="orb-btn2" class="orb-btn"></button>
+                </div>
             </div>
         </div>
 
@@ -79,6 +135,7 @@ else:
             const canvas = document.getElementById("gameCanvas");
             const ctx = canvas.getContext("2d");
             const overScreen = document.getElementById("gameover");
+            const lbList = document.getElementById("lb-list");
             
             const orbModal = document.getElementById("orb-modal");
             const orbTitle = document.getElementById("orb-title");
@@ -272,13 +329,11 @@ else:
                     return;
                 }
 
-                // Mientras más grande, menos daño recibes (Reducción de daño)
                 let dmgMult = Math.max(0.25, 18 / Math.max(18, target.r));
                 let realDamage = amount * dmgMult;
                 
                 target.hp -= realDamage;
                 
-                // Textos grandes para el daño
                 floatingTexts.push({ x: target.x, y: target.y - target.r - 10, text: `-${Math.ceil(realDamage)}`, color: "#FF3333", life: 30, size: 24 });
 
                 if(target === player && player.hp <= 0) {
@@ -313,6 +368,24 @@ else:
                 }
             }
 
+            function updateLeaderboard() {
+                let allStars = [player, ...bots].filter(s => !s.dead);
+                allStars.sort((a, b) => b.r - a.r);
+                let topStars = allStars.slice(0, 10);
+
+                let html = "";
+                topStars.forEach((s, idx) => {
+                    let isMe = (s === player);
+                    html += `
+                        <div class="lb-item ${isMe ? 'me' : ''}">
+                            <span>${idx + 1}. ${s.name} ${isMe ? '⭐' : ''}</span>
+                            <span>${Math.round(s.r)} pt</span>
+                        </div>
+                    `;
+                });
+                lbList.innerHTML = html;
+            }
+
             function update() {
                 if(Math.random() < 0.003 && boxes.length < maxBoxes) spawnBox();
                 if(Math.random() < 0.002 && orbs.length < maxOrbs) spawnOrb();
@@ -321,7 +394,31 @@ else:
                 meteor.x = (worldW / 2) + Math.cos(meteor.orbitAngle) * meteor.orbitRadius;
                 meteor.y = (worldH / 2) + Math.sin(meteor.orbitAngle) * meteor.orbitRadius;
 
-                if(!blackHole.dead) { blackHole.r += 0.012; blackHole.hp = Math.min(blackHole.maxHp, blackHole.hp + 0.1); }
+                // 🕳️ AGUJERO NEGRO: REGENERACIÓN RALENTIZADA Y GRAVEDAD 🌌
+                if(!blackHole.dead) { 
+                    blackHole.r += 0.012; 
+                    blackHole.hp = Math.min(blackHole.maxHp, blackHole.hp + 0.02); // Regeneración lenta (+0.02)
+
+                    // Atracción gravitatoria constante
+                    let pullRadius = blackHole.r * 5.5;
+                    let dPlayer = Math.hypot(blackHole.x - player.x, blackHole.y - player.y);
+
+                    if(!player.dead && dPlayer < pullRadius && dPlayer > 0) {
+                        let pullForce = (1 - dPlayer / pullRadius) * 2.8;
+                        player.x += ((blackHole.x - player.x) / dPlayer) * pullForce;
+                        player.y += ((blackHole.y - player.y) / dPlayer) * pullForce;
+
+                        // Efecto visual de succión
+                        if(Math.random() < 0.25) {
+                            particles.push({
+                                x: player.x, y: player.y,
+                                vx: ((blackHole.x - player.x) / dPlayer) * 3,
+                                vy: ((blackHole.y - player.y) / dPlayer) * 3,
+                                color: "#8A2BE2", life: 12
+                            });
+                        }
+                    }
+                }
 
                 if(player.invulnTimer > 0) player.invulnTimer--;
                 if(player.fireTimer > 0) player.fireTimer--;
@@ -423,7 +520,7 @@ else:
                         let rand = Math.random();
                         if(rand < 0.50) { 
                             player.hp += 50;
-                            if(player.hp > player.maxHp) player.maxHp = player.hp; // Aumenta vida base
+                            if(player.hp > player.maxHp) player.maxHp = player.hp;
                             player.r += 2;
                             floatingTexts.push({x: player.x, y: player.y - player.r - 15, text: "❤️ +50 HP MAX", color: "#33FF66", life: 50, size: 22});
                         } else if(rand < 0.625) {
@@ -438,7 +535,6 @@ else:
                     }
                 }
 
-                // Corazones (Aumentan Vida Base si estás lleno)
                 for(let i = hearts.length - 1; i >= 0; i--) {
                     let h = hearts[i];
                     if(!player.dead && Math.hypot(player.x - h.x, player.y - h.y) < player.r + h.r) {
@@ -458,7 +554,6 @@ else:
                     });
                 }
 
-                // Comer y Choques entre estrellas
                 for(let i = foods.length - 1; i >= 0; i--) {
                     let f = foods[i];
                     for(let e of allStars) {
@@ -478,7 +573,6 @@ else:
                         let e1 = allStars[i], e2 = allStars[j];
                         let d = Math.hypot(e1.x - e2.x, e1.y - e2.y);
                         
-                        // 🔥 DAÑO POR AURA DE FUEGO 🔥 (40 HP por contacto)
                         if(d < e1.r + e2.r) {
                             if(e1 === player && player.fireTimer > 0 && (now - (e2.lastBurnTime || 0) > 500)) {
                                 takeDamage(e2, 40); e2.lastBurnTime = now;
@@ -518,6 +612,8 @@ else:
                 if(player.dead && !isGameOver) { isGameOver = true; overScreen.style.display = 'block'; }
                 bots = bots.filter(b => !b.dead);
                 while(bots.length < maxBots) spawnBot();
+
+                updateLeaderboard();
             }
 
             function draw() {
@@ -552,12 +648,30 @@ else:
                 meteor.craters.forEach(c => { ctx.beginPath(); ctx.arc(c.x, c.y, c.r, 0, Math.PI * 2); ctx.fillStyle = "#696969"; ctx.fill(); });
                 ctx.restore();
 
+                // 🕳️ DIBUJO DEL AGUJERO NEGRO Y SU BARRA DE VIDA DE JEFE 🕳️
                 if(!blackHole.dead) {
                     ctx.save(); ctx.translate(blackHole.x, blackHole.y);
+                    
+                    // Zona gravitatoria sutil
+                    ctx.strokeStyle = "rgba(138, 43, 226, 0.15)"; ctx.lineWidth = 2;
+                    ctx.beginPath(); ctx.arc(0, 0, blackHole.r * 5.5, 0, Math.PI * 2); ctx.stroke();
+
+                    // Cuerpo del agujero negro
                     let grad = ctx.createRadialGradient(0, 0, blackHole.r * 0.4, 0, 0, blackHole.r * 1.5);
                     grad.addColorStop(0, "#000"); grad.addColorStop(0.5, "#8A2BE2"); grad.addColorStop(1, "rgba(255, 0, 128, 0)");
                     ctx.beginPath(); ctx.arc(0, 0, blackHole.r * 1.5, 0, Math.PI * 2); ctx.fillStyle = grad; ctx.fill();
                     ctx.beginPath(); ctx.arc(0, 0, blackHole.r, 0, Math.PI * 2); ctx.fillStyle = "#05000A"; ctx.fill();
+                    
+                    // Barra de Vida
+                    let bhHpPct = Math.max(0, blackHole.hp / blackHole.maxHp);
+                    let barW = 140, barH = 10;
+                    ctx.fillStyle = "rgba(0,0,0,0.7)"; ctx.fillRect(-barW/2, -blackHole.r * 1.5 - 25, barW, barH);
+                    ctx.fillStyle = "#CC33FF"; ctx.fillRect(-barW/2 + 1, -blackHole.r * 1.5 - 24, (barW - 2) * bhHpPct, barH - 2);
+                    ctx.strokeStyle = "#FFFFFF"; ctx.lineWidth = 1; ctx.strokeRect(-barW/2, -blackHole.r * 1.5 - 25, barW, barH);
+                    
+                    ctx.fillStyle = "#FFD700"; ctx.font = "bold 13px sans-serif"; ctx.textAlign = "center";
+                    ctx.fillText(`🕳️ JEFE: ${Math.ceil(blackHole.hp)} / ${blackHole.maxHp} HP`, 0, -blackHole.r * 1.5 - 32);
+
                     ctx.restore();
                 }
 
@@ -627,7 +741,7 @@ else:
                 ctx.save();
                 let x = 12, y = canvas.height - 45;
                 ctx.fillStyle = "rgba(10, 10, 20, 0.85)"; ctx.strokeStyle = "#444"; ctx.lineWidth = 2;
-                ctx.fillRect(x, y, 220, 18); ctx.strokeRect(x, y, 220, 18); // Barra más ancha para 200hp
+                ctx.fillRect(x, y, 220, 18); ctx.strokeRect(x, y, 220, 18);
 
                 let hpPct = Math.max(0, player.hp / player.maxHp);
                 ctx.fillStyle = player.hp > (player.maxHp*0.5) ? "#33FF66" : (player.hp > (player.maxHp*0.2) ? "#FFFF33" : "#FF3333");
@@ -661,4 +775,4 @@ else:
     </html>
     """
     
-    components.html(codigo_juego, height=620, width=920, scrolling=False)
+    components.html(codigo_juego, height=640, width=1180, scrolling=False)
