@@ -133,11 +133,69 @@ else:
                 border-radius: 10px; font-size: 16px; font-weight: bold; cursor: pointer; transition: 0.2s;
             }
             .orb-btn:hover { background: #2a2a40; transform: scale(1.05); }
+
+            /* === ESTILOS DEL CONTROL DE AUDIO === */
+            #audio-controls {
+                position: absolute;
+                top: 15px;
+                left: 15px;
+                background: rgba(10, 10, 20, 0.85);
+                border: 2px solid #00FFFF;
+                border-radius: 8px;
+                padding: 8px 15px;
+                display: flex;
+                align-items: center;
+                gap: 12px;
+                z-index: 15;
+                box-shadow: 0 0 10px rgba(0, 255, 255, 0.2);
+            }
+            #mute-btn {
+                background: none;
+                border: none;
+                font-size: 22px;
+                cursor: pointer;
+                padding: 0;
+                margin: 0;
+                outline: none;
+                transition: transform 0.2s;
+                color: white;
+            }
+            #mute-btn:hover { transform: scale(1.15); }
+            
+            input[type=range] {
+                -webkit-appearance: none;
+                width: 90px;
+                background: transparent;
+            }
+            input[type=range]::-webkit-slider-thumb {
+                -webkit-appearance: none;
+                height: 16px;
+                width: 16px;
+                border-radius: 50%;
+                background: #00FFFF;
+                cursor: pointer;
+                margin-top: -6px;
+                box-shadow: 0 0 5px #00FFFF;
+            }
+            input[type=range]::-webkit-slider-runnable-track {
+                width: 100%;
+                height: 4px;
+                cursor: pointer;
+                background: #444;
+                border-radius: 2px;
+            }
         </style>
     </head>
     <body>
         <div id="main-wrapper">
             <div style="position: relative;">
+                
+                <!-- === PANEL DE AUDIO === -->
+                <div id="audio-controls">
+                    <button id="mute-btn" title="Activar/Silenciar">🔇</button>
+                    <input type="range" id="volume-slider" min="0" max="1" step="0.05" value="0.3" title="Volumen">
+                </div>
+
                 <canvas id="gameCanvas" width="900" height="650"></canvas>
                 <div id="gameover">
                     <h2>¡HAS MUERTO! 💥</h2>
@@ -162,22 +220,66 @@ else:
         </div>
 
         <script>
-            // === SISTEMA DE AUDIO FIJO AL 30% ===
+            // === SISTEMA DE AUDIO INTERACTIVO ===
             const audioSrc = "__AUDIO_SRC__";
             let bgMusic = null;
+            let isUserInteracted = false;
             
+            const muteBtn = document.getElementById("mute-btn");
+            const volSlider = document.getElementById("volume-slider");
+
             if (audioSrc && audioSrc !== "") {
                 bgMusic = new Audio(audioSrc);
                 bgMusic.loop = true;
-                bgMusic.volume = 0.3; // 30% fijo por defecto
+                bgMusic.volume = volSlider.value;
             }
 
-            // Reproducir música en el primer clic (obligatorio por políticas de navegadores)
-            document.addEventListener('mousedown', () => {
-                if (bgMusic && bgMusic.paused) {
-                    bgMusic.play().catch(err => console.log("Autoplay bloqueado:", err));
+            // Evitar que interactuar con el panel de sonido dispare en el juego
+            muteBtn.addEventListener('mousedown', (e) => e.stopPropagation());
+            volSlider.addEventListener('mousedown', (e) => e.stopPropagation());
+
+            // Reproducir automáticamente cuando el jugador hace clic en el juego por primera vez
+            document.getElementById("gameCanvas").addEventListener('mousedown', () => {
+                if (!isUserInteracted && bgMusic) {
+                    isUserInteracted = true;
+                    if (bgMusic.paused) {
+                        bgMusic.play().then(() => {
+                            muteBtn.innerText = "🔊";
+                        }).catch(err => {
+                            console.log("Autoplay bloqueado:", err);
+                        });
+                    }
                 }
-            }, { once: true });
+            });
+
+            // Botón de Mute/Desmute
+            muteBtn.addEventListener('click', (e) => {
+                if(!bgMusic) return;
+                if(bgMusic.paused) {
+                    bgMusic.play();
+                    muteBtn.innerText = "🔊";
+                    if(volSlider.value == 0) { 
+                        volSlider.value = 0.3; 
+                        bgMusic.volume = 0.3; 
+                    }
+                } else {
+                    bgMusic.pause();
+                    muteBtn.innerText = "🔇";
+                }
+            });
+
+            // Slider de Volumen
+            volSlider.addEventListener('input', (e) => {
+                if(!bgMusic) return;
+                bgMusic.volume = e.target.value;
+                if(e.target.value > 0 && bgMusic.paused) {
+                    bgMusic.play();
+                    muteBtn.innerText = "🔊";
+                } else if (e.target.value == 0) {
+                    bgMusic.pause();
+                    muteBtn.innerText = "🔇";
+                }
+            });
 
 
             // === SISTEMA DEL JUEGO ===
