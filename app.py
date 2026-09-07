@@ -27,7 +27,7 @@ if not audio_src:
     st.warning("⚠️ No se encontró la música de fondo (test.wav).")
 
 # Cargar efectos de sonido (incluye bhexplosion)
-sfx_categorias = ["dash", "laser", "food", "box", "orb", "death", "respawn", "bhexplosion"]
+sfx_categorias = ["dash", "laser", "food", "box", "orb", "muerte", "respawn", "explosionagujeronegro"]
 sfx_data = {cat: [] for cat in sfx_categorias}
 
 for cat in sfx_categorias:
