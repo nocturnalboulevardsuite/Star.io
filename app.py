@@ -12,7 +12,7 @@ st.write("¡Sobrevive, domina el Top y destruye al Agujero Negro!")
 # 🎵 CONFIGURACIÓN DE TU MÚSICA (BACKEND)
 # ==========================================
 # Cambia "mi_cancion.wav" por el nombre exacto de tu archivo exportado de FL Studio
-RUTA_MUSICA = "mi_cancion.wav" 
+RUTA_MUSICA = "test.wav" 
 
 audio_src = ""
 if os.path.exists(RUTA_MUSICA):
