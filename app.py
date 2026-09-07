@@ -29,7 +29,7 @@ if not audio_src:
     st.warning(f"⚠️ No se encontró la música de fondo: {RUTA_MUSICA}.")
 
 # Cargar efectos de sonido dinámicamente (hasta 4 por acción)
-sfx_categorias = ["dash", "laser", "food", "box", "orb", "muerte", "respawn"]
+sfx_categorias = ["dash", "laser1", "food", "box", "orb", "muerte", "respawn"]
 sfx_data = {cat: [] for cat in sfx_categorias}
 
 for cat in sfx_categorias:
