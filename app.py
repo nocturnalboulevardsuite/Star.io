@@ -1,10 +1,10 @@
 import streamlit as st
 import streamlit.components.v1 as components
 
-st.set_page_config(page_title="Star.io - Batalla Láser & Top 10", layout="wide")
+st.set_page_config(page_title="Star.io - Corazones & Reaparición Rápida", layout="wide")
 
-st.title("🌟 Star.io - Top 10 Leaderboard & Combate Láser")
-st.write("¡Compite por el Top 10 global, esquiva disparos enemigas y destruye estrellas con tu láser!")
+st.title("🌟 Star.io - Corazones, Temblor Crítico y Respawn")
+st.write("¡Junta corazones para sanarte, devora estrellas y reaparece al instante haciendo clic!")
 
 if 'jugando' not in st.session_state:
     st.session_state.jugando = False
@@ -20,19 +20,16 @@ if not st.session_state.jugando:
     with col2:
         st.button("▶️ JUGAR AHORA", on_click=iniciar_juego, type="primary", use_container_width=True)
         st.info("""
-        💡 **CONTROLES ACTUALIZADOS:**
-        - **🖱️ CLICK IZQUIERDO:** Disparar Láser en dirección al cursor.
-        - **🖱️ CLICK DERECHO:** Usar Dash / Impulso rápido (Cooldown: 5s).
-        - **⌨️ BARRA ESPACIADORA:** Activar Invulnerabilidad / Modo Fantasma (requiere carga de caja misteriosa).
-        
-        ⚔️ **NUEVAS REGLAS DE COMBATE:**
-        - **Los Bots disparan:** Ten cuidado, las otras estrellas te atacarán con láseres.
-        - **Daño por Láser:** Puedes destruir estrellas a disparos aunque sean más grandes que tú.
-        - **Top 10 Global:** Mira el panel superior izquierdo para ver si estás entre los mejores.
+        💡 **NUEVAS MECÁNICAS DE SALUD:**
+        - **❤️ CORAZONES ROJOS:** Tócalos para curar 20 HP de salud.
+        - **⭐ COMER ESTRELLAS:** Te cura 35 HP al instante.
+        - **🚥 ESTADO DE SALUD:** Verde (>50 HP) ➡️ Amarillo (≤50 HP) ➡️ Rojo (≤20 HP).
+        - **📳 MAREO Y TEMBLOR:** Si tu salud cae a 20 HP o menos, la pantalla temblará.
+        - **🔄 REAPARICIÓN RÁPIDA:** Haz click en la pantalla al morir para volver a jugar al instante.
         """)
 
 else:
-    st.button("⏹️ Volver al Menú / Reiniciar", on_click=volver_menu)
+    st.button("⏹️ Volver al Menú Principal", on_click=volver_menu)
     
     codigo_juego = """
     <!DOCTYPE html>
@@ -41,15 +38,20 @@ else:
         <style>
             body { margin: 0; overflow: hidden; background-color: #050508; display: flex; justify-content: center; user-select: none; }
             canvas { background-color: #080812; cursor: crosshair; border-radius: 8px; }
-            #gameover { display: none; position: absolute; color: white; font-family: sans-serif; top: 40%; text-align: center; font-size: 24px; text-shadow: 2px 2px 8px #000; }
+            #gameover { 
+                display: none; position: absolute; color: white; font-family: sans-serif; 
+                top: 40%; text-align: center; font-size: 24px; text-shadow: 2px 2px 10px #000;
+                pointer-events: none;
+            }
         </style>
     </head>
     <body>
         <canvas id="gameCanvas" width="900" height="600"></canvas>
         <div id="gameover">
-            <h2>¡Has sido destruido! 💥</h2>
-            <p>Estás en modo espectador.</p>
-            <p style="font-size: 16px; color:#aaa;">Usa el botón superior para reiniciar.</p>
+            <h2>¡HAS MUERTO! 💥</h2>
+            <p style="font-size: 22px; color: #00FFFF; font-weight: bold; margin-top: 10px;">
+                👉 DALE CLICK A LA PANTALLA PARA REAPARECER 👈
+            </p>
         </div>
 
         <script>
@@ -76,13 +78,14 @@ else:
             let lasers = [];
             let particles = [];
             let boxes = [];
+            let hearts = [];
 
             // ESTRELLAS PARALLAX DE FONDO
             let bgStarsLayer1 = [];
             let bgStarsLayer2 = [];
             for(let i=0; i<120; i++) {
-                bgStarsLayer1.push({x: Math.random() * canvas.width, y: Math.random() * canvas.height, r: Math.random() * 1.5 + 0.5, alpha: Math.random()});
-                bgStarsLayer2.push({x: Math.random() * canvas.width, y: Math.random() * canvas.height, r: Math.random() * 2.5 + 1.0, alpha: Math.random()});
+                bgStarsLayer1.push({x: Math.random() * canvas.width, y: Math.random() * canvas.height, r: Math.random() * 1.5 + 0.5});
+                bgStarsLayer2.push({x: Math.random() * canvas.width, y: Math.random() * canvas.height, r: Math.random() * 2.5 + 1.0});
             }
 
             // METEORO LUNAR
@@ -103,8 +106,13 @@ else:
                 screenMouseY = e.clientY - rect.top;
             });
 
-            // MOUSE CONTROLS: Left click = Shoot Laser, Right click = Dash
+            // CONTROLES DE MOUSE (CLIC PARA REAPARECER O ACCIÓN)
             canvas.addEventListener('mousedown', (e) => {
+                if(player.dead) {
+                    respawnPlayer();
+                    return;
+                }
+
                 if(e.button === 0) {
                     shootLaser();
                 } else if(e.button === 2) { 
@@ -113,13 +121,38 @@ else:
                 }
             });
 
-            // KEYBOARD CONTROLS: Space = Invulnerability
             window.addEventListener('keydown', (e) => {
                 if(e.code === 'Space') {
                     e.preventDefault();
-                    triggerInvulnerability();
+                    if(player.dead) {
+                        respawnPlayer();
+                    } else {
+                        triggerInvulnerability();
+                    }
                 }
             });
+
+            function respawnPlayer() {
+                player.x = Math.random() * (worldW - 200) + 100;
+                player.y = Math.random() * (worldH - 200) + 100;
+                player.r = 18;
+                player.hp = 100;
+                player.maxHp = 100;
+                player.shields = 0;
+                player.dead = false;
+                player.invulnTimer = 0;
+                player.fireTimer = 0;
+                player.speedBoostTimer = 0;
+                player.hasInvulnCharge = false;
+                
+                isGameOver = false;
+                overScreen.style.display = 'none';
+
+                floatingTexts.push({
+                    x: player.x, y: player.y - 30,
+                    text: "✨ ¡REAPARECISTE!", color: "#33FF66", life: 50
+                });
+            }
 
             function triggerInvulnerability() {
                 if(!player.dead && player.hasInvulnCharge && player.invulnTimer <= 0) {
@@ -161,7 +194,7 @@ else:
                     owner: player, color: "#00FFFF"
                 });
 
-                player.r = Math.max(10, player.r - 0.5);
+                player.r = Math.max(10, player.r - 0.4);
             }
 
             const nombres = ["Alpha", "Nova", "Sirius", "Vega", "Orion", "Cosmos", "Apollo", "Zeta", "Pulsar", "Quasar", "Rigel", "Lyra", "Draco", "Cygnus", "Pegasus"];
@@ -178,10 +211,19 @@ else:
                 });
             }
 
+            function spawnHeart() {
+                hearts.push({
+                    x: Math.random() * (worldW - 100) + 50,
+                    y: Math.random() * (worldH - 100) + 50,
+                    r: 10
+                });
+            }
+
             let player, bots, foods;
             const maxBots = 28;
             const maxFoods = 600;
             const maxBoxes = 20;
+            const maxHearts = 35;
 
             function init() {
                 isGameOver = false;
@@ -190,6 +232,7 @@ else:
                 lasers = [];
                 particles = [];
                 boxes = [];
+                hearts = [];
                 
                 player = { 
                     x: Math.random() * worldW, y: Math.random() * worldH, 
@@ -209,6 +252,7 @@ else:
                 for(let i=0; i<maxFoods; i++) spawnFood();
 
                 for(let i=0; i<maxBoxes; i++) spawnBox();
+                for(let i=0; i<maxHearts; i++) spawnHeart();
                 
                 loop();
             }
@@ -219,7 +263,7 @@ else:
                     x: Math.random() * worldW, y: Math.random() * worldH,
                     r: initialR, color: randomColor(), name: randomName(),
                     vx: (Math.random() - 0.5) * 4, vy: (Math.random() - 0.5) * 4,
-                    hp: initialR * 5, maxHp: initialR * 5,
+                    hp: 100, maxHp: 100,
                     lastShootTime: 0,
                     dead: false
                 });
@@ -245,7 +289,6 @@ else:
                 }
 
                 target.hp -= amount;
-                target.r = Math.max(8, target.r - (amount * 0.08));
 
                 if(target === player) {
                     if(player.hp <= 0) {
@@ -317,7 +360,7 @@ else:
                     player.y = Math.max(player.r, Math.min(worldH - player.r, player.y));
                 }
 
-                // Mover y Fuego de Bots
+                // Mover y Disparar Bots
                 const now = Date.now();
                 bots.forEach(bot => {
                     let botSpeed = 3 * Math.max(0.35, 20 / (bot.r + 5));
@@ -330,7 +373,6 @@ else:
                     bot.x = Math.max(bot.r, Math.min(worldW - bot.r, bot.x));
                     bot.y = Math.max(bot.r, Math.min(worldH - bot.r, bot.y));
 
-                    // IA de Disparo de Bots
                     if (now - (bot.lastShootTime || 0) > 2500 && Math.random() < 0.03 && bot.r > 12) {
                         let target = !player.dead && Math.hypot(player.x - bot.x, player.y - bot.y) < 550 ? player : null;
                         
@@ -363,14 +405,13 @@ else:
                 camX += (focusTarget.x - canvas.width / 2 - camX) * 0.1;
                 camY += (focusTarget.y - canvas.height / 2 - camY) * 0.1;
 
-                // Colisiones e Impactos de Láseres
+                // Colisiones Láseres
                 for(let i = lasers.length - 1; i >= 0; i--) {
                     let l = lasers[i];
                     l.x += l.vx; l.y += l.vy; l.life--;
 
                     let hit = false;
 
-                    // Daño al Agujero Negro
                     if(!blackHole.dead && Math.hypot(l.x - blackHole.x, l.y - blackHole.y) < blackHole.r) {
                         blackHole.hp -= 18;
                         blackHole.r = Math.max(25, blackHole.r - 0.25);
@@ -378,7 +419,6 @@ else:
                         hit = true;
                     }
 
-                    // Daño a Estrellas
                     if(!hit) {
                         for(let s of allStars) {
                             if(s.dead || s === l.owner) continue;
@@ -406,7 +446,22 @@ else:
                     if(hit || l.life <= 0) lasers.splice(i, 1);
                 }
 
-                // Colisión con Cajitas
+                // Recoger Corazones (+20 HP)
+                for(let i = hearts.length - 1; i >= 0; i--) {
+                    let h = hearts[i];
+                    if(!player.dead && Math.hypot(player.x - h.x, player.y - h.y) < player.r + h.r) {
+                        hearts.splice(i, 1);
+                        spawnHeart();
+
+                        player.hp = Math.min(player.maxHp, player.hp + 20);
+                        floatingTexts.push({
+                            x: player.x, y: player.y - player.r - 15,
+                            text: "+20 HP ❤️", color: "#FF3366", life: 40
+                        });
+                    }
+                }
+
+                // Colisión con Cajitas Misteriosas
                 for(let i = boxes.length - 1; i >= 0; i--) {
                     let b = boxes[i];
                     if(!player.dead && Math.hypot(player.x - b.x, player.y - b.y) < player.r + b.r) {
@@ -434,7 +489,6 @@ else:
                         } else {
                             player.hp = Math.min(player.maxHp, player.hp + 40);
                             player.r += 4;
-                            player.maxHp = player.r * 5;
                             floatingTexts.push({x: player.x, y: player.y - player.r - 15, text: "❤️ +40 SALUD & MASA", color: "#33FF66", life: 45});
                         }
                     }
@@ -469,8 +523,7 @@ else:
                         if(e.dead) continue;
                         if(Math.hypot(e.x - f.x, e.y - f.y) < e.r) {
                             e.r += 0.08; 
-                            e.maxHp = e.r * 5;
-                            e.hp = Math.min(e.maxHp, e.hp + 0.3);
+                            if(e === player) player.hp = Math.min(player.maxHp, player.hp + 0.1);
                             foods.splice(i, 1);
                             spawnFood();
                             break;
@@ -478,7 +531,7 @@ else:
                     }
                 }
 
-                // Estrella vs Estrella
+                // Estrella vs Estrella (Devorar recupera salud)
                 for(let i = 0; i < allStars.length; i++) {
                     for(let j = i + 1; j < allStars.length; j++) {
                         let e1 = allStars[i];
@@ -503,14 +556,24 @@ else:
                             if(smaller === player && player.invulnTimer > 0) continue;
 
                             bigger.r += smaller.r * 0.35;
-                            bigger.maxHp = bigger.r * 5;
-                            bigger.hp = Math.min(bigger.maxHp, bigger.hp + 20);
+                            
+                            // RECUPERAR SALUD AL DEVORAR UNA ESTRELLA
+                            if(bigger === player) {
+                                player.hp = Math.min(player.maxHp, player.hp + 35);
+                                floatingTexts.push({
+                                    x: player.x, y: player.y - player.r - 15,
+                                    text: "❤️ +35 HP", color: "#FF3366", life: 40
+                                });
+                            } else {
+                                bigger.hp = Math.min(bigger.maxHp, bigger.hp + 35);
+                            }
+
                             smaller.dead = true;
                         }
                     }
                 }
 
-                // Limpieza de Partículas y Textos
+                // Limpieza
                 for(let i = particles.length - 1; i >= 0; i--) {
                     let p = particles[i];
                     p.x += p.vx; p.y += p.vy; p.life--;
@@ -596,7 +659,7 @@ else:
                 let x = 12;
                 let y = canvas.height - 45;
 
-                // Barra de Vida
+                // BARRA DE VIDA DINÁMICA (VERDE, AMARILLA, ROJA)
                 ctx.fillStyle = "rgba(10, 10, 20, 0.85)";
                 ctx.strokeStyle = "#444";
                 ctx.lineWidth = 2;
@@ -604,13 +667,21 @@ else:
                 ctx.strokeRect(x, y, 180, 18);
 
                 let hpPct = Math.max(0, player.hp / player.maxHp);
-                ctx.fillStyle = hpPct > 0.4 ? "#33FF66" : "#FF3333";
+
+                if(player.hp > 50) {
+                    ctx.fillStyle = "#33FF66"; // Verde
+                } else if(player.hp > 20) {
+                    ctx.fillStyle = "#FFFF33"; // Amarillo
+                } else {
+                    ctx.fillStyle = "#FF3333"; // Rojo
+                }
+
                 ctx.fillRect(x + 2, y + 2, 176 * hpPct, 14);
 
                 ctx.fillStyle = "#FFF";
                 ctx.font = "bold 10px sans-serif";
                 ctx.textAlign = "center";
-                ctx.fillText(`SALUD: ${Math.ceil(player.hp)} / ${Math.ceil(player.maxHp)}`, x + 90, y + 13);
+                ctx.fillText(`SALUD: ${Math.ceil(player.hp)} / ${Math.ceil(player.maxHp)} HP`, x + 90, y + 13);
 
                 // Escudos Grises
                 for(let i = 0; i < 4; i++) {
@@ -644,7 +715,6 @@ else:
 
                 if(isInvuln) ctx.globalAlpha = 0.5;
 
-                // Cambio Dinámico de Colores según el Tamaño
                 let starFill = color;
                 if (radius > 30) {
                     let hue = (Date.now() / 20 + radius * 6) % 360;
@@ -696,14 +766,33 @@ else:
                 });
             }
 
+            function drawHearts() {
+                hearts.forEach(h => {
+                    ctx.save();
+                    ctx.font = "14px sans-serif";
+                    ctx.textAlign = "center";
+                    ctx.textBaseline = "middle";
+                    ctx.fillText("❤️", h.x, h.y);
+                    ctx.restore();
+                });
+            }
+
             function draw() {
                 ctx.fillStyle = "#06060E";
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
 
                 drawParallaxBG();
                 
+                // EFECTO DE TEMBLOR / MAREO SI SALUD <= 20 HP
+                let shakeX = 0;
+                let shakeY = 0;
+                if(!player.dead && player.hp <= 20 && player.hp > 0) {
+                    shakeX = (Math.random() - 0.5) * 9;
+                    shakeY = (Math.random() - 0.5) * 9;
+                }
+
                 ctx.save();
-                ctx.translate(canvas.width / 2, canvas.height / 2);
+                ctx.translate(canvas.width / 2 + shakeX, canvas.height / 2 + shakeY);
                 ctx.scale(zoom, zoom);
                 ctx.translate(-camX - canvas.width / 2, -camY - canvas.height / 2);
                 
@@ -737,6 +826,7 @@ else:
                 }
 
                 drawBoxes();
+                drawHearts();
 
                 // Partículas
                 particles.forEach(p => {
@@ -770,7 +860,7 @@ else:
                         let hpP = Math.max(0, s.hp / s.maxHp);
                         ctx.fillStyle = "rgba(0,0,0,0.5)";
                         ctx.fillRect(s.x - 15, s.y - s.r - 12, 30, 4);
-                        ctx.fillStyle = "#FF3333";
+                        ctx.fillStyle = s.hp > 50 ? "#33FF66" : (s.hp > 20 ? "#FFFF33" : "#FF3333");
                         ctx.fillRect(s.x - 15, s.y - s.r - 12, 30 * hpP, 4);
                     }
 
