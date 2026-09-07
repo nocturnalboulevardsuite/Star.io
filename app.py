@@ -21,12 +21,13 @@ def obtener_audio_b64(ruta):
             return f"data:audio/{extension};base64,{audio_base64}"
     return None
 
+# Cargar música (busca en raíz y en carpeta sonidos)
 audio_src = obtener_audio_b64("test.wav") or obtener_audio_b64(os.path.join("sonidos", "test.wav")) or ""
 if not audio_src:
     st.warning("⚠️ No se encontró la música de fondo (test.wav).")
 
-# SE AÑADIÓ "bhexplosion" A LA LISTA
-sfx_categorias = ["dash", "laser", "food", "box", "orb", "muerte", "respawn", "explosionagujeronegro"]
+# Cargar efectos de sonido (incluye bhexplosion)
+sfx_categorias = ["dash", "laser", "food", "box", "orb", "death", "respawn", "bhexplosion"]
 sfx_data = {cat: [] for cat in sfx_categorias}
 
 for cat in sfx_categorias:
@@ -179,7 +180,7 @@ else:
             let lastDashTime = 0; const dashCooldown = 5000; let dashTimer = 0; 
 
             let floatingTexts = []; let lasers = []; let particles = []; let boxes = []; let hearts = []; let orbs = [];
-            let moonProjectiles = []; // ESTRELLAS EN ESPIRAL DE LA LUNA
+            let moonProjectiles = [];
             let bgStarsLayer1 = []; let bgStarsLayer2 = [];
             
             for(let i=0; i<120; i++) {
@@ -243,7 +244,7 @@ else:
             
             function init() {
                 bots = []; food = []; boxes = []; hearts = []; orbs = []; floatingTexts = []; lasers = []; particles = [];
-                moonProjectiles = []; // RESETEAR PROYECTILES DE LA LUNA
+                moonProjectiles = [];
                 player.name = "__NICKNAME__";
                 meteor = { orbitAngle: 0, orbitRadius: 450, x: worldW / 2, y: worldH / 2, r: 100, angle: 0, 
                            craters: [ {x: -35, y: -25, r: 20}, {x: 35, y: -35, r: 16}, {x: 10, y: 30, r: 25}, {x: -40, y: 25, r: 14}, {x: 0, y: 0, r: 18} ], 
@@ -329,14 +330,14 @@ else:
 
                 bots.forEach(b => b.update());
 
-                // Mover y Dibujar la Luna
+                // Mover Luna
                 if (!meteor.isBoss) {
                     meteor.orbitAngle += 0.002;
                     if(!blackHole.dead) { meteor.x = blackHole.x + Math.cos(meteor.orbitAngle) * meteor.orbitRadius; meteor.y = blackHole.y + Math.sin(meteor.orbitAngle) * meteor.orbitRadius; }
                 }
                 meteor.angle += 0.01;
 
-                // 🌕 ATAQUE DE LA LUNA (JEFA)
+                // 🌕 ATAQUE DE LA LUNA (JEFA FINAL)
                 if (meteor.isBoss && !meteor.dead) {
                     if (now - meteor.lastShootTime > 200) { 
                         meteor.shootAngle += 0.4;
@@ -347,7 +348,7 @@ else:
                     }
                 }
 
-                // Actualizar proyectiles de la Luna
+                // Actualizar proyectiles de la Luna y colisión con el jugador
                 for(let i = moonProjectiles.length - 1; i >= 0; i--) {
                     let mp = moonProjectiles[i];
                     mp.x += mp.vx; mp.y += mp.vy; mp.life--; mp.rot += 0.1;
@@ -369,7 +370,7 @@ else:
                         }
                     });
 
-                    // Colisión Laser vs Luna (Jefa)
+                    // Colisión Láser vs Luna Jefa
                     if(meteor.isBoss && !meteor.dead && !hit) {
                         if(Math.hypot(l.x - meteor.x, l.y - meteor.y) < meteor.r) {
                             meteor.hp -= l.size * 5; hit = true;
@@ -390,9 +391,12 @@ else:
                     if(!hit && !blackHole.dead && Math.hypot(l.x - blackHole.x, l.y - blackHole.y) < blackHole.r) {
                         blackHole.hp -= l.size * 5; blackHole.r = Math.max(25, blackHole.r - 0.25); hit = true;
                         if(blackHole.hp <= 0 && !blackHole.deathTriggered) { 
-                            blackHole.dead = true; blackHole.deathTriggered = true;
-                            playSfx("bhexplosion"); // SONIDO NUEVO
-                            meteor.isBoss = true; meteor.r = 250; meteor.hp = 15000;
+                            blackHole.dead = true; 
+                            blackHole.deathTriggered = true;
+                            playSfx("bhexplosion");
+                            meteor.isBoss = true; 
+                            meteor.r = 250; 
+                            meteor.hp = 15000;
                         }
                     }
                     if(hit || l.life <= 0) {
@@ -418,8 +422,12 @@ else:
                         if(Math.hypot(s.x - blackHole.x, s.y - blackHole.y) < s.r + blackHole.r * 0.8) {
                             if(s.r > blackHole.r * 1.25) { 
                                 if(!blackHole.deathTriggered) {
-                                    blackHole.dead = true; blackHole.deathTriggered = true; playSfx("bhexplosion");
-                                    meteor.isBoss = true; meteor.r = 250; meteor.hp = 15000;
+                                    blackHole.dead = true; 
+                                    blackHole.deathTriggered = true; 
+                                    playSfx("bhexplosion");
+                                    meteor.isBoss = true; 
+                                    meteor.r = 250; 
+                                    meteor.hp = 15000;
                                 }
                                 s.r += 35; 
                             } else { 
@@ -529,7 +537,7 @@ else:
 
                     if(meteor.isBoss) {
                         let hpPct = Math.max(0, meteor.hp / meteor.maxHp); 
-                        let barW = 200, barH = 14; 
+                        let barW = 220, barH = 14; 
                         ctx.fillStyle = "rgba(0,0,0,0.7)"; ctx.fillRect(meteor.x - barW/2, meteor.y - meteor.r - 40, barW, barH); 
                         ctx.fillStyle = "#FFD700"; ctx.fillRect(meteor.x - barW/2 + 1, meteor.y - meteor.r - 39, (barW - 2) * hpPct, barH - 2); 
                         ctx.strokeStyle = "#FFFFFF"; ctx.lineWidth = 1; ctx.strokeRect(meteor.x - barW/2, meteor.y - meteor.r - 40, barW, barH);
@@ -544,7 +552,7 @@ else:
                     ctx.fillStyle = "white"; ctx.font = "12px sans-serif"; ctx.textAlign = "center"; ctx.fillText("AGUJERO NEGRO", blackHole.x, blackHole.y - blackHole.r - 25);
                 }
 
-                // Dibujar Estrellas de la Jefa Luna
+                // Dibujar Estrellas en Espiral de la Jefa Luna
                 moonProjectiles.forEach(mp => {
                     ctx.save(); ctx.translate(mp.x, mp.y); ctx.rotate(mp.rot);
                     ctx.beginPath();
