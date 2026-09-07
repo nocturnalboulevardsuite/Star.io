@@ -2,10 +2,10 @@ import streamlit as st
 import streamlit.components.v1 as components
 
 # Configuración de página
-st.set_page_config(page_title="Star.io - Reglas Avanzadas", layout="wide")
+st.set_page_config(page_title="Star.io - Meteoro Lunar", layout="wide")
 
-st.title("🌟 Star.io - Reglas Avanzadas & Dash")
-st.write("¡Mapa masivo con cámara inteligente, Dash (Click Derecho) y sistema anti-bullying para estrellas gigantes!")
+st.title("🌟 Star.io - Meteoro Lunar Mortal")
+st.write("¡Cuidado con el gran meteoro lunar en el centro del mapa! Si chocas con él, explotarás.")
 
 if 'jugando' not in st.session_state:
     st.session_state.jugando = False
@@ -21,12 +21,11 @@ if not st.session_state.jugando:
     with col2:
         st.button("▶️ JUGAR AHORA", on_click=iniciar_juego, type="primary", use_container_width=True)
         st.info("""
-        💡 **NUEVAS REGLAS Y CONTROLES:**
-        - **⚡ DASH:** Haz **Click Derecho** para hacer un deslizamiento rápido hacia tu ratón (Cooldown: 5s).
-        - **👑 ESTRELLA GIGANTE (Radio ≥ 50):** Tu estrella obtiene un borde dorado.
-        - **⚠️ REGLA DE ABSORCIÓN:** Al ser gigante, **¡solo puedes comer estrellas del Top 10!**
-        - **🚫 PENALIZACIÓN / DESINFLADO:** Si eres gigante y te comes una estrella pequeña fuera del Top 10, **¡TE DESINFLAS Y PIERDES TAMAÑO!**
-        - **🔍 CÁMARA INTELIGENTE:** Corrección del bug de tamaño: la pantalla se aleja dinámicamente cuando creces.
+        💡 **REGLAS Y MODO DE JUEGO:**
+        - **🌑 METEORO LUNAR:** Enorme meteoro gris con hoyitos rondando el centro. **¡Si te lo chocas o intentas comerlo, EXPLOTAS!**
+        - **⚡ DASH:** Haz **Click Derecho** para impulsarte hacia el ratón (Cooldown: 5s).
+        - **👑 ESTRELLA GIGANTE (Radio ≥ 50):** Solo puedes comer estrellas del Top 10.
+        - **🚫 PENALIZACIÓN:** Si eres gigante y te comes una estrella pequeña fuera del Top 10, **¡TE DESINFLAS!**
         """)
 
 else:
@@ -45,7 +44,7 @@ else:
     <body>
         <canvas id="gameCanvas" width="900" height="600"></canvas>
         <div id="gameover">
-            <h2>¡Te comieron! 💥</h2>
+            <h2>¡Te comieron o Explotaste! 💥</h2>
             <p>Estás en modo espectador (siguiendo al #1).</p>
             <p style="font-size: 16px; color:#aaa;">Usa el botón de arriba para reiniciar.</p>
         </div>
@@ -61,7 +60,7 @@ else:
             // Configuración del mundo
             const worldW = 3200;
             const worldH = 3200;
-            const LARGE_THRESHOLD = 50; // A partir de este radio se considera "Muy Grande"
+            const LARGE_THRESHOLD = 50; 
             
             // Cámara y Entrada
             let camX = 0;
@@ -73,11 +72,30 @@ else:
 
             // Dash / Impulso
             let lastDashTime = 0;
-            const dashCooldown = 5000; // 5 segundos
-            let dashTimer = 0; // Frames de dash activo
+            const dashCooldown = 5000; 
+            let dashTimer = 0; 
 
-            // Textos flotantes de penalización / aviso
+            // Textos flotantes
             let floatingTexts = [];
+
+            // METEORO LUNAR
+            let meteor = {
+                orbitAngle: 0,
+                orbitRadius: 450, // Radio de la órbita en el centro
+                x: worldW / 2,
+                y: worldH / 2,
+                r: 110, // Super grande
+                angle: 0, // Ángulo de rotación propia
+                craters: [
+                    {x: -35, y: -25, r: 22},
+                    {x: 35, y: -35, r: 18},
+                    {x: 10, y: 30, r: 28},
+                    {x: -40, y: 25, r: 15},
+                    {x: 45, y: 20, r: 16},
+                    {x: -5, y: -50, r: 14},
+                    {x: 0, y: 0, r: 20}
+                ]
+            };
 
             // Escuchar ratón
             canvas.addEventListener('mousemove', (e) => {
@@ -87,7 +105,7 @@ else:
             });
 
             canvas.addEventListener('mousedown', (e) => {
-                if(e.button === 2) { // Click derecho
+                if(e.button === 2) { 
                     e.preventDefault();
                     triggerDash();
                 }
@@ -97,7 +115,7 @@ else:
                 const now = Date.now();
                 if(!player.dead && now - lastDashTime >= dashCooldown) {
                     lastDashTime = now;
-                    dashTimer = 12; // 12 frames de impulso
+                    dashTimer = 12; 
                     
                     floatingTexts.push({
                         x: player.x,
@@ -133,11 +151,38 @@ else:
                 ctx.fillStyle = color;
                 ctx.fill();
                 
-                // Borde dorado si es estrella gigante
                 ctx.lineWidth = Math.max(2, radius * 0.08);
                 ctx.strokeStyle = isLarge ? "#FFD700" : "rgba(0,0,0,0.3)";
                 ctx.stroke();
                 ctx.closePath();
+                ctx.restore();
+            }
+
+            function drawMeteor() {
+                ctx.save();
+                ctx.translate(meteor.x, meteor.y);
+                ctx.rotate(meteor.angle);
+
+                // Cuerpo del meteoro (Gris Luna)
+                ctx.beginPath();
+                ctx.arc(0, 0, meteor.r, 0, Math.PI * 2);
+                ctx.fillStyle = "#A9A9A9";
+                ctx.fill();
+                ctx.lineWidth = 8;
+                ctx.strokeStyle = "#555555";
+                ctx.stroke();
+
+                // Hoyitos / Cráteres
+                meteor.craters.forEach(c => {
+                    ctx.beginPath();
+                    ctx.arc(c.x, c.y, c.r, 0, Math.PI * 2);
+                    ctx.fillStyle = "#696969"; // Gris más oscuro
+                    ctx.fill();
+                    ctx.lineWidth = 3;
+                    ctx.strokeStyle = "#404040";
+                    ctx.stroke();
+                });
+
                 ctx.restore();
             }
 
@@ -193,7 +238,13 @@ else:
             }
 
             function update() {
-                // Obtener Top 10 actual para la regla de estrellas grandes
+                // Actualizar Meteoro Lunar (Órbita y Rotación)
+                meteor.orbitAngle += 0.0012; // Velocidad de órbita muy lenta
+                meteor.angle += 0.003;      // Rotación en su propio eje
+                meteor.x = (worldW / 2) + Math.cos(meteor.orbitAngle) * meteor.orbitRadius;
+                meteor.y = (worldH / 2) + Math.sin(meteor.orbitAngle) * meteor.orbitRadius;
+
+                // Obtener Top 10
                 let allStars = [player, ...bots].filter(s => !s.dead);
                 allStars.sort((a, b) => b.r - a.r);
                 let top10 = allStars.slice(0, 10);
@@ -207,11 +258,10 @@ else:
                     let dy = targetY - player.y;
                     let dist = Math.sqrt(dx*dx + dy*dy);
                     
-                    // Velocidad corregida para evitar glitches al crecer
                     let baseSpeed = player.speed * Math.max(0.35, 20 / (player.r + 5));
                     
                     if (dashTimer > 0) {
-                        baseSpeed *= 3.8; // Impulso Dash
+                        baseSpeed *= 3.8; 
                         dashTimer--;
                     }
 
@@ -224,9 +274,8 @@ else:
                     player.y = Math.max(player.r, Math.min(worldH - player.r, player.y));
                 }
 
-                // Cámara con ZOOM DINÁMICO (Soluciona el bug cuando te haces enorme)
+                // Cámara con ZOOM DINÁMICO
                 let focusTarget = (!player.dead) ? player : (allStars[0] || {x: worldW/2, y: worldH/2, r: 15});
-                
                 let targetZoom = Math.max(0.25, 25 / Math.max(25, focusTarget.r * 0.6));
                 zoom += (targetZoom - zoom) * 0.05;
 
@@ -261,10 +310,24 @@ else:
                     bot.y = Math.max(bot.r, Math.min(worldH - bot.r, bot.y));
                 });
 
+                // Colisión con METEORO LUNAR (Explosión Instantánea)
+                allStars.forEach(s => {
+                    let distToMeteor = Math.hypot(s.x - meteor.x, s.y - meteor.y);
+                    if(distToMeteor < s.r + meteor.r * 0.85) {
+                        s.dead = true;
+                        
+                        floatingTexts.push({
+                            x: s.x, y: s.y - s.r - 10,
+                            text: "💥 ¡EXPLOSIÓN METEÓRICA!", color: "#FF4500", life: 50
+                        });
+                    }
+                });
+
                 // Colisiones: Estrellas vs Comida
                 for(let i = foods.length - 1; i >= 0; i--) {
                     let f = foods[i];
                     for(let e of allStars) {
+                        if(e.dead) continue;
                         let d = Math.hypot(e.x - f.x, e.y - f.y);
                         if(d < e.r) {
                             e.r += 0.08; 
@@ -275,7 +338,7 @@ else:
                     }
                 }
 
-                // Colisiones: Estrella vs Estrella (Regla del Top 10 y Penalización)
+                // Colisiones: Estrella vs Estrella
                 for(let i = 0; i < allStars.length; i++) {
                     for(let j = i + 1; j < allStars.length; j++) {
                         let e1 = allStars[i];
@@ -288,33 +351,27 @@ else:
 
                         if(d < bigger.r * 0.75) {
                             if(bigger.r > smaller.r * 1.15) {
-                                
                                 const isBiggerLarge = bigger.r >= LARGE_THRESHOLD;
                                 const isSmallerInTop10 = top10.includes(smaller);
 
                                 if (isBiggerLarge) {
                                     if (isSmallerInTop10) {
-                                        // ✅ Come Top 10 -> Crece
                                         bigger.r += smaller.r * 0.35;
                                         smaller.dead = true;
-
                                         floatingTexts.push({
                                             x: bigger.x, y: bigger.y - bigger.r - 10,
                                             text: "👑 +TOP 10 ABSORBIDO!", color: "#00FF66", life: 40
                                         });
                                     } else {
-                                        // ❌ PENALIZACIÓN: Intenta comer una estrella pequeña fuera del Top 10 -> ¡DESINFLADO!
                                         let loss = Math.max(6, smaller.r * 0.5);
                                         bigger.r = Math.max(15, bigger.r - loss);
                                         smaller.dead = true;
-
                                         floatingTexts.push({
                                             x: bigger.x, y: bigger.y - bigger.r - 10,
                                             text: `⚠️ ¡DESINFLADO! -${Math.floor(loss)} TAMAÑO`, color: "#FF3333", life: 45
                                         });
                                     }
                                 } else {
-                                    // Normal cuando aún no es gigante
                                     bigger.r += smaller.r * 0.35;
                                     smaller.dead = true;
                                 }
@@ -438,6 +495,9 @@ else:
                 
                 drawGrid();
                 
+                // Dibujar Meteoro Lunar
+                drawMeteor();
+
                 // Comida
                 foods.forEach(f => {
                     ctx.beginPath();
@@ -464,7 +524,7 @@ else:
                     ctx.shadowBlur = 0;
                 });
 
-                // Textos flotantes (Penalización / Dash)
+                // Textos flotantes
                 floatingTexts.forEach(ft => {
                     ctx.fillStyle = ft.color;
                     ctx.font = "bold 15px sans-serif";
