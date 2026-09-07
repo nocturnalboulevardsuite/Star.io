@@ -2,10 +2,10 @@ import streamlit as st
 import streamlit.components.v1 as components
 
 # Configuración de página
-st.set_page_config(page_title="Star.io - Boss Agujero Negro", layout="wide")
+st.set_page_config(page_title="Star.io - Cajitas Misteriosas y Parallax", layout="wide")
 
-st.title("🌟 Star.io - ¡Combate contra el Agujero Negro!")
-st.write("¡Detén al Agujero Negro antes de que devore todo el mapa! Usa [ESPACIO] para disparar láseres.")
+st.title("🌟 Star.io - Cajitas Misteriosas & Power-Ups")
+st.write("¡Junta cajitas misteriosas para obtener escudos, aura de fuego e invulnerabilidad!")
 
 if 'jugando' not in st.session_state:
     st.session_state.jugando = False
@@ -21,12 +21,13 @@ if not st.session_state.jugando:
     with col2:
         st.button("▶️ JUGAR AHORA", on_click=iniciar_juego, type="primary", use_container_width=True)
         st.info("""
-        💡 **CONTROLES Y MECÁNICAS:**
-        - **🕳️ AGUJERO NEGRO (JEFE):** Crece sin parar. ¡Reduce su vida antes de que devore el mapa!
-        - **🔫 DISPARAR LÁSER:** Presiona **[ESPACIO]** para disparar hacia el ratón. *(Consume tu masa/tamaño)*.
-        - **⚡ DASH:** Haz **Click Derecho** para impulsarte (Cooldown: 5s).
-        - **🌑 METEORO LUNAR:** Meteoro gigante con hoyitos en órbita. ¡Chocarlo causa explosión!
-        - **👑 REGLA DE GIGANTES:** Si miden ≥ 50, solo ganan tamaño comiendo Top 10.
+        💡 **CONTROLES Y NUEVAS MECÁNICAS:**
+        - **🎁 CAJITAS MISTERIOSAS:** Recógelas para obtener poderes aleatorios.
+        - **🛡️ ESCUDOS (Máx 4):** Bloquean golpes fatales antes de afectar tu barra de vida.
+        - **👻 INVULNERABILIDAD:** Al conseguir la carga, haz **Click Izquierdo** para ser 100% inmune durante 5s.
+        - **🔥 AURA DE FUEGO:** Quema a las estrellas más grandes si te tocan y evita que te coman.
+        - **⚡ DASH:** Haz **Click Derecho** para un impulso rápido (Cooldown: 5s).
+        - **🔫 DISPARAR LÁSER:** Presiona **[ESPACIO]** contra el Agujero Negro.
         """)
 
 else:
@@ -38,7 +39,7 @@ else:
     <head>
         <style>
             body { margin: 0; overflow: hidden; background-color: #050508; display: flex; justify-content: center; user-select: none; }
-            canvas { background-color: #101018; cursor: crosshair; border-radius: 8px; }
+            canvas { background-color: #080812; cursor: crosshair; border-radius: 8px; }
             #gameover { display: none; position: absolute; color: white; font-family: sans-serif; top: 40%; text-align: center; font-size: 24px; text-shadow: 2px 2px 8px #000; }
         </style>
     </head>
@@ -46,8 +47,8 @@ else:
         <canvas id="gameCanvas" width="900" height="600"></canvas>
         <div id="gameover">
             <h2>¡Has muerto! 💥</h2>
-            <p>Estás en modo espectador (siguiendo al líder).</p>
-            <p style="font-size: 16px; color:#aaa;">Usa el botón de arriba para reiniciar.</p>
+            <p>Estás en modo espectador.</p>
+            <p style="font-size: 16px; color:#aaa;">Usa el botón superior para reiniciar.</p>
         </div>
 
         <script>
@@ -72,32 +73,28 @@ else:
 
             let floatingTexts = [];
             let lasers = [];
+            let particles = [];
+            let boxes = [];
+
+            // ESTRELLERAS PARALLAX DE FONDO
+            let bgStarsLayer1 = [];
+            let bgStarsLayer2 = [];
+            for(let i=0; i<120; i++) {
+                bgStarsLayer1.push({x: Math.random() * canvas.width, y: Math.random() * canvas.height, r: Math.random() * 1.5 + 0.5, alpha: Math.random()});
+                bgStarsLayer2.push({x: Math.random() * canvas.width, y: Math.random() * canvas.height, r: Math.random() * 2.5 + 1.0, alpha: Math.random()});
+            }
 
             // METEORO LUNAR
             let meteor = {
-                orbitAngle: 0,
-                orbitRadius: 450,
-                x: worldW / 2,
-                y: worldH / 2,
-                r: 100,
-                angle: 0,
+                orbitAngle: 0, orbitRadius: 450, x: worldW / 2, y: worldH / 2, r: 100, angle: 0,
                 craters: [
                     {x: -35, y: -25, r: 20}, {x: 35, y: -35, r: 16},
-                    {x: 10, y: 30, r: 25}, {x: -40, y: 25, r: 14},
-                    {x: 45, y: 20, r: 15}, {x: 0, y: 0, r: 18}
+                    {x: 10, y: 30, r: 25}, {x: -40, y: 25, r: 14}, {x: 0, y: 0, r: 18}
                 ]
             };
 
             // AGUJERO NEGRO (JEFE FINAL)
-            let blackHole = {
-                x: worldW * 0.7,
-                y: worldH * 0.3,
-                r: 75,
-                hp: 1200,
-                maxHp: 1200,
-                angle: 0,
-                dead: false
-            };
+            let blackHole = { x: worldW * 0.7, y: worldH * 0.3, r: 75, hp: 1200, maxHp: 1200, dead: false };
 
             canvas.addEventListener('mousemove', (e) => {
                 const rect = canvas.getBoundingClientRect();
@@ -105,8 +102,11 @@ else:
                 screenMouseY = e.clientY - rect.top;
             });
 
+            // MOUSE CONTROLS: Left click = Invulnerability, Right click = Dash
             canvas.addEventListener('mousedown', (e) => {
-                if(e.button === 2) { 
+                if(e.button === 0) {
+                    triggerInvulnerability();
+                } else if(e.button === 2) { 
                     e.preventDefault();
                     triggerDash();
                 }
@@ -118,6 +118,17 @@ else:
                     shootLaser();
                 }
             });
+
+            function triggerInvulnerability() {
+                if(!player.dead && player.hasInvulnCharge && player.invulnTimer <= 0) {
+                    player.hasInvulnCharge = false;
+                    player.invulnTimer = 300; // 5 segundos (60 FPS * 5)
+                    floatingTexts.push({
+                        x: player.x, y: player.y - player.r - 25,
+                        text: "👻 ¡MODO FANTASMA ACTIVADO!", color: "#00FFFF", life: 50
+                    });
+                }
+            }
 
             function triggerDash() {
                 const now = Date.now();
@@ -142,118 +153,51 @@ else:
 
                 if(dist === 0) return;
 
-                let speed = 14;
                 lasers.push({
-                    x: player.x,
-                    y: player.y,
-                    vx: (dx / dist) * speed,
-                    vy: (dy / dist) * speed,
-                    life: 70
+                    x: player.x, y: player.y,
+                    vx: (dx / dist) * 14, vy: (dy / dist) * 14, life: 70
                 });
 
-                // Cuesta masa al jugador
                 player.r = Math.max(10, player.r - 0.7);
             }
 
-            const nombres = ["Alpha", "Nova", "Sirius", "Vega", "Orion", "Cosmos", "Apollo", "Zeta", "Pulsar", "Quasar", 
-                             "Rigel", "Lyra", "Draco", "Cygnus", "Pegasus", "Phoenix", "Astro", "Cometa", "Titan", "Atlas"];
+            const nombres = ["Alpha", "Nova", "Sirius", "Vega", "Orion", "Cosmos", "Apollo", "Zeta", "Pulsar", "Quasar", "Rigel", "Lyra", "Draco", "Cygnus", "Pegasus"];
             const colors = ['#FF3366', '#33CCFF', '#FF9933', '#33FF66', '#CC33FF', '#FFFF33', '#FF3333', '#33FFCC'];
 
             function randomName() { return nombres[Math.floor(Math.random() * nombres.length)]; }
             function randomColor() { return colors[Math.floor(Math.random() * colors.length)]; }
 
-            function drawStar(x, y, radius, color, isLarge) {
-                ctx.save();
-                ctx.beginPath();
-                ctx.translate(x, y);
-                for (let i = 0; i < 5; i++) {
-                    ctx.lineTo(0, -radius);
-                    ctx.translate(0, -radius);
-                    ctx.rotate((Math.PI * 2) / 10);
-                    ctx.lineTo(0, radius / 2);
-                    ctx.translate(0, radius / 2);
-                    ctx.rotate((Math.PI * 2) / 10);
-                }
-                ctx.lineTo(0, -radius);
-                ctx.fillStyle = color;
-                ctx.fill();
-                ctx.lineWidth = Math.max(2, radius * 0.08);
-                ctx.strokeStyle = isLarge ? "#FFD700" : "rgba(0,0,0,0.3)";
-                ctx.stroke();
-                ctx.closePath();
-                ctx.restore();
-            }
-
-            function drawMeteor() {
-                ctx.save();
-                ctx.translate(meteor.x, meteor.y);
-                ctx.rotate(meteor.angle);
-                ctx.beginPath();
-                ctx.arc(0, 0, meteor.r, 0, Math.PI * 2);
-                ctx.fillStyle = "#A9A9A9";
-                ctx.fill();
-                ctx.lineWidth = 8;
-                ctx.strokeStyle = "#555555";
-                ctx.stroke();
-
-                meteor.craters.forEach(c => {
-                    ctx.beginPath();
-                    ctx.arc(c.x, c.y, c.r, 0, Math.PI * 2);
-                    ctx.fillStyle = "#696969";
-                    ctx.fill();
-                    ctx.lineWidth = 3;
-                    ctx.strokeStyle = "#404040";
-                    ctx.stroke();
+            function spawnBox() {
+                boxes.push({
+                    x: Math.random() * (worldW - 100) + 50,
+                    y: Math.random() * (worldH - 100) + 50,
+                    r: 16,
+                    angle: 0
                 });
-                ctx.restore();
-            }
-
-            function drawBlackHole() {
-                if(blackHole.dead) return;
-                ctx.save();
-                ctx.translate(blackHole.x, blackHole.y);
-
-                // Disco de acreción (aura externa)
-                let grad = ctx.createRadialGradient(0, 0, blackHole.r * 0.4, 0, 0, blackHole.r * 1.5);
-                grad.addColorStop(0, "#000000");
-                grad.addColorStop(0.5, "#8A2BE2");
-                grad.addColorStop(1, "rgba(255, 0, 128, 0)");
-
-                ctx.beginPath();
-                ctx.arc(0, 0, blackHole.r * 1.5, 0, Math.PI * 2);
-                ctx.fillStyle = grad;
-                ctx.fill();
-
-                // Centro del Agujero Negro
-                ctx.beginPath();
-                ctx.arc(0, 0, blackHole.r, 0, Math.PI * 2);
-                ctx.fillStyle = "#05000A";
-                ctx.fill();
-                ctx.lineWidth = 5;
-                ctx.strokeStyle = "#DA70D6";
-                ctx.stroke();
-
-                ctx.restore();
             }
 
             let player, bots, foods;
             const maxBots = 28;
             const maxFoods = 600;
+            const maxBoxes = 20;
 
             function init() {
                 isGameOver = false;
                 overScreen.style.display = 'none';
                 floatingTexts = [];
                 lasers = [];
+                particles = [];
+                boxes = [];
                 
                 player = { 
-                    x: Math.random() * worldW, 
-                    y: Math.random() * worldH, 
-                    r: 16, 
-                    color: '#FFFFFF', 
-                    name: "TÚ",
-                    speed: 3.5,
-                    dead: false
+                    x: Math.random() * worldW, y: Math.random() * worldH, 
+                    r: 16, color: '#FFFFFF', name: "TÚ", speed: 3.5, dead: false,
+                    hp: 100, maxHp: 100,
+                    shields: 0, // Máximo 4
+                    hasInvulnCharge: false,
+                    invulnTimer: 0,
+                    fireTimer: 0,
+                    speedBoostTimer: 0
                 };
                 
                 bots = [];
@@ -261,44 +205,75 @@ else:
 
                 foods = [];
                 for(let i=0; i<maxFoods; i++) spawnFood();
+
+                for(let i=0; i<maxBoxes; i++) spawnBox();
                 
                 loop();
             }
 
             function spawnBot() {
                 bots.push({
-                    x: Math.random() * worldW,
-                    y: Math.random() * worldH,
-                    r: Math.random() * 20 + 10,
-                    color: randomColor(),
-                    name: randomName(),
-                    vx: (Math.random() - 0.5) * 4,
-                    vy: (Math.random() - 0.5) * 4,
-                    dashTimer: 0,
+                    x: Math.random() * worldW, y: Math.random() * worldH,
+                    r: Math.random() * 20 + 10, color: randomColor(), name: randomName(),
+                    vx: (Math.random() - 0.5) * 4, vy: (Math.random() - 0.5) * 4,
                     dead: false
                 });
             }
 
             function spawnFood() {
                 foods.push({
-                    x: Math.random() * worldW,
-                    y: Math.random() * worldH,
-                    r: 3.5,
-                    color: randomColor()
+                    x: Math.random() * worldW, y: Math.random() * worldH,
+                    r: 3.5, color: randomColor()
                 });
             }
 
+            function takeDamage(amount) {
+                if(player.invulnTimer > 0) return;
+
+                if(player.shields > 0) {
+                    player.shields--;
+                    floatingTexts.push({
+                        x: player.x, y: player.y - player.r - 20,
+                        text: "🛡️ ¡ESCUDO ABSORBIÓ EL GOLPE!", color: "#C0C0C0", life: 40
+                    });
+                    return;
+                }
+
+                player.hp -= amount;
+                if(player.hp <= 0) {
+                    player.hp = 0;
+                    player.dead = true;
+                }
+            }
+
             function update() {
-                // Actualizar Meteoro
+                // Meteoro y Agujero Negro
                 meteor.orbitAngle += 0.0012;
                 meteor.angle += 0.003;
                 meteor.x = (worldW / 2) + Math.cos(meteor.orbitAngle) * meteor.orbitRadius;
                 meteor.y = (worldH / 2) + Math.sin(meteor.orbitAngle) * meteor.orbitRadius;
 
-                // Actualizar Agujero Negro (Crecimiento continuo)
                 if(!blackHole.dead) {
                     blackHole.r += 0.012; 
                     blackHole.hp = Math.min(blackHole.maxHp, blackHole.hp + 0.1);
+                }
+
+                // Timers del Jugador
+                if(player.invulnTimer > 0) player.invulnTimer--;
+                if(player.fireTimer > 0) player.fireTimer--;
+                if(player.speedBoostTimer > 0) player.speedBoostTimer--;
+
+                // Generar partículas de fuego si tiene el aura
+                if(player.fireTimer > 0 && !player.dead) {
+                    for(let i=0; i<2; i++) {
+                        particles.push({
+                            x: player.x + (Math.random() - 0.5) * player.r * 1.5,
+                            y: player.y + (Math.random() - 0.5) * player.r * 1.5,
+                            vx: (Math.random() - 0.5) * 2, vy: -Math.random() * 3,
+                            color: Math.random() > 0.5 ? "#FF4500" : "#FFD700",
+                            life: 20
+                        });
+                    }
                 }
 
                 let allStars = [player, ...bots].filter(s => !s.dead);
@@ -314,11 +289,9 @@ else:
                     let dy = targetY - player.y;
                     let dist = Math.sqrt(dx*dx + dy*dy);
                     let baseSpeed = player.speed * Math.max(0.35, 20 / (player.r + 5));
-                    
-                    if (dashTimer > 0) {
-                        baseSpeed *= 3.8; 
-                        dashTimer--;
-                    }
+
+                    if (player.speedBoostTimer > 0) baseSpeed *= 1.7;
+                    if (dashTimer > 0) { baseSpeed *= 3.8; dashTimer--; }
 
                     if (dist > 5) {
                         player.x += (dx / dist) * baseSpeed;
@@ -337,44 +310,24 @@ else:
                 camX += (focusTarget.x - canvas.width / 2 - camX) * 0.1;
                 camY += (focusTarget.y - canvas.height / 2 - camY) * 0.1;
 
-                // Actualizar Lasers
+                // Lasers
                 for(let i = lasers.length - 1; i >= 0; i--) {
                     let l = lasers[i];
-                    l.x += l.vx;
-                    l.y += l.vy;
-                    l.life--;
+                    l.x += l.vx; l.y += l.vy; l.life--;
 
-                    // Impacto Láser vs Agujero Negro
                     if(!blackHole.dead) {
-                        let distBH = Math.hypot(l.x - blackHole.x, l.y - blackHole.y);
-                        if(distBH < blackHole.r) {
+                        if(Math.hypot(l.x - blackHole.x, l.y - blackHole.y) < blackHole.r) {
                             blackHole.hp -= 18;
                             blackHole.r = Math.max(25, blackHole.r - 0.25);
                             lasers.splice(i, 1);
-
-                            floatingTexts.push({
-                                x: blackHole.x + (Math.random()-0.5)*30,
-                                y: blackHole.y + (Math.random()-0.5)*30,
-                                text: "-18 HP", color: "#FF00FF", life: 25
-                            });
-
-                            if(blackHole.hp <= 0) {
-                                blackHole.dead = true;
-                                floatingTexts.push({
-                                    x: blackHole.x, y: blackHole.y,
-                                    text: "💥 ¡AGUJERO NEGRO DESTRUIDO!", color: "#00FFCC", life: 80
-                                });
-                            }
+                            if(blackHole.hp <= 0) blackHole.dead = true;
                             continue;
                         }
                     }
-
-                    if(l.life <= 0 || l.x < 0 || l.x > worldW || l.y < 0 || l.y > worldH) {
-                        lasers.splice(i, 1);
-                    }
+                    if(l.life <= 0) lasers.splice(i, 1);
                 }
 
-                // Movimiento Bots
+                // Mover Bots
                 bots.forEach(bot => {
                     let botSpeed = 3 * Math.max(0.35, 20 / (bot.r + 5));
                     if(Math.random() < 0.02) {
@@ -383,23 +336,55 @@ else:
                     }
                     bot.x += bot.vx * (botSpeed / 2);
                     bot.y += bot.vy * (botSpeed / 2);
-
                     bot.x = Math.max(bot.r, Math.min(worldW - bot.r, bot.x));
                     bot.y = Math.max(bot.r, Math.min(worldH - bot.r, bot.y));
                 });
 
-                // Colisión con Meteoro
+                // Colisión con Cajitas Misteriosas
+                for(let i = boxes.length - 1; i >= 0; i--) {
+                    let b = boxes[i];
+                    if(!player.dead && Math.hypot(player.x - b.x, player.y - b.y) < player.r + b.r) {
+                        boxes.splice(i, 1);
+                        spawnBox();
+
+                        let rand = Math.random();
+                        if(rand < 0.25) { // Escudo
+                            if(player.shields < 4) {
+                                player.shields++;
+                                floatingTexts.push({x: player.x, y: player.y - player.r - 15, text: "🛡️ +1 ESCUDO GRIS", color: "#C0C0C0", life: 45});
+                            } else {
+                                player.hp = player.maxHp;
+                                floatingTexts.push({x: player.x, y: player.y - player.r - 15, text: "❤️ SALUD MÁXIMA", color: "#FF3366", life: 45});
+                            }
+                        } else if(rand < 0.45) { // Aura de fuego
+                            player.fireTimer = 360; // 6s
+                            floatingTexts.push({x: player.x, y: player.y - player.r - 15, text: "🔥 ¡AURA DE FUEGO ACTIVADA!", color: "#FF4500", life: 50});
+                        } else if(rand < 0.65) { // Invulnerabilidad
+                            player.hasInvulnCharge = true;
+                            floatingTexts.push({x: player.x, y: player.y - player.r - 15, text: "👻 ¡INVULNERABILIDAD LISTA! (Click Izq)", color: "#00FFFF", life: 55});
+                        } else if(rand < 0.85) { // Super velocidad
+                            player.speedBoostTimer = 300; // 5s
+                            floatingTexts.push({x: player.x, y: player.y - player.r - 15, text: "⚡ ¡SUPER VELOCIDAD!", color: "#FFFF33", life: 45});
+                        } else { // Vida / Curación
+                            player.hp = Math.min(player.maxHp, player.hp + 40);
+                            player.r += 4;
+                            floatingTexts.push({x: player.x, y: player.y - player.r - 15, text: "❤️ +40 SALUD & MASA", color: "#33FF66", life: 45});
+                        }
+                    }
+                }
+
+                // Colisión Meteoro
                 allStars.forEach(s => {
                     if(Math.hypot(s.x - meteor.x, s.y - meteor.y) < s.r + meteor.r * 0.85) {
-                        s.dead = true;
-                        floatingTexts.push({
-                            x: s.x, y: s.y - s.r - 10,
-                            text: "💥 ¡EXPLOSIÓN METEÓRICA!", color: "#FF4500", life: 50
-                        });
+                        if(s === player) {
+                            takeDamage(100);
+                        } else {
+                            s.dead = true;
+                        }
                     }
                 });
 
-                // Colisión con Agujero Negro
+                // Colisión Agujero Negro
                 if(!blackHole.dead) {
                     allStars.forEach(s => {
                         let d = Math.hypot(s.x - blackHole.x, s.y - blackHole.y);
@@ -407,18 +392,13 @@ else:
                             if(s.r > blackHole.r * 1.25) {
                                 blackHole.dead = true;
                                 s.r += 35;
-                                floatingTexts.push({
-                                    x: s.x, y: s.y - s.r - 10,
-                                    text: "🌌 ¡DEVORASTE EL AGUJERO NEGRO!", color: "#9900FF", life: 70
-                                });
                             } else {
-                                s.dead = true;
-                                blackHole.r += s.r * 0.15;
-                                blackHole.hp = Math.min(blackHole.maxHp, blackHole.hp + 60);
-                                floatingTexts.push({
-                                    x: blackHole.x, y: blackHole.y - blackHole.r - 10,
-                                    text: "🕳️ ¡ESTRELLA DEVORADA!", color: "#8A2BE2", life: 40
-                                });
+                                if(s === player) {
+                                    takeDamage(100);
+                                } else {
+                                    s.dead = true;
+                                    blackHole.r += s.r * 0.15;
+                                }
                             }
                         }
                     });
@@ -431,6 +411,7 @@ else:
                         if(e.dead) continue;
                         if(Math.hypot(e.x - f.x, e.y - f.y) < e.r) {
                             e.r += 0.08; 
+                            if(e === player) player.hp = Math.min(player.maxHp, player.hp + 0.2);
                             foods.splice(i, 1);
                             spawnFood();
                             break;
@@ -438,7 +419,7 @@ else:
                     }
                 }
 
-                // Estrella vs Estrella
+                // Estrella vs Estrella (Con efecto de Fuego e Invulnerabilidad)
                 for(let i = 0; i < allStars.length; i++) {
                     for(let j = i + 1; j < allStars.length; j++) {
                         let e1 = allStars[i];
@@ -450,15 +431,23 @@ else:
                         let smaller = e1.r > e2.r ? e2 : e1;
 
                         if(d < bigger.r * 0.75 && bigger.r > smaller.r * 1.15) {
-                            if (bigger.r >= LARGE_THRESHOLD) {
-                                if (top10.includes(smaller)) {
-                                    bigger.r += smaller.r * 0.35;
-                                    smaller.dead = true;
-                                } else {
-                                    let loss = Math.max(6, smaller.r * 0.5);
-                                    bigger.r = Math.max(15, bigger.r - loss);
-                                    smaller.dead = true;
-                                }
+                            // Si el pequeño es el Jugador con Fuego o Invulnerabilidad
+                            if(smaller === player && player.fireTimer > 0) {
+                                bigger.r = Math.max(12, bigger.r - 0.6); // Quema a la grande
+                                particles.push({
+                                    x: bigger.x + (Math.random()-0.5)*bigger.r,
+                                    y: bigger.y + (Math.random()-0.5)*bigger.r,
+                                    vx: 0, vy: -2, color: "#FF4500", life: 15
+                                });
+                                continue;
+                            }
+
+                            if(smaller === player && player.invulnTimer > 0) {
+                                continue; // Inmune, no puede ser comido
+                            }
+
+                            if(smaller === player) {
+                                takeDamage(100);
                             } else {
                                 bigger.r += smaller.r * 0.35;
                                 smaller.dead = true;
@@ -467,11 +456,17 @@ else:
                     }
                 }
 
+                // Partículas
+                for(let i = particles.length - 1; i >= 0; i--) {
+                    let p = particles[i];
+                    p.x += p.vx; p.y += p.vy; p.life--;
+                    if(p.life <= 0) particles.splice(i, 1);
+                }
+
                 // Textos
                 for(let i = floatingTexts.length - 1; i >= 0; i--) {
                     let ft = floatingTexts[i];
-                    ft.y -= 0.8;
-                    ft.life--;
+                    ft.y -= 0.8; ft.life--;
                     if(ft.life <= 0) floatingTexts.splice(i, 1);
                 }
 
@@ -484,101 +479,126 @@ else:
                 while(bots.length < maxBots) spawnBot();
             }
 
-            function drawGrid() {
-                ctx.strokeStyle = "#1a1a28";
-                ctx.lineWidth = 1.5;
-                let gridSize = 120;
-                ctx.beginPath();
-                for(let x = 0; x <= worldW; x += gridSize) {
-                    ctx.moveTo(x, 0); ctx.lineTo(x, worldH);
-                }
-                for(let y = 0; y <= worldH; y += gridSize) {
-                    ctx.moveTo(0, y); ctx.lineTo(worldW, y);
-                }
-                ctx.stroke();
-            }
-
-            function drawBossBar() {
-                if(blackHole.dead) return;
-                ctx.save();
-                let w = 380;
-                let h = 20;
-                let x = (canvas.width - w) / 2;
-                let y = canvas.height - 35;
-
-                ctx.fillStyle = "rgba(10, 5, 20, 0.85)";
-                ctx.strokeStyle = "#9900FF";
-                ctx.lineWidth = 2;
-                ctx.fillRect(x, y, w, h);
-                ctx.strokeRect(x, y, w, h);
-
-                let pct = Math.max(0, blackHole.hp / blackHole.maxHp);
-                ctx.fillStyle = "#A020F0";
-                ctx.fillRect(x + 2, y + 2, (w - 4) * pct, h - 4);
-
-                ctx.fillStyle = "#FFFFFF";
-                ctx.font = "bold 11px sans-serif";
-                ctx.textAlign = "center";
-                ctx.fillText(`🕳️ JEFE FINAL: AGUJERO NEGRO (${Math.ceil(blackHole.hp)} / ${blackHole.maxHp} HP)`, canvas.width / 2, y + 14);
-                ctx.restore();
-            }
-
-            function drawLeaderboard() {
-                let allStars = [player, ...bots].filter(s => !s.dead);
-                allStars.sort((a, b) => b.r - a.r);
-                let top10 = allStars.slice(0, 10);
-
-                ctx.save();
-                ctx.fillStyle = "rgba(10, 10, 20, 0.8)";
-                ctx.strokeStyle = "rgba(255, 255, 255, 0.1)";
-                let h = 40 + (top10.length * 22);
-                ctx.fillRect(12, 12, 200, h);
-
-                ctx.fillStyle = "#FFD700";
-                ctx.font = "bold 13px sans-serif";
-                ctx.textAlign = "center";
-                ctx.fillText("🏆 TOP 10 ESTRELLAS", 112, 30);
-
-                ctx.textAlign = "left";
-                ctx.font = "11px sans-serif";
-                for(let i=0; i<top10.length; i++) {
-                    let s = top10[i];
-                    let yPos = 52 + (i * 22);
-                    ctx.fillStyle = s.color;
+            function drawParallaxBG() {
+                // Capa 1 (Fondo lejano)
+                ctx.fillStyle = "rgba(255, 255, 255, 0.4)";
+                bgStarsLayer1.forEach(s => {
+                    let px = (s.x - camX * 0.08) % canvas.width;
+                    if (px < 0) px += canvas.width;
+                    let py = (s.y - camY * 0.08) % canvas.height;
+                    if (py < 0) py += canvas.height;
                     ctx.beginPath();
-                    ctx.arc(24, yPos - 4, 4, 0, Math.PI*2);
+                    ctx.arc(px, py, s.r, 0, Math.PI * 2);
                     ctx.fill();
+                });
 
-                    let isGigante = s.r >= LARGE_THRESHOLD;
-                    ctx.fillStyle = s.name === "TÚ" ? "#FFD700" : (isGigante ? "#FFA500" : "white");
-                    ctx.fillText(`${i+1}. ${s.name} (${Math.floor(s.r)})${isGigante ? ' 👑' : ''}`, 35, yPos);
+                // Capa 2 (Más cercana)
+                ctx.fillStyle = "rgba(180, 200, 255, 0.7)";
+                bgStarsLayer2.forEach(s => {
+                    let px = (s.x - camX * 0.2) % canvas.width;
+                    if (px < 0) px += canvas.width;
+                    let py = (s.y - camY * 0.2) % canvas.height;
+                    if (py < 0) py += canvas.height;
+                    ctx.beginPath();
+                    ctx.arc(px, py, s.r, 0, Math.PI * 2);
+                    ctx.fill();
+                });
+            }
+
+            function drawPlayerUI() {
+                ctx.save();
+                let x = 12;
+                let y = canvas.height - 50;
+
+                // Barra de Vida
+                ctx.fillStyle = "rgba(10, 10, 20, 0.85)";
+                ctx.strokeStyle = "#444";
+                ctx.lineWidth = 2;
+                ctx.fillRect(x, y, 180, 18);
+                ctx.strokeRect(x, y, 180, 18);
+
+                let hpPct = Math.max(0, player.hp / player.maxHp);
+                ctx.fillStyle = hpPct > 0.4 ? "#33FF66" : "#FF3333";
+                ctx.fillRect(x + 2, y + 2, 176 * hpPct, 14);
+
+                ctx.fillStyle = "#FFF";
+                ctx.font = "bold 10px sans-serif";
+                ctx.textAlign = "center";
+                ctx.fillText(`SALUD: ${Math.ceil(player.hp)} / ${player.maxHp}`, x + 90, y + 13);
+
+                // Escudos Grises (Iconos arriba de la vida)
+                for(let i = 0; i < 4; i++) {
+                    let sx = x + (i * 22) + 10;
+                    let sy = y - 14;
+                    ctx.beginPath();
+                    ctx.arc(sx, sy, 7, 0, Math.PI * 2);
+                    ctx.fillStyle = i < player.shields ? "#A0A0A0" : "rgba(80, 80, 80, 0.3)";
+                    ctx.fill();
+                    ctx.strokeStyle = "#FFF";
+                    ctx.lineWidth = 1;
+                    ctx.stroke();
                 }
+
+                // Indicador de Invulnerabilidad
+                if(player.hasInvulnCharge || player.invulnTimer > 0) {
+                    ctx.fillStyle = player.invulnTimer > 0 ? "#00FFFF" : "#FFD700";
+                    ctx.font = "bold 11px sans-serif";
+                    ctx.textAlign = "left";
+                    let txt = player.invulnTimer > 0 ? `👻 FANTASMA: ${(player.invulnTimer/60).toFixed(1)}s` : "👻 CLICK IZQ: FANTASMA LISTO";
+                    ctx.fillText(txt, x, y - 28);
+                }
+
                 ctx.restore();
             }
 
-            function drawDashUI() {
+            function drawStar(x, y, radius, color, isLarge, isInvuln, isFire) {
                 ctx.save();
-                const elapsed = Date.now() - lastDashTime;
-                const ready = elapsed >= dashCooldown;
-                let x = canvas.width - 185;
-                let y = canvas.height - 45;
+                ctx.beginPath();
+                ctx.translate(x, y);
 
-                ctx.fillStyle = "rgba(10, 10, 20, 0.8)";
-                ctx.fillRect(x, y, 170, 32);
+                if(isInvuln) ctx.globalAlpha = 0.5;
 
-                ctx.fillStyle = ready ? "#00FFCC" : "#444";
-                ctx.fillRect(x + 5, y + 22, 160 * Math.min(1, elapsed / dashCooldown), 5);
-
-                ctx.fillStyle = ready ? "#00FFCC" : "#AAA";
-                ctx.font = "bold 11px sans-serif";
-                ctx.textAlign = "center";
-                ctx.fillText(ready ? "⚡ DASH LISTO (R-Click)" : `⚡ DASH: ${(5 - elapsed/1000).toFixed(1)}s`, x + 85, y + 15);
+                for (let i = 0; i < 5; i++) {
+                    ctx.lineTo(0, -radius);
+                    ctx.translate(0, -radius);
+                    ctx.rotate((Math.PI * 2) / 10);
+                    ctx.lineTo(0, radius / 2);
+                    ctx.translate(0, radius / 2);
+                    ctx.rotate((Math.PI * 2) / 10);
+                }
+                ctx.lineTo(0, -radius);
+                ctx.fillStyle = isFire ? "#FF4500" : color;
+                ctx.fill();
+                ctx.lineWidth = Math.max(2, radius * 0.08);
+                ctx.strokeStyle = isLarge ? "#FFD700" : "rgba(0,0,0,0.3)";
+                ctx.stroke();
+                ctx.closePath();
                 ctx.restore();
+            }
+
+            function drawBoxes() {
+                boxes.forEach(b => {
+                    ctx.save();
+                    ctx.translate(b.x, b.y);
+                    ctx.fillStyle = "#FFD700";
+                    ctx.strokeStyle = "#FF8C00";
+                    ctx.lineWidth = 3;
+                    ctx.fillRect(-b.r, -b.r, b.r*2, b.r*2);
+                    ctx.strokeRect(-b.r, -b.r, b.r*2, b.r*2);
+
+                    ctx.fillStyle = "#000";
+                    ctx.font = "bold 16px sans-serif";
+                    ctx.textAlign = "center";
+                    ctx.fillText("?", 0, 5);
+                    ctx.restore();
+                });
             }
 
             function draw() {
-                ctx.fillStyle = "#0a0a12";
+                ctx.fillStyle = "#06060E";
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                drawParallaxBG();
                 
                 ctx.save();
                 ctx.translate(canvas.width / 2, canvas.height / 2);
@@ -588,29 +608,51 @@ else:
                 ctx.strokeStyle = "#FF3366";
                 ctx.lineWidth = 6;
                 ctx.strokeRect(0, 0, worldW, worldH);
-                
-                drawGrid();
-                drawMeteor();
-                drawBlackHole();
 
-                // Dibujar Láseres
-                lasers.forEach(l => {
+                // Meteoro y Agujero Negro
+                ctx.save();
+                ctx.translate(meteor.x, meteor.y);
+                ctx.rotate(meteor.angle);
+                ctx.beginPath();
+                ctx.arc(0, 0, meteor.r, 0, Math.PI * 2);
+                ctx.fillStyle = "#A9A9A9"; ctx.fill();
+                meteor.craters.forEach(c => {
+                    ctx.beginPath(); ctx.arc(c.x, c.y, c.r, 0, Math.PI * 2);
+                    ctx.fillStyle = "#696969"; ctx.fill();
+                });
+                ctx.restore();
+
+                if(!blackHole.dead) {
                     ctx.save();
-                    ctx.beginPath();
-                    ctx.arc(l.x, l.y, 5, 0, Math.PI * 2);
-                    ctx.fillStyle = "#00FFFF";
-                    ctx.shadowColor = "#00FFFF";
-                    ctx.shadowBlur = 8;
-                    ctx.fill();
+                    ctx.translate(blackHole.x, blackHole.y);
+                    let grad = ctx.createRadialGradient(0, 0, blackHole.r * 0.4, 0, 0, blackHole.r * 1.5);
+                    grad.addColorStop(0, "#000"); grad.addColorStop(0.5, "#8A2BE2"); grad.addColorStop(1, "rgba(255, 0, 128, 0)");
+                    ctx.beginPath(); ctx.arc(0, 0, blackHole.r * 1.5, 0, Math.PI * 2);
+                    ctx.fillStyle = grad; ctx.fill();
+                    ctx.beginPath(); ctx.arc(0, 0, blackHole.r, 0, Math.PI * 2);
+                    ctx.fillStyle = "#05000A"; ctx.fill();
                     ctx.restore();
+                }
+
+                drawBoxes();
+
+                // Partículas
+                particles.forEach(p => {
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
+                    ctx.fillStyle = p.color;
+                    ctx.fill();
                 });
 
-                // Comida
+                // Láseres y Comida
+                lasers.forEach(l => {
+                    ctx.beginPath(); ctx.arc(l.x, l.y, 5, 0, Math.PI * 2);
+                    ctx.fillStyle = "#00FFFF"; ctx.fill();
+                });
+
                 foods.forEach(f => {
-                    ctx.beginPath();
-                    ctx.arc(f.x, f.y, f.r, 0, Math.PI * 2);
-                    ctx.fillStyle = f.color;
-                    ctx.fill();
+                    ctx.beginPath(); ctx.arc(f.x, f.y, f.r, 0, Math.PI * 2);
+                    ctx.fillStyle = f.color; ctx.fill();
                 });
 
                 // Estrellas
@@ -618,7 +660,9 @@ else:
                 allStars.sort((a, b) => a.r - b.r); 
 
                 allStars.forEach(s => {
-                    drawStar(s.x, s.y, s.r, s.color, s.r >= LARGE_THRESHOLD);
+                    let isInvuln = (s === player && player.invulnTimer > 0);
+                    let isFire = (s === player && player.fireTimer > 0);
+                    drawStar(s.x, s.y, s.r, s.color, s.r >= LARGE_THRESHOLD, isInvuln, isFire);
                     ctx.fillStyle = "white";
                     ctx.font = "bold 12px sans-serif";
                     ctx.textAlign = "center";
@@ -626,17 +670,14 @@ else:
                 });
 
                 floatingTexts.forEach(ft => {
-                    ctx.fillStyle = ft.color;
-                    ctx.font = "bold 14px sans-serif";
-                    ctx.textAlign = "center";
-                    ctx.fillText(ft.text, ft.x, ft.y);
+                    ctx.fillStyle = ft.color; ctx.font = "bold 14px sans-serif";
+                    ctx.textAlign = "center"; ctx.fillText(ft.text, ft.x, ft.y);
                 });
 
                 ctx.restore();
 
-                drawLeaderboard();
-                drawDashUI();
-                drawBossBar();
+                // UI Fija
+                drawPlayerUI();
             }
 
             function loop() {
