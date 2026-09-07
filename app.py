@@ -1,15 +1,19 @@
 import streamlit as st
 import streamlit.components.v1 as components
+import base64
 
-st.set_page_config(page_title="Star.io - Agujero Negro & Vidas", layout="wide")
+st.set_page_config(page_title="Star.io - Música & Vidas", layout="wide")
 
 st.title("🌟 Star.io - Batalla Galáctica")
-st.write("¡Sobrevive, domina el Top y destruye al Agujero Negro con ayuda de otros!")
+st.write("¡Sobrevive, domina el Top y destruye al Agujero Negro con tu propia música de fondo!")
 
+# Inicialización de variables de estado
 if 'jugando' not in st.session_state:
     st.session_state.jugando = False
 if 'nickname' not in st.session_state:
     st.session_state.nickname = "TÚ"
+if 'audio_src' not in st.session_state:
+    st.session_state.audio_src = ""
 
 def iniciar_juego():
     nombre = st.session_state.nickname_input.strip()
@@ -23,17 +27,34 @@ if not st.session_state.jugando:
     col1, col2, col3 = st.columns([1,2,1])
     with col2:
         st.text_input("✨ Ingresa el Nickname de tu Estrella:", value=st.session_state.nickname, key="nickname_input", max_chars=12)
+        
+        st.write("---")
+        # Subida del archivo de audio creado en FL Studio
+        archivo_audio = st.file_uploader("🎵 Sube tu música de FL Studio (.wav o .mp3)", type=["wav", "mp3"])
+        
+        if archivo_audio is not None:
+            audio_bytes = archivo_audio.read()
+            # Convertir el archivo a base64 para inyectarlo en el HTML/JS
+            audio_base64 = base64.b64encode(audio_bytes).decode('utf-8')
+            extension = archivo_audio.name.split('.')[-1]
+            st.session_state.audio_src = f"data:audio/{extension};base64,{audio_base64}"
+            st.success("✅ ¡Música cargada lista para la batalla!")
+        else:
+            st.session_state.audio_src = ""
+            
+        st.write("---")
+        
         st.button("▶️ JUGAR AHORA", on_click=iniciar_juego, type="primary", use_container_width=True)
         
         st.info("""
         💡 **ÚLTIMA ACTUALIZACIÓN:**
+        - **🎵 Música Custom:** Sube tu pista en `.wav` y controla el volumen in-game (30% por defecto).
         - **❤️ 5 Vidas Máximas:** Si mueres 5 veces, se termina el juego.
-        - **🤖 IA Colaborativa:** Los bots ahora también le dispararán al Agujero Negro si se acercan a él.
-        - **👑 Ranking Externo & 10k HP:** Top lateral mejorado y Jefe colosal.
+        - **🤖 IA Colaborativa:** Los bots ayudan a disparar al Agujero Negro.
         """)
 
 else:
-    st.button("⏹️ Volver al Menú Principal (Reiniciar Juego)", on_click=volver_menu)
+    st.button("⏹️ Volver al Menú Principal (Cambiar Música/Reiniciar)", on_click=volver_menu)
     
     codigo_juego_template = """
     <!DOCTYPE html>
@@ -64,6 +85,30 @@ else:
                 cursor: crosshair; 
                 border-radius: 8px; 
                 border: 1px solid #222; 
+            }
+            
+            /* Panel de volumen */
+            #volume-panel {
+                position: absolute;
+                top: 20px;
+                left: 20px;
+                background: rgba(10, 10, 20, 0.85);
+                padding: 10px 15px;
+                border: 2px solid #00FFFF;
+                border-radius: 8px;
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                z-index: 10;
+                box-shadow: 0 0 10px rgba(0, 255, 255, 0.3);
+                color: white;
+                font-weight: bold;
+                font-size: 14px;
+            }
+
+            input[type=range] {
+                accent-color: #00FFFF;
+                cursor: pointer;
             }
             
             #leaderboard-panel {
@@ -132,6 +177,11 @@ else:
             <div style="position: relative;">
                 <canvas id="gameCanvas" width="900" height="650"></canvas>
                 
+                <!-- Panel de Volumen de Música -->
+                <div id="volume-panel">
+                    🔊 <input type="range" id="vol-slider" min="0" max="100" value="30">
+                </div>
+                
                 <div id="gameover">
                     <h2>¡HAS MUERTO! 💥</h2>
                     <p id="gameover-msg" style="font-size: 22px; color: #00FFFF; font-weight: bold; margin-top: 10px;">
@@ -156,6 +206,32 @@ else:
         </div>
 
         <script>
+            // === SISTEMA DE AUDIO ===
+            const audioSrc = "__AUDIO_SRC__";
+            let bgMusic = null;
+            
+            if (audioSrc && audioSrc !== "") {
+                bgMusic = new Audio(audioSrc);
+                bgMusic.loop = true;
+                bgMusic.volume = 0.3; // 30% por defecto
+            }
+
+            const volSlider = document.getElementById("vol-slider");
+            volSlider.addEventListener("input", (e) => {
+                if (bgMusic) {
+                    bgMusic.volume = e.target.value / 100;
+                }
+            });
+
+            // Reproducir música en el primer clic (política navegadores)
+            document.addEventListener('mousedown', () => {
+                if (bgMusic && bgMusic.paused) {
+                    bgMusic.play().catch(err => console.log("Bloqueo de autoplay:", err));
+                }
+            }, { once: true });
+
+
+            // === SISTEMA DEL JUEGO ===
             const canvas = document.getElementById("gameCanvas");
             const ctx = canvas.getContext("2d");
             const overScreen = document.getElementById("gameover");
@@ -211,6 +287,9 @@ else:
             });
 
             canvas.addEventListener('mousedown', (e) => {
+                // Prevenir que el clic en el slider dispare lásers
+                if(e.target.id === 'vol-slider') return; 
+
                 if(isPaused) return;
                 if(player.dead) { 
                     if (playerLives > 0) respawnPlayer(); 
@@ -479,7 +558,6 @@ else:
                 let allStars = [player, ...bots].filter(s => !s.dead);
                 const now = Date.now();
 
-                // Movimiento Jugador
                 if(!player.dead) {
                     let targetX = (screenMouseX - canvas.width / 2) / zoom + camX + canvas.width / 2;
                     let targetY = (screenMouseY - canvas.height / 2) / zoom + camY + canvas.height / 2;
@@ -495,7 +573,6 @@ else:
                     player.y = Math.max(player.r, Math.min(worldH - player.r, player.y));
                 }
 
-                // Bots e IA vs Agujero Negro
                 bots.forEach(bot => {
                     let botSpeed = 3 * Math.max(0.35, 20 / (bot.r + 5));
                     if(Math.random() < 0.02) { bot.vx = (Math.random() - 0.5) * 4; bot.vy = (Math.random() - 0.5) * 4; }
@@ -504,8 +581,6 @@ else:
 
                     if (now - (bot.lastShootTime || 0) > 2500 && Math.random() < 0.03 && bot.r > 12) {
                         let target = null;
-                        
-                        // IA: Detectar el Agujero Negro si está cerca (Radio 600)
                         if(!blackHole.dead && Math.hypot(blackHole.x - bot.x, blackHole.y - bot.y) < 600) {
                             target = blackHole;
                         } else if (!player.dead && Math.hypot(player.x - bot.x, player.y - bot.y) < 550) {
@@ -780,11 +855,9 @@ else:
                 });
                 ctx.restore();
 
-                // UI Principal (Salud y Vidas del Jugador)
                 ctx.save();
                 let x = 12, y = canvas.height - 45;
                 
-                // Mostrar Vidas
                 ctx.fillStyle = "#FFF"; ctx.font = "bold 14px sans-serif"; ctx.textAlign = "left";
                 let corazones = "❤️".repeat(Math.max(0, playerLives)) + "🖤".repeat(Math.max(0, 5 - playerLives));
                 ctx.fillText(`VIDAS: ${corazones}`, x, y - 35);
@@ -825,4 +898,6 @@ else:
     """
     
     codigo_juego_listo = codigo_juego_template.replace("__PLAYER_NICKNAME__", st.session_state.nickname)
+    codigo_juego_listo = codigo_juego_listo.replace("__AUDIO_SRC__", st.session_state.audio_src)
+    
     components.html(codigo_juego_listo, height=680, width=1200, scrolling=False)
