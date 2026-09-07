@@ -36,7 +36,7 @@ rutas_sfx = {
     "box": ["sonidos/box1.wav", "box1.wav"],
     "orb": ["sonidos/orb1.wav", "orb1.wav"],
     "respawn": ["sonidos/respawn1.wav", "respawn1.wav"],
-    "boss_music": ["sonidos/boss.wav", "boss.wav"] # Agregado por si decides poner un archivo específico
+    "bossluna": ["sonidos/bossluna.wav", "bossluna.wav"] # Agregado por si decides poner un archivo específico
 }
 
 sfx_data = {}
