@@ -28,17 +28,23 @@ audio_src = obtener_audio_b64(RUTA_MUSICA) or ""
 if not audio_src:
     st.warning(f"⚠️ No se encontró la música de fondo: {RUTA_MUSICA}.")
 
-# Cargar efectos de sonido dinámicamente (hasta 4 por acción)
-sfx_categorias = ["dash", "laser1", "food", "box", "orb", "muerte", "respawn"]
-sfx_data = {cat: [] for cat in sfx_categorias}
+# Cargar efectos de sonido dinámicamente mapeando las rutas reales
+rutas_sfx = {
+    "laser": ["sonidos/laser1.wav", "laser1.wav", "laser1.mp3"],
+    "death": ["sonidos/muerte.wav", "muerte.wav", "death1.wav", "death1.mp3"],
+    "bh_death": ["sonidos/explosionagujeronegro.wav", "explosionagujeronegro.wav"],
+    "dash": ["sonidos/dash1.wav", "dash1.wav", "dash1.mp3"],
+    "food": ["sonidos/food1.wav", "food1.wav", "food1.mp3"],
+    "box": ["sonidos/box1.wav", "box1.wav", "box1.mp3"],
+    "orb": ["sonidos/orb1.wav", "orb1.wav", "orb1.mp3"],
+    "respawn": ["sonidos/respawn1.wav", "respawn1.wav", "respawn1.mp3"]
+}
 
-for cat in sfx_categorias:
-    for i in range(1, 5):
-        # Buscar en .wav y .mp3
-        ruta_wav = f"{cat}{i}.wav"
-        ruta_mp3 = f"{cat}{i}.mp3"
-        
-        b64_str = obtener_audio_b64(ruta_wav) or obtener_audio_b64(ruta_mp3)
+sfx_data = {}
+for cat, rutas in rutas_sfx.items():
+    sfx_data[cat] = []
+    for ruta in rutas:
+        b64_str = obtener_audio_b64(ruta)
         if b64_str:
             sfx_data[cat].append(b64_str)
 
@@ -450,7 +456,7 @@ else:
 
                     if(!blackHole.dead && Math.hypot(l.x - blackHole.x, l.y - blackHole.y) < blackHole.r) {
                         blackHole.hp -= dmg; blackHole.r = Math.max(25, blackHole.r - 0.25);
-                        if(blackHole.hp <= 0) { blackHole.dead = true; playSfx("death"); } 
+                        if(blackHole.hp <= 0) { blackHole.dead = true; playSfx("bh_death"); } 
                         hit = true;
                     }
 
@@ -506,7 +512,7 @@ else:
                         if(Math.hypot(s.x - blackHole.x, s.y - blackHole.y) < s.r + blackHole.r * 0.8) {
                             if(s.r > blackHole.r * 1.25) { 
                                 blackHole.dead = true; s.r += 35; 
-                                playSfx("death");
+                                playSfx("bh_death");
                             } 
                             else { 
                                 playSfx("death"); // Audio al ser tragado por el agujero negro
