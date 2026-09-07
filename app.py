@@ -1,11 +1,11 @@
 import streamlit as st
 import streamlit.components.v1 as components
 
-# Ampliamos el layout para que el juego tenga más espacio
-st.set_page_config(page_title="Star.io", layout="wide")
+# Configuración de página
+st.set_page_config(page_title="Star.io - Reglas Avanzadas", layout="wide")
 
-st.title("🌟 Star.io - Mundo Masivo")
-st.write("¡Mapa extendido! Cómete a los demás, huye de los grandes y llega al Top 1.")
+st.title("🌟 Star.io - Reglas Avanzadas & Dash")
+st.write("¡Mapa masivo con cámara inteligente, Dash (Click Derecho) y sistema anti-bullying para estrellas gigantes!")
 
 if 'jugando' not in st.session_state:
     st.session_state.jugando = False
@@ -20,20 +20,26 @@ if not st.session_state.jugando:
     col1, col2, col3 = st.columns([1,2,1])
     with col2:
         st.button("▶️ JUGAR AHORA", on_click=iniciar_juego, type="primary", use_container_width=True)
-        st.info("💡 **Instrucciones:** \n- El mapa es GIGANTE (3000x3000px).\n- Hay 30 estrellas compitiendo.\n- Arriba a la izquierda verás el Top 10.\n- Sigue el ratón para moverte.")
+        st.info("""
+        💡 **NUEVAS REGLAS Y CONTROLES:**
+        - **⚡ DASH:** Haz **Click Derecho** para hacer un deslizamiento rápido hacia tu ratón (Cooldown: 5s).
+        - **👑 ESTRELLA GIGANTE (Radio ≥ 50):** Tu estrella obtiene un borde dorado.
+        - **⚠️ REGLA DE ABSORCIÓN:** Al ser gigante, **¡solo puedes comer estrellas del Top 10!**
+        - **🚫 PENALIZACIÓN / DESINFLADO:** Si eres gigante y te comes una estrella pequeña fuera del Top 10, **¡TE DESINFLAS Y PIERDES TAMAÑO!**
+        - **🔍 CÁMARA INTELIGENTE:** Corrección del bug de tamaño: la pantalla se aleja dinámicamente cuando creces.
+        """)
 
 else:
     st.button("⏹️ Volver al Menú / Reiniciar", on_click=volver_menu)
     
-    # Código HTML/JS con cámara, mapa grande y leaderboard
     codigo_juego = """
     <!DOCTYPE html>
     <html>
     <head>
         <style>
-            body { margin: 0; overflow: hidden; background-color: #000; display: flex; justify-content: center; }
-            canvas { background-color: #111; cursor: crosshair; border-radius: 5px;}
-            #gameover { display: none; position: absolute; color: white; font-family: sans-serif; top: 40%; text-align: center; font-size: 24px; text-shadow: 2px 2px 4px #000; }
+            body { margin: 0; overflow: hidden; background-color: #050508; display: flex; justify-content: center; user-select: none; }
+            canvas { background-color: #101018; cursor: crosshair; border-radius: 8px; }
+            #gameover { display: none; position: absolute; color: white; font-family: sans-serif; top: 40%; text-align: center; font-size: 24px; text-shadow: 2px 2px 8px #000; }
         </style>
     </head>
     <body>
@@ -41,7 +47,7 @@ else:
         <div id="gameover">
             <h2>¡Te comieron! 💥</h2>
             <p>Estás en modo espectador (siguiendo al #1).</p>
-            <p style="font-size: 16px; color:#aaa;">Usa el botón de Streamlit arriba para reiniciar.</p>
+            <p style="font-size: 16px; color:#aaa;">Usa el botón de arriba para reiniciar.</p>
         </div>
 
         <script>
@@ -49,40 +55,69 @@ else:
             const ctx = canvas.getContext("2d");
             const overScreen = document.getElementById("gameover");
 
-            // Configuración del mundo (mucho más grande que el canvas)
-            const worldW = 3000;
-            const worldH = 3000;
+            // Bloquear menú contextual de click derecho
+            window.addEventListener('contextmenu', (e) => e.preventDefault());
+
+            // Configuración del mundo
+            const worldW = 3200;
+            const worldH = 3200;
+            const LARGE_THRESHOLD = 50; // A partir de este radio se considera "Muy Grande"
             
-            // Variables de la cámara y ratón
+            // Cámara y Entrada
             let camX = 0;
             let camY = 0;
+            let zoom = 1;
             let screenMouseX = canvas.width / 2;
             let screenMouseY = canvas.height / 2;
             let isGameOver = false;
 
-            // Escuchar el mouse en la pantalla
+            // Dash / Impulso
+            let lastDashTime = 0;
+            const dashCooldown = 5000; // 5 segundos
+            let dashTimer = 0; // Frames de dash activo
+
+            // Textos flotantes de penalización / aviso
+            let floatingTexts = [];
+
+            // Escuchar ratón
             canvas.addEventListener('mousemove', (e) => {
                 const rect = canvas.getBoundingClientRect();
                 screenMouseX = e.clientX - rect.left;
                 screenMouseY = e.clientY - rect.top;
             });
 
-            // Nombres aleatorios espaciales para los bots
+            canvas.addEventListener('mousedown', (e) => {
+                if(e.button === 2) { // Click derecho
+                    e.preventDefault();
+                    triggerDash();
+                }
+            });
+
+            function triggerDash() {
+                const now = Date.now();
+                if(!player.dead && now - lastDashTime >= dashCooldown) {
+                    lastDashTime = now;
+                    dashTimer = 12; // 12 frames de impulso
+                    
+                    floatingTexts.push({
+                        x: player.x,
+                        y: player.y - player.r - 20,
+                        text: "⚡ DASH!",
+                        color: "#00FFFF",
+                        life: 30
+                    });
+                }
+            }
+
             const nombres = ["Alpha", "Nova", "Sirius", "Vega", "Orion", "Cosmos", "Apollo", "Zeta", "Pulsar", "Quasar", 
                              "Rigel", "Lyra", "Draco", "Cygnus", "Pegasus", "Phoenix", "Astro", "Cometa", "Meteor", "Nebula",
                              "Titan", "Atlas", "Galia", "Krypton", "Zenith", "Vortex", "Horizon", "Eclipse", "Aurora", "Polaris"];
             const colors = ['#FF3366', '#33CCFF', '#FF9933', '#33FF66', '#CC33FF', '#FFFF33', '#FF3333', '#33FFCC'];
 
-            function randomName() {
-                return nombres[Math.floor(Math.random() * nombres.length)];
-            }
+            function randomName() { return nombres[Math.floor(Math.random() * nombres.length)]; }
+            function randomColor() { return colors[Math.floor(Math.random() * colors.length)]; }
 
-            function randomColor() {
-                return colors[Math.floor(Math.random() * colors.length)];
-            }
-
-            // Dibuja una estrella
-            function drawStar(x, y, radius, color) {
+            function drawStar(x, y, radius, color, isLarge) {
                 ctx.save();
                 ctx.beginPath();
                 ctx.translate(x, y);
@@ -98,44 +133,39 @@ else:
                 ctx.fillStyle = color;
                 ctx.fill();
                 
-                // Borde oscuro para dar volumen
-                ctx.lineWidth = radius * 0.1;
-                ctx.strokeStyle = "rgba(0,0,0,0.3)";
+                // Borde dorado si es estrella gigante
+                ctx.lineWidth = Math.max(2, radius * 0.08);
+                ctx.strokeStyle = isLarge ? "#FFD700" : "rgba(0,0,0,0.3)";
                 ctx.stroke();
                 ctx.closePath();
                 ctx.restore();
             }
 
             let player, bots, foods;
-            const maxBots = 29; // 29 bots + 1 jugador = 30 estrellas
+            const maxBots = 29;
             const maxFoods = 600;
 
             function init() {
                 isGameOver = false;
                 overScreen.style.display = 'none';
+                floatingTexts = [];
                 
-                // Jugador
                 player = { 
                     x: Math.random() * worldW, 
                     y: Math.random() * worldH, 
                     r: 15, 
                     color: '#FFFFFF', 
                     name: "TÚ",
-                    speed: 3,
+                    speed: 3.5,
                     dead: false
                 };
                 
-                // Bots
                 bots = [];
-                for(let i=0; i<maxBots; i++) {
-                    spawnBot();
-                }
+                for(let i=0; i<maxBots; i++) spawnBot();
 
-                // Comida
                 foods = [];
-                for(let i=0; i<maxFoods; i++) {
-                    spawnFood();
-                }
+                for(let i=0; i<maxFoods; i++) spawnFood();
+                
                 loop();
             }
 
@@ -143,11 +173,12 @@ else:
                 bots.push({
                     x: Math.random() * worldW,
                     y: Math.random() * worldH,
-                    r: Math.random() * 20 + 10, // Tamaño inicial aleatorio
+                    r: Math.random() * 20 + 10,
                     color: randomColor(),
                     name: randomName(),
                     vx: (Math.random() - 0.5) * 4,
                     vy: (Math.random() - 0.5) * 4,
+                    dashTimer: 0,
                     dead: false
                 });
             }
@@ -156,59 +187,73 @@ else:
                 foods.push({
                     x: Math.random() * worldW,
                     y: Math.random() * worldH,
-                    r: 3,
+                    r: 3.5,
                     color: randomColor()
                 });
             }
 
             function update() {
-                // Posición objetivo del jugador basada en cámara + ratón
-                let targetX = screenMouseX + camX;
-                let targetY = screenMouseY + camY;
+                // Obtener Top 10 actual para la regla de estrellas grandes
+                let allStars = [player, ...bots].filter(s => !s.dead);
+                allStars.sort((a, b) => b.r - a.r);
+                let top10 = allStars.slice(0, 10);
 
+                // Movimiento del Jugador
                 if(!player.dead) {
+                    let targetX = (screenMouseX - canvas.width / 2) / zoom + camX + canvas.width / 2;
+                    let targetY = (screenMouseY - canvas.height / 2) / zoom + camY + canvas.height / 2;
+
                     let dx = targetX - player.x;
                     let dy = targetY - player.y;
                     let dist = Math.sqrt(dx*dx + dy*dy);
                     
+                    // Velocidad corregida para evitar glitches al crecer
+                    let baseSpeed = player.speed * Math.max(0.35, 20 / (player.r + 5));
+                    
+                    if (dashTimer > 0) {
+                        baseSpeed *= 3.8; // Impulso Dash
+                        dashTimer--;
+                    }
+
                     if (dist > 5) {
-                        let speedMultiplier = 15 / player.r;
-                        if(speedMultiplier < 0.3) speedMultiplier = 0.3; // Límite de lentitud
-                        player.x += (dx / dist) * (player.speed * speedMultiplier);
-                        player.y += (dy / dist) * (player.speed * speedMultiplier);
+                        player.x += (dx / dist) * baseSpeed;
+                        player.y += (dy / dist) * baseSpeed;
                     }
                     
-                    // Límites del mapa para el jugador
                     player.x = Math.max(player.r, Math.min(worldW - player.r, player.x));
                     player.y = Math.max(player.r, Math.min(worldH - player.r, player.y));
                 }
 
-                // Actualizar Cámara (Si el jugador muere, la cámara sigue al bot más grande)
-                let allStars = [player, ...bots].filter(s => !s.dead);
-                allStars.sort((a, b) => b.r - a.r);
+                // Cámara con ZOOM DINÁMICO (Soluciona el bug cuando te haces enorme)
+                let focusTarget = (!player.dead) ? player : (allStars[0] || {x: worldW/2, y: worldH/2, r: 15});
                 
-                let targetCamX = (!player.dead) ? player.x : (allStars[0]?.x || 0);
-                let targetCamY = (!player.dead) ? player.y : (allStars[0]?.y || 0);
+                let targetZoom = Math.max(0.25, 25 / Math.max(25, focusTarget.r * 0.6));
+                zoom += (targetZoom - zoom) * 0.05;
 
-                // Suavizado de cámara
-                camX += (targetCamX - canvas.width / 2 - camX) * 0.1;
-                camY += (targetCamY - canvas.height / 2 - camY) * 0.1;
+                camX += (focusTarget.x - canvas.width / 2 - camX) * 0.1;
+                camY += (focusTarget.y - canvas.height / 2 - camY) * 0.1;
 
                 // Mover Bots
                 bots.forEach(bot => {
-                    let speedMultiplier = 15 / bot.r;
-                    if(speedMultiplier < 0.3) speedMultiplier = 0.3;
+                    let botSpeed = 3 * Math.max(0.35, 20 / (bot.r + 5));
+                    
+                    if(Math.random() < 0.002 && bot.r > 25 && bot.dashTimer <= 0) {
+                        bot.dashTimer = 10;
+                    }
 
-                    // De vez en cuando cambian de dirección
+                    if(bot.dashTimer > 0) {
+                        botSpeed *= 3;
+                        bot.dashTimer--;
+                    }
+
                     if(Math.random() < 0.02) {
                         bot.vx = (Math.random() - 0.5) * 4;
                         bot.vy = (Math.random() - 0.5) * 4;
                     }
 
-                    bot.x += bot.vx * speedMultiplier;
-                    bot.y += bot.vy * speedMultiplier;
+                    bot.x += bot.vx * (botSpeed / 2);
+                    bot.y += bot.vy * (botSpeed / 2);
 
-                    // Rebote en los bordes del mapa gigante
                     if(bot.x - bot.r < 0 || bot.x + bot.r > worldW) bot.vx *= -1;
                     if(bot.y - bot.r < 0 || bot.y + bot.r > worldH) bot.vy *= -1;
                     
@@ -222,15 +267,15 @@ else:
                     for(let e of allStars) {
                         let d = Math.hypot(e.x - f.x, e.y - f.y);
                         if(d < e.r) {
-                            e.r += 0.1; // Crecer un poquito al comer puntos
+                            e.r += 0.08; 
                             foods.splice(i, 1);
-                            spawnFood(); // Reaparecer comida
+                            spawnFood();
                             break;
                         }
                     }
                 }
 
-                // Colisiones: Todos contra Todos
+                // Colisiones: Estrella vs Estrella (Regla del Top 10 y Penalización)
                 for(let i = 0; i < allStars.length; i++) {
                     for(let j = i + 1; j < allStars.length; j++) {
                         let e1 = allStars[i];
@@ -238,49 +283,74 @@ else:
                         if(e1.dead || e2.dead) continue;
 
                         let d = Math.hypot(e1.x - e2.x, e1.y - e2.y);
-                        
-                        // Si la distancia es menor a la estrella más grande, es comida
-                        if(d < Math.max(e1.r, e2.r) * 0.8) { 
-                            if(e1.r > e2.r * 1.15) { // e1 debe ser un 15% más grande para comer a e2
-                                e1.r += e2.r * 0.4;
-                                e2.dead = true;
-                            } else if (e2.r > e1.r * 1.15) {
-                                e2.r += e1.r * 0.4;
-                                e1.dead = true;
+                        let bigger = e1.r > e2.r ? e1 : e2;
+                        let smaller = e1.r > e2.r ? e2 : e1;
+
+                        if(d < bigger.r * 0.75) {
+                            if(bigger.r > smaller.r * 1.15) {
+                                
+                                const isBiggerLarge = bigger.r >= LARGE_THRESHOLD;
+                                const isSmallerInTop10 = top10.includes(smaller);
+
+                                if (isBiggerLarge) {
+                                    if (isSmallerInTop10) {
+                                        // ✅ Come Top 10 -> Crece
+                                        bigger.r += smaller.r * 0.35;
+                                        smaller.dead = true;
+
+                                        floatingTexts.push({
+                                            x: bigger.x, y: bigger.y - bigger.r - 10,
+                                            text: "👑 +TOP 10 ABSORBIDO!", color: "#00FF66", life: 40
+                                        });
+                                    } else {
+                                        // ❌ PENALIZACIÓN: Intenta comer una estrella pequeña fuera del Top 10 -> ¡DESINFLADO!
+                                        let loss = Math.max(6, smaller.r * 0.5);
+                                        bigger.r = Math.max(15, bigger.r - loss);
+                                        smaller.dead = true;
+
+                                        floatingTexts.push({
+                                            x: bigger.x, y: bigger.y - bigger.r - 10,
+                                            text: `⚠️ ¡DESINFLADO! -${Math.floor(loss)} TAMAÑO`, color: "#FF3333", life: 45
+                                        });
+                                    }
+                                } else {
+                                    // Normal cuando aún no es gigante
+                                    bigger.r += smaller.r * 0.35;
+                                    smaller.dead = true;
+                                }
                             }
                         }
                     }
                 }
 
-                // Limpiar muertos
+                // Textos flotantes
+                for(let i = floatingTexts.length - 1; i >= 0; i--) {
+                    let ft = floatingTexts[i];
+                    ft.y -= 0.8;
+                    ft.life--;
+                    if(ft.life <= 0) floatingTexts.splice(i, 1);
+                }
+
                 if(player.dead && !isGameOver) {
                     isGameOver = true;
                     overScreen.style.display = 'block';
                 }
                 
                 bots = bots.filter(b => !b.dead);
-                
-                // Repoblar bots para que siempre haya 30
-                while(bots.length < maxBots) {
-                    spawnBot();
-                }
+                while(bots.length < maxBots) spawnBot();
             }
 
             function drawGrid() {
-                ctx.strokeStyle = "#222";
-                ctx.lineWidth = 2;
-                let gridSize = 100;
-                
-                // Dibujar solo las líneas de la cuadrícula visibles en la cámara
-                let startX = Math.floor(camX / gridSize) * gridSize;
-                let startY = Math.floor(camY / gridSize) * gridSize;
+                ctx.strokeStyle = "#1a1a28";
+                ctx.lineWidth = 1.5;
+                let gridSize = 120;
                 
                 ctx.beginPath();
-                for(let x = startX; x < camX + canvas.width + gridSize; x += gridSize) {
-                    if(x >= 0 && x <= worldW) { ctx.moveTo(x, 0); ctx.lineTo(x, worldH); }
+                for(let x = 0; x <= worldW; x += gridSize) {
+                    ctx.moveTo(x, 0); ctx.lineTo(x, worldH);
                 }
-                for(let y = startY; y < camY + canvas.height + gridSize; y += gridSize) {
-                    if(y >= 0 && y <= worldH) { ctx.moveTo(0, y); ctx.lineTo(worldW, y); }
+                for(let y = 0; y <= worldH; y += gridSize) {
+                    ctx.moveTo(0, y); ctx.lineTo(worldW, y);
                 }
                 ctx.stroke();
             }
@@ -290,99 +360,123 @@ else:
                 allStars.sort((a, b) => b.r - a.r);
                 let top10 = allStars.slice(0, 10);
 
-                // Fondo de la tabla
-                ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
-                ctx.roundRect = function(x, y, w, h, r) {
-                    ctx.beginPath(); ctx.moveTo(x+r, y); ctx.lineTo(x+w-r, y); ctx.quadraticCurveTo(x+w, y, x+w, y+r);
-                    ctx.lineTo(x+w, y+h-r); ctx.quadraticCurveTo(x+w, y+h, x+w-r, y+h); ctx.lineTo(x+r, y+h);
-                    ctx.quadraticCurveTo(x, y+h, x, y+h-r); ctx.lineTo(x, y+r); ctx.quadraticCurveTo(x, y, x+r, y); ctx.closePath();
-                };
-                if(ctx.roundRect) ctx.roundRect(10, 10, 200, 35 + (top10.length * 25), 10);
-                else ctx.fillRect(10, 10, 200, 35 + (top10.length * 25));
+                ctx.save();
+                ctx.fillStyle = "rgba(10, 10, 20, 0.8)";
+                ctx.strokeStyle = "rgba(255, 255, 255, 0.1)";
+                ctx.lineWidth = 1;
+
+                let h = 40 + (top10.length * 24);
+                ctx.beginPath();
+                if(ctx.roundRect) ctx.roundRect(12, 12, 210, h, 8);
+                else ctx.fillRect(12, 12, 210, h);
                 ctx.fill();
+                ctx.stroke();
 
-                // Título
-                ctx.fillStyle = "white";
-                ctx.font = "bold 16px Arial";
+                ctx.fillStyle = "#FFD700";
+                ctx.font = "bold 14px sans-serif";
                 ctx.textAlign = "center";
-                ctx.fillText("🏆 TOP 10 ESTRELLAS", 110, 30);
+                ctx.fillText("🏆 TOP 10 ESTRELLAS", 117, 32);
 
-                // Nombres
                 ctx.textAlign = "left";
-                ctx.font = "14px Arial";
+                ctx.font = "12px sans-serif";
                 for(let i=0; i<top10.length; i++) {
                     let s = top10[i];
-                    let yPos = 60 + (i * 25);
+                    let yPos = 58 + (i * 24);
                     
-                    // Puntito de color
                     ctx.fillStyle = s.color;
                     ctx.beginPath();
-                    ctx.arc(25, yPos - 4, 6, 0, Math.PI*2);
+                    ctx.arc(26, yPos - 4, 5, 0, Math.PI*2);
                     ctx.fill();
-                    ctx.strokeStyle = "#fff";
-                    ctx.lineWidth = 1;
-                    ctx.stroke();
 
-                    // Texto del nombre y tamaño
-                    ctx.fillStyle = s.name === "TÚ" ? "#FFD700" : "white"; // Dorado si eres tú
-                    let text = `${i+1}. ${s.name} (${Math.floor(s.r)})`;
-                    ctx.fillText(text, 40, yPos);
+                    let isGigante = s.r >= LARGE_THRESHOLD;
+                    ctx.fillStyle = s.name === "TÚ" ? "#FFD700" : (isGigante ? "#FFA500" : "white");
+                    let text = `${i+1}. ${s.name} (${Math.floor(s.r)})${isGigante ? ' 👑' : ''}`;
+                    ctx.fillText(text, 38, yPos);
                 }
+                ctx.restore();
+            }
+
+            function drawDashUI() {
+                ctx.save();
+                const now = Date.now();
+                const elapsed = now - lastDashTime;
+                const ready = elapsed >= dashCooldown;
+                const progress = Math.min(1, elapsed / dashCooldown);
+
+                let x = canvas.width - 185;
+                let y = canvas.height - 45;
+
+                ctx.fillStyle = "rgba(10, 10, 20, 0.8)";
+                ctx.fillRect(x, y, 170, 32);
+
+                ctx.fillStyle = ready ? "#00FFCC" : "#444";
+                ctx.fillRect(x + 5, y + 22, 160 * progress, 5);
+
+                ctx.fillStyle = ready ? "#00FFCC" : "#AAA";
+                ctx.font = "bold 11px sans-serif";
+                ctx.textAlign = "center";
+                ctx.fillText(ready ? "⚡ DASH LISTO (R-Click)" : `⚡ DASH: ${(5 - elapsed/1000).toFixed(1)}s`, x + 85, y + 15);
+
+                ctx.restore();
             }
 
             function draw() {
-                // Limpiar pantalla
-                ctx.fillStyle = "#111";
+                ctx.fillStyle = "#0a0a12";
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
                 
                 ctx.save();
-                // Aplicar movimiento de cámara
-                ctx.translate(-camX, -camY);
                 
-                // Dibujar bordes del mapa rojo para saber dónde termina
-                ctx.strokeStyle = "red";
-                ctx.lineWidth = 5;
+                // Aplicar Zoom y Cámara
+                ctx.translate(canvas.width / 2, canvas.height / 2);
+                ctx.scale(zoom, zoom);
+                ctx.translate(-camX - canvas.width / 2, -camY - canvas.height / 2);
+                
+                // Límites del Mundo
+                ctx.strokeStyle = "#FF3366";
+                ctx.lineWidth = 6;
                 ctx.strokeRect(0, 0, worldW, worldH);
                 
                 drawGrid();
                 
-                // Dibujar Comida
+                // Comida
                 foods.forEach(f => {
-                    // Solo dibujar si está en la pantalla (Optimización)
-                    if(f.x > camX && f.x < camX + canvas.width && f.y > camY && f.y < camY + canvas.height) {
-                        ctx.beginPath();
-                        ctx.arc(f.x, f.y, f.r, 0, Math.PI * 2);
-                        ctx.fillStyle = f.color;
-                        ctx.fill();
-                    }
+                    ctx.beginPath();
+                    ctx.arc(f.x, f.y, f.r, 0, Math.PI * 2);
+                    ctx.fillStyle = f.color;
+                    ctx.fill();
                 });
 
-                // Dibujar Estrellas y Nombres
+                // Estrellas
                 let allStars = [player, ...bots].filter(s => !s.dead);
-                // Dibujar de menor a mayor tamaño para que los grandes tapen a los chicos
                 allStars.sort((a, b) => a.r - b.r); 
 
                 allStars.forEach(s => {
-                    // Solo dibujar si están cerca de la pantalla
-                    if(s.x + s.r > camX && s.x - s.r < camX + canvas.width && s.y + s.r > camY && s.y - s.r < camY + canvas.height) {
-                        drawStar(s.x, s.y, s.r, s.color);
-                        
-                        // Etiqueta del nombre encima de la estrella
-                        ctx.fillStyle = "white";
-                        ctx.font = "bold 14px Arial";
-                        ctx.textAlign = "center";
-                        // Sombra del texto para que se lea mejor
-                        ctx.shadowColor = "black";
-                        ctx.shadowBlur = 4;
-                        ctx.fillText(s.name, s.x, s.y + s.r + 18);
-                        ctx.shadowBlur = 0; // quitar sombra
-                    }
+                    let isLarge = s.r >= LARGE_THRESHOLD;
+                    drawStar(s.x, s.y, s.r, s.color, isLarge);
+                    
+                    ctx.fillStyle = "white";
+                    ctx.font = "bold 13px sans-serif";
+                    ctx.textAlign = "center";
+                    ctx.shadowColor = "black";
+                    ctx.shadowBlur = 4;
+                    let label = s.name + (isLarge ? " 👑" : "");
+                    ctx.fillText(label, s.x, s.y + s.r + 16);
+                    ctx.shadowBlur = 0;
                 });
 
-                ctx.restore(); // Termina lo afectado por la cámara
+                // Textos flotantes (Penalización / Dash)
+                floatingTexts.forEach(ft => {
+                    ctx.fillStyle = ft.color;
+                    ctx.font = "bold 15px sans-serif";
+                    ctx.textAlign = "center";
+                    ctx.fillText(ft.text, ft.x, ft.y);
+                });
 
-                // Dibujar la interfaz (Leaderboard) Fija en la pantalla
+                ctx.restore();
+
+                // UI Fija
                 drawLeaderboard();
+                drawDashUI();
             }
 
             function loop() {
@@ -397,5 +491,4 @@ else:
     </html>
     """
     
-    # Ajustamos el tamaño del iframe para que coincida con el canvas
     components.html(codigo_juego, height=620, width=920, scrolling=False)
