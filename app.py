@@ -1,10 +1,10 @@
 import streamlit as st
 import streamlit.components.v1 as components
 
-st.set_page_config(page_title="Star.io - Orbes y Cajas Mejoradas", layout="wide")
+st.set_page_config(page_title="Star.io - Mejoras de Vida y Fuego", layout="wide")
 
-st.title("🌟 Star.io - Orbes de Poder y Cajas Dinámicas")
-st.write("¡Encuentra los orbes celestes y morados para evolucionar tus láseres!")
+st.title("🌟 Star.io - Vida Escalable y Aura de Fuego")
+st.write("¡Hazte más grande para resistir daño, quema a tus enemigos y supera tus límites de salud!")
 
 if 'jugando' not in st.session_state:
     st.session_state.jugando = False
@@ -20,10 +20,11 @@ if not st.session_state.jugando:
     with col2:
         st.button("▶️ JUGAR AHORA", on_click=iniciar_juego, type="primary", use_container_width=True)
         st.info("""
-        💡 **NUEVAS MECÁNICAS:**
-        - **📦 CAJAS MISTERIOSAS:** Ahora aparecen de a poco. ¡Tienen un 50% de probabilidad de darte mucha vida!
-        - **🔵 ORBES CELESTES:** Te permiten elegir entre mejorar la **Distancia** o el **Daño** de tus láseres.
-        - **🟣 ORBES MORADOS:** Te permiten elegir entre disparar **3 láseres juntos** o **4 láseres en cruz**.
+        💡 **ÚLTIMOS CAMBIOS:**
+        - **🛡️ TAMAÑO = DEFENSA:** Mientras más grande seas, menos daño recibirás de los ataques.
+        - **❤️ VIDA BASE 200:** Comienzas con 200 HP. ¡Agarrar vida cuando estás al máximo aumenta tu límite!
+        - **🔥 AURA QUEMANTE:** El poder de fuego de la caja misteriosa ahora hace 40 de daño por toque a los enemigos.
+        - **💥 NÚMEROS GIGANTES:** Los indicadores de daño y curación son mucho más visibles.
         """)
 
 else:
@@ -42,7 +43,6 @@ else:
                 font-size: 24px; text-shadow: 2px 2px 10px #000; pointer-events: none; z-index: 5;
             }
             
-            /* Menú de Orbes */
             #orb-modal {
                 display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
                 background: rgba(10, 10, 25, 0.95); padding: 30px; border-radius: 12px; border: 3px solid white;
@@ -80,7 +80,6 @@ else:
             const ctx = canvas.getContext("2d");
             const overScreen = document.getElementById("gameover");
             
-            // Modal Elements
             const orbModal = document.getElementById("orb-modal");
             const orbTitle = document.getElementById("orb-title");
             const btn1 = document.getElementById("orb-btn1");
@@ -109,7 +108,6 @@ else:
             let hearts = [];
             let orbs = [];
 
-            // ESTRELLAS PARALLAX DE FONDO
             let bgStarsLayer1 = [];
             let bgStarsLayer2 = [];
             for(let i=0; i<120; i++) {
@@ -132,12 +130,7 @@ else:
 
             canvas.addEventListener('mousedown', (e) => {
                 if(isPaused) return;
-                
-                if(player.dead) {
-                    respawnPlayer();
-                    return;
-                }
-
+                if(player.dead) { respawnPlayer(); return; }
                 if(e.button === 0) shootLaser();
                 else if(e.button === 2) { e.preventDefault(); triggerDash(); }
             });
@@ -155,8 +148,8 @@ else:
                 player.x = Math.random() * (worldW - 200) + 100;
                 player.y = Math.random() * (worldH - 200) + 100;
                 player.r = 18;
-                player.hp = 100;
-                player.maxHp = 100;
+                player.hp = 200;
+                player.maxHp = 200;
                 player.shields = 0;
                 player.dead = false;
                 player.invulnTimer = 0;
@@ -164,7 +157,6 @@ else:
                 player.speedBoostTimer = 0;
                 player.hasInvulnCharge = false;
                 
-                // Reiniciar stats de orbes
                 player.laserRange = 1.0;
                 player.laserDamage = 1.0;
                 player.shotType = 'normal';
@@ -172,14 +164,14 @@ else:
                 isGameOver = false;
                 overScreen.style.display = 'none';
 
-                floatingTexts.push({ x: player.x, y: player.y - 30, text: "✨ ¡REAPARECISTE!", color: "#33FF66", life: 50 });
+                floatingTexts.push({ x: player.x, y: player.y - 30, text: "✨ ¡REAPARECISTE!", color: "#33FF66", life: 50, size: 18 });
             }
 
             function triggerInvulnerability() {
                 if(!player.dead && player.hasInvulnCharge && player.invulnTimer <= 0) {
                     player.hasInvulnCharge = false;
                     player.invulnTimer = 300; 
-                    floatingTexts.push({ x: player.x, y: player.y - player.r - 25, text: "👻 ¡MODO FANTASMA ACTIVADO!", color: "#00FFFF", life: 50 });
+                    floatingTexts.push({ x: player.x, y: player.y - player.r - 25, text: "👻 ¡MODO FANTASMA ACTIVADO!", color: "#00FFFF", life: 50, size: 16 });
                 }
             }
 
@@ -188,7 +180,7 @@ else:
                 if(!player.dead && now - lastDashTime >= dashCooldown) {
                     lastDashTime = now;
                     dashTimer = 12; 
-                    floatingTexts.push({ x: player.x, y: player.y - player.r - 20, text: "⚡ DASH!", color: "#00FFFF", life: 30 });
+                    floatingTexts.push({ x: player.x, y: player.y - player.r - 20, text: "⚡ DASH!", color: "#00FFFF", life: 30, size: 18 });
                 }
             }
 
@@ -216,18 +208,9 @@ else:
                     });
                 }
 
-                if(player.shotType === 'normal') {
-                    fireAt(angle);
-                } else if(player.shotType === 'triple') {
-                    fireAt(angle - 0.20);
-                    fireAt(angle);
-                    fireAt(angle + 0.20);
-                } else if(player.shotType === 'cross') {
-                    fireAt(angle);
-                    fireAt(angle + Math.PI/2); // Derecha/Abajo rel
-                    fireAt(angle + Math.PI);   // Atrás
-                    fireAt(angle - Math.PI/2); // Izquierda/Arriba rel
-                }
+                if(player.shotType === 'normal') { fireAt(angle); } 
+                else if(player.shotType === 'triple') { fireAt(angle - 0.20); fireAt(angle); fireAt(angle + 0.20); } 
+                else if(player.shotType === 'cross') { fireAt(angle); fireAt(angle + Math.PI/2); fireAt(angle + Math.PI); fireAt(angle - Math.PI/2); }
 
                 player.r = Math.max(10, player.r - 0.4);
             }
@@ -238,22 +221,9 @@ else:
             function randomColor() { return colors[Math.floor(Math.random() * colors.length)]; }
             function randomName() { return nombres[Math.floor(Math.random() * nombres.length)]; }
 
-            function spawnBox() {
-                boxes.push({ x: Math.random() * (worldW - 100) + 50, y: Math.random() * (worldH - 100) + 50, r: 16 });
-            }
-
-            function spawnHeart() {
-                hearts.push({ x: Math.random() * (worldW - 100) + 50, y: Math.random() * (worldH - 100) + 50, r: 10 });
-            }
-
-            function spawnOrb() {
-                orbs.push({
-                    x: Math.random() * (worldW - 100) + 50,
-                    y: Math.random() * (worldH - 100) + 50,
-                    r: 14,
-                    type: Math.random() < 0.5 ? 'celeste' : 'morado'
-                });
-            }
+            function spawnBox() { boxes.push({ x: Math.random() * (worldW - 100) + 50, y: Math.random() * (worldH - 100) + 50, r: 16 }); }
+            function spawnHeart() { hearts.push({ x: Math.random() * (worldW - 100) + 50, y: Math.random() * (worldH - 100) + 50, r: 10 }); }
+            function spawnOrb() { orbs.push({ x: Math.random() * (worldW - 100) + 50, y: Math.random() * (worldH - 100) + 50, r: 14, type: Math.random() < 0.5 ? 'celeste' : 'morado' }); }
 
             let player, bots, foods;
             const maxBots = 28;
@@ -263,17 +233,14 @@ else:
             const maxOrbs = 3;
 
             function init() {
-                isGameOver = false;
-                isPaused = false;
-                orbModal.style.display = 'none';
-                overScreen.style.display = 'none';
-                
+                isGameOver = false; isPaused = false;
+                orbModal.style.display = 'none'; overScreen.style.display = 'none';
                 floatingTexts = []; lasers = []; particles = []; boxes = []; hearts = []; orbs = [];
                 
                 player = { 
                     x: Math.random() * worldW, y: Math.random() * worldH, 
                     r: 18, color: '#FFFFFF', name: "TÚ", speed: 3.5, dead: false,
-                    hp: 100, maxHp: 100, shields: 0, hasInvulnCharge: false, invulnTimer: 0, fireTimer: 0, speedBoostTimer: 0,
+                    hp: 200, maxHp: 200, shields: 0, hasInvulnCharge: false, invulnTimer: 0, fireTimer: 0, speedBoostTimer: 0,
                     laserRange: 1.0, laserDamage: 1.0, shotType: 'normal'
                 };
                 
@@ -281,10 +248,7 @@ else:
                 foods = []; for(let i=0; i<maxFoods; i++) spawnFood();
                 for(let i=0; i<maxHearts; i++) spawnHeart();
                 
-                // Spawn inicial de cajas y orbes (pocos, el resto progresivo)
-                spawnBox(); spawnBox(); 
-                spawnOrb();
-                
+                spawnBox(); spawnBox(); spawnOrb();
                 loop();
             }
 
@@ -293,30 +257,35 @@ else:
                     x: Math.random() * worldW, y: Math.random() * worldH,
                     r: Math.random() * 20 + 10, color: randomColor(), name: randomName(),
                     vx: (Math.random() - 0.5) * 4, vy: (Math.random() - 0.5) * 4,
-                    hp: 100, maxHp: 100, lastShootTime: 0, dead: false
+                    hp: 200, maxHp: 200, lastShootTime: 0, dead: false, lastBurnTime: 0
                 });
             }
 
-            function spawnFood() {
-                foods.push({ x: Math.random() * worldW, y: Math.random() * worldH, r: 3.5, color: randomColor() });
-            }
+            function spawnFood() { foods.push({ x: Math.random() * worldW, y: Math.random() * worldH, r: 3.5, color: randomColor() }); }
 
             function takeDamage(target, amount) {
                 if(target === player && player.invulnTimer > 0) return;
 
                 if(target === player && player.shields > 0) {
                     player.shields--;
-                    floatingTexts.push({ x: player.x, y: player.y - player.r - 20, text: "🛡️ ¡ESCUDO ABSORBIÓ DAÑO!", color: "#C0C0C0", life: 40 });
+                    floatingTexts.push({ x: player.x, y: player.y - player.r - 20, text: "🛡️ ¡ESCUDO ABSORBIÓ DAÑO!", color: "#C0C0C0", life: 40, size: 16 });
                     return;
                 }
 
-                target.hp -= amount;
+                // Mientras más grande, menos daño recibes (Reducción de daño)
+                let dmgMult = Math.max(0.25, 18 / Math.max(18, target.r));
+                let realDamage = amount * dmgMult;
+                
+                target.hp -= realDamage;
+                
+                // Textos grandes para el daño
+                floatingTexts.push({ x: target.x, y: target.y - target.r - 10, text: `-${Math.ceil(realDamage)}`, color: "#FF3333", life: 30, size: 24 });
 
                 if(target === player && player.hp <= 0) {
                     player.hp = 0; player.dead = true;
                 } else if(target !== player && target.hp <= 0) {
                     target.dead = true;
-                    floatingTexts.push({ x: target.x, y: target.y, text: "💥 ¡DESTRUIDO!", color: "#FF3333", life: 40 });
+                    floatingTexts.push({ x: target.x, y: target.y, text: "💥 ¡DESTRUIDO!", color: "#FF3333", life: 40, size: 22 });
                 }
             }
 
@@ -325,43 +294,26 @@ else:
                 if(type === 'damage') player.laserDamage += 0.5;
                 if(type === 'triple') player.shotType = 'triple';
                 if(type === 'cross') player.shotType = 'cross';
-                
-                orbModal.style.display = 'none';
-                isPaused = false;
+                orbModal.style.display = 'none'; isPaused = false;
             }
 
             function showOrbMenu(type) {
-                isPaused = true;
-                orbModal.style.display = 'block';
+                isPaused = true; orbModal.style.display = 'block';
                 orbModal.style.borderColor = type === 'celeste' ? '#00FFFF' : '#CC33FF';
-                
                 btn1.onclick = null; btn2.onclick = null;
 
                 if(type === 'celeste') {
-                    orbTitle.style.color = '#00FFFF';
-                    orbTitle.innerText = "🔵 ORBE CELESTE";
-                    btn1.style.borderColor = '#00FFFF';
-                    btn1.innerHTML = "🚀<br>MAYOR DISTANCIA";
-                    btn1.onclick = () => applyUpgrade('range');
-                    
-                    btn2.style.borderColor = '#00FFFF';
-                    btn2.innerHTML = "💥<br>MAYOR DAÑO";
-                    btn2.onclick = () => applyUpgrade('damage');
+                    orbTitle.style.color = '#00FFFF'; orbTitle.innerText = "🔵 ORBE CELESTE";
+                    btn1.style.borderColor = '#00FFFF'; btn1.innerHTML = "🚀<br>MAYOR DISTANCIA"; btn1.onclick = () => applyUpgrade('range');
+                    btn2.style.borderColor = '#00FFFF'; btn2.innerHTML = "💥<br>MAYOR DAÑO"; btn2.onclick = () => applyUpgrade('damage');
                 } else {
-                    orbTitle.style.color = '#CC33FF';
-                    orbTitle.innerText = "🟣 ORBE MORADO";
-                    btn1.style.borderColor = '#CC33FF';
-                    btn1.innerHTML = "🔱<br>DISPARO TRIPLE";
-                    btn1.onclick = () => applyUpgrade('triple');
-                    
-                    btn2.style.borderColor = '#CC33FF';
-                    btn2.innerHTML = "➕<br>DISPARO EN CRUZ";
-                    btn2.onclick = () => applyUpgrade('cross');
+                    orbTitle.style.color = '#CC33FF'; orbTitle.innerText = "🟣 ORBE MORADO";
+                    btn1.style.borderColor = '#CC33FF'; btn1.innerHTML = "🔱<br>DISPARO TRIPLE"; btn1.onclick = () => applyUpgrade('triple');
+                    btn2.style.borderColor = '#CC33FF'; btn2.innerHTML = "➕<br>DISPARO EN CRUZ"; btn2.onclick = () => applyUpgrade('cross');
                 }
             }
 
             function update() {
-                // Generación progresiva de Cajas y Orbes
                 if(Math.random() < 0.003 && boxes.length < maxBoxes) spawnBox();
                 if(Math.random() < 0.002 && orbs.length < maxOrbs) spawnOrb();
 
@@ -385,6 +337,7 @@ else:
                 }
 
                 let allStars = [player, ...bots].filter(s => !s.dead);
+                const now = Date.now();
 
                 // Movimiento Jugador
                 if(!player.dead) {
@@ -403,7 +356,6 @@ else:
                 }
 
                 // Bots
-                const now = Date.now();
                 bots.forEach(bot => {
                     let botSpeed = 3 * Math.max(0.35, 20 / (bot.r + 5));
                     if(Math.random() < 0.02) { bot.vx = (Math.random() - 0.5) * 4; bot.vy = (Math.random() - 0.5) * 4; }
@@ -416,10 +368,7 @@ else:
                         if(target) {
                             let dx = target.x - bot.x, dy = target.y - bot.y, dist = Math.hypot(dx, dy);
                             if(dist > 0) {
-                                lasers.push({
-                                    x: bot.x, y: bot.y, vx: (dx / dist) * 13, vy: (dy / dist) * 13,
-                                    life: 65, owner: bot, color: "#FF6633", damageMult: 1
-                                });
+                                lasers.push({ x: bot.x, y: bot.y, vx: (dx / dist) * 13, vy: (dy / dist) * 13, life: 65, owner: bot, color: "#FF6633", damageMult: 1 });
                                 bot.lastShootTime = now; bot.r = Math.max(8, bot.r - 0.3);
                             }
                         }
@@ -450,9 +399,7 @@ else:
                         for(let s of allStars) {
                             if(s.dead || s === l.owner) continue;
                             if(Math.hypot(l.x - s.x, l.y - s.y) < s.r) {
-                                hit = true;
-                                takeDamage(s, dmg);
-                                floatingTexts.push({ x: s.x, y: s.y - s.r - 10, text: `-${Math.ceil(dmg)} HP`, color: "#FF5555", life: 25 });
+                                hit = true; takeDamage(s, dmg);
                                 for(let k=0; k<4; k++) particles.push({ x: l.x, y: l.y, vx: (Math.random() - 0.5)*4, vy: (Math.random() - 0.5)*4, color: l.color, life: 15 });
                                 break;
                             }
@@ -461,44 +408,44 @@ else:
                     if(hit || l.life <= 0) lasers.splice(i, 1);
                 }
 
-                // Recoger Orbes
+                // Cajas y Orbes
                 for(let i = orbs.length - 1; i >= 0; i--) {
                     let o = orbs[i];
                     if(!player.dead && Math.hypot(player.x - o.x, player.y - o.y) < player.r + o.r) {
-                        showOrbMenu(o.type);
-                        orbs.splice(i, 1);
+                        showOrbMenu(o.type); orbs.splice(i, 1);
                     }
                 }
 
-                // Cajas Misteriosas (50% vida, 50% otras cosas)
                 for(let i = boxes.length - 1; i >= 0; i--) {
                     let b = boxes[i];
                     if(!player.dead && Math.hypot(player.x - b.x, player.y - b.y) < player.r + b.r) {
                         boxes.splice(i, 1);
                         let rand = Math.random();
-                        if(rand < 0.50) { // 50% Probabilidad de Vida
-                            player.hp = Math.min(player.maxHp, player.hp + 50);
+                        if(rand < 0.50) { 
+                            player.hp += 50;
+                            if(player.hp > player.maxHp) player.maxHp = player.hp; // Aumenta vida base
                             player.r += 2;
-                            floatingTexts.push({x: player.x, y: player.y - player.r - 15, text: "❤️ +50 HP (CAJA)", color: "#33FF66", life: 50});
+                            floatingTexts.push({x: player.x, y: player.y - player.r - 15, text: "❤️ +50 HP MAX", color: "#33FF66", life: 50, size: 22});
                         } else if(rand < 0.625) {
-                            if(player.shields < 4) { player.shields++; floatingTexts.push({x: player.x, y: player.y - 30, text: "🛡️ +1 ESCUDO GRIS", color: "#C0C0C0", life: 45}); }
+                            if(player.shields < 4) { player.shields++; floatingTexts.push({x: player.x, y: player.y - 30, text: "🛡️ ESCUDO +1", color: "#C0C0C0", life: 45, size: 18}); }
                         } else if(rand < 0.750) {
-                            player.fireTimer = 360; floatingTexts.push({x: player.x, y: player.y - 30, text: "🔥 ¡AURA DE FUEGO!", color: "#FF4500", life: 50});
+                            player.fireTimer = 360; floatingTexts.push({x: player.x, y: player.y - 30, text: "🔥 ¡AURA DE FUEGO!", color: "#FF4500", life: 50, size: 22});
                         } else if(rand < 0.875) {
-                            player.hasInvulnCharge = true; floatingTexts.push({x: player.x, y: player.y - 30, text: "👻 ¡FANTASMA LISTO!", color: "#00FFFF", life: 55});
+                            player.hasInvulnCharge = true; floatingTexts.push({x: player.x, y: player.y - 30, text: "👻 ¡FANTASMA LISTO!", color: "#00FFFF", life: 55, size: 18});
                         } else {
-                            player.speedBoostTimer = 300; floatingTexts.push({x: player.x, y: player.y - 30, text: "⚡ ¡SUPER VELOCIDAD!", color: "#FFFF33", life: 45});
+                            player.speedBoostTimer = 300; floatingTexts.push({x: player.x, y: player.y - 30, text: "⚡ ¡VELOCIDAD!", color: "#FFFF33", life: 45, size: 18});
                         }
                     }
                 }
 
-                // Corazones
+                // Corazones (Aumentan Vida Base si estás lleno)
                 for(let i = hearts.length - 1; i >= 0; i--) {
                     let h = hearts[i];
                     if(!player.dead && Math.hypot(player.x - h.x, player.y - h.y) < player.r + h.r) {
                         hearts.splice(i, 1); spawnHeart();
-                        player.hp = Math.min(player.maxHp, player.hp + 20);
-                        floatingTexts.push({ x: player.x, y: player.y - player.r - 15, text: "+20 HP ❤️", color: "#FF3366", life: 40 });
+                        player.hp += 20;
+                        if(player.hp > player.maxHp) player.maxHp = player.hp;
+                        floatingTexts.push({ x: player.x, y: player.y - player.r - 15, text: "+20 HP ❤️", color: "#FF3366", life: 40, size: 18 });
                     }
                 }
 
@@ -511,12 +458,16 @@ else:
                     });
                 }
 
+                // Comer y Choques entre estrellas
                 for(let i = foods.length - 1; i >= 0; i--) {
                     let f = foods[i];
                     for(let e of allStars) {
                         if(Math.hypot(e.x - f.x, e.y - f.y) < e.r) {
                             e.r += 0.08; 
-                            if(e === player) player.hp = Math.min(player.maxHp, player.hp + 0.1);
+                            if(e === player) {
+                                player.hp += 0.2;
+                                if(player.hp > player.maxHp) player.maxHp = player.hp;
+                            }
                             foods.splice(i, 1); spawnFood(); break;
                         }
                     }
@@ -526,20 +477,28 @@ else:
                     for(let j = i + 1; j < allStars.length; j++) {
                         let e1 = allStars[i], e2 = allStars[j];
                         let d = Math.hypot(e1.x - e2.x, e1.y - e2.y);
+                        
+                        // 🔥 DAÑO POR AURA DE FUEGO 🔥 (40 HP por contacto)
+                        if(d < e1.r + e2.r) {
+                            if(e1 === player && player.fireTimer > 0 && (now - (e2.lastBurnTime || 0) > 500)) {
+                                takeDamage(e2, 40); e2.lastBurnTime = now;
+                                floatingTexts.push({ x: e2.x, y: e2.y, text: "🔥 -40", color: "#FF4500", life: 30, size: 24 });
+                            } else if (e2 === player && player.fireTimer > 0 && (now - (e1.lastBurnTime || 0) > 500)) {
+                                takeDamage(e1, 40); e1.lastBurnTime = now;
+                                floatingTexts.push({ x: e1.x, y: e1.y, text: "🔥 -40", color: "#FF4500", life: 30, size: 24 });
+                            }
+                        }
+
                         let bigger = e1.r > e2.r ? e1 : e2;
                         let smaller = e1.r > e2.r ? e2 : e1;
 
                         if(d < bigger.r * 0.75 && bigger.r > smaller.r * 1.15) {
-                            if(smaller === player && player.fireTimer > 0) {
-                                bigger.r = Math.max(12, bigger.r - 0.6);
-                                particles.push({x: bigger.x, y: bigger.y, vx: 0, vy: -2, color: "#FF4500", life: 15});
-                                continue;
-                            }
                             if(smaller === player && player.invulnTimer > 0) continue;
                             bigger.r += smaller.r * 0.35;
                             if(bigger === player) {
-                                player.hp = Math.min(player.maxHp, player.hp + 35);
-                                floatingTexts.push({ x: player.x, y: player.y - player.r - 15, text: "❤️ +35 HP", color: "#FF3366", life: 40 });
+                                player.hp += 35;
+                                if(player.hp > player.maxHp) player.maxHp = player.hp;
+                                floatingTexts.push({ x: player.x, y: player.y - player.r - 15, text: "❤️ +35 HP", color: "#FF3366", life: 40, size: 20 });
                             } else { bigger.hp = Math.min(bigger.maxHp, bigger.hp + 35); }
                             smaller.dead = true;
                         }
@@ -579,7 +538,7 @@ else:
                 });
 
                 let shakeX = 0, shakeY = 0;
-                if(!player.dead && player.hp <= 20 && player.hp > 0) { shakeX = (Math.random() - 0.5) * 9; shakeY = (Math.random() - 0.5) * 9; }
+                if(!player.dead && player.hp <= 40 && player.hp > 0) { shakeX = (Math.random() - 0.5) * 9; shakeY = (Math.random() - 0.5) * 9; }
 
                 ctx.save();
                 ctx.translate(canvas.width / 2 + shakeX, canvas.height / 2 + shakeY);
@@ -614,13 +573,12 @@ else:
                     ctx.beginPath(); ctx.arc(0, 0, o.r, 0, Math.PI * 2);
                     ctx.fillStyle = o.type === 'celeste' ? '#00FFFF' : '#CC33FF'; ctx.fill();
                     ctx.strokeStyle = "white"; ctx.lineWidth = 2; ctx.stroke();
-                    // Efecto de pulso
                     ctx.globalAlpha = 0.5; ctx.beginPath(); ctx.arc(0, 0, o.r + Math.sin(Date.now() / 150)*4, 0, Math.PI * 2);
                     ctx.strokeStyle = o.type === 'celeste' ? '#00FFFF' : '#CC33FF'; ctx.lineWidth = 2; ctx.stroke();
                     ctx.restore();
                 });
 
-                hearts.forEach(h => { ctx.font = "14px sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText("❤️", h.x, h.y); });
+                hearts.forEach(h => { ctx.font = "16px sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText("❤️", h.x, h.y); });
 
                 particles.forEach(p => { ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, Math.PI * 2); ctx.fillStyle = p.color; ctx.fill(); });
                 lasers.forEach(l => { ctx.beginPath(); ctx.arc(l.x, l.y, 5, 0, Math.PI * 2); ctx.fillStyle = l.color || "#00FFFF"; ctx.fill(); });
@@ -650,28 +608,33 @@ else:
                     if(s !== player) {
                         let hpP = Math.max(0, s.hp / s.maxHp);
                         ctx.fillStyle = "rgba(0,0,0,0.5)"; ctx.fillRect(s.x - 15, s.y - s.r - 12, 30, 4);
-                        ctx.fillStyle = s.hp > 50 ? "#33FF66" : (s.hp > 20 ? "#FFFF33" : "#FF3333");
+                        ctx.fillStyle = s.hp > (s.maxHp*0.5) ? "#33FF66" : (s.hp > (s.maxHp*0.2) ? "#FFFF33" : "#FF3333");
                         ctx.fillRect(s.x - 15, s.y - s.r - 12, 30 * hpP, 4);
                     }
                     ctx.fillStyle = "white"; ctx.font = "bold 12px sans-serif"; ctx.textAlign = "center";
                     ctx.fillText(s.name + (s.r >= LARGE_THRESHOLD ? " 👑" : ""), s.x, s.y + s.r + 15);
                 });
 
-                floatingTexts.forEach(ft => { ctx.fillStyle = ft.color; ctx.font = "bold 14px sans-serif"; ctx.textAlign = "center"; ctx.fillText(ft.text, ft.x, ft.y); });
+                floatingTexts.forEach(ft => { 
+                    ctx.fillStyle = ft.color; 
+                    ctx.font = "bold " + (ft.size || 14) + "px sans-serif"; 
+                    ctx.textAlign = "center"; 
+                    ctx.fillText(ft.text, ft.x, ft.y); 
+                });
                 ctx.restore();
 
-                // UI
+                // UI Principal
                 ctx.save();
                 let x = 12, y = canvas.height - 45;
                 ctx.fillStyle = "rgba(10, 10, 20, 0.85)"; ctx.strokeStyle = "#444"; ctx.lineWidth = 2;
-                ctx.fillRect(x, y, 180, 18); ctx.strokeRect(x, y, 180, 18);
+                ctx.fillRect(x, y, 220, 18); ctx.strokeRect(x, y, 220, 18); // Barra más ancha para 200hp
 
                 let hpPct = Math.max(0, player.hp / player.maxHp);
-                ctx.fillStyle = player.hp > 50 ? "#33FF66" : (player.hp > 20 ? "#FFFF33" : "#FF3333");
-                ctx.fillRect(x + 2, y + 2, 176 * hpPct, 14);
+                ctx.fillStyle = player.hp > (player.maxHp*0.5) ? "#33FF66" : (player.hp > (player.maxHp*0.2) ? "#FFFF33" : "#FF3333");
+                ctx.fillRect(x + 2, y + 2, 216 * hpPct, 14);
 
-                ctx.fillStyle = "#FFF"; ctx.font = "bold 10px sans-serif"; ctx.textAlign = "center";
-                ctx.fillText(`SALUD: ${Math.ceil(player.hp)} / ${Math.ceil(player.maxHp)} HP`, x + 90, y + 13);
+                ctx.fillStyle = "#FFF"; ctx.font = "bold 11px sans-serif"; ctx.textAlign = "center";
+                ctx.fillText(`SALUD: ${Math.ceil(player.hp)} / ${Math.ceil(player.maxHp)} HP`, x + 110, y + 13);
 
                 for(let i = 0; i < 4; i++) {
                     ctx.beginPath(); ctx.arc(x + (i * 22) + 10, y - 14, 7, 0, Math.PI * 2);
@@ -680,7 +643,7 @@ else:
                 }
                 
                 if(player.hasInvulnCharge || player.invulnTimer > 0) {
-                    ctx.fillStyle = player.invulnTimer > 0 ? "#00FFFF" : "#FFD700"; ctx.font = "bold 11px sans-serif"; ctx.textAlign = "left";
+                    ctx.fillStyle = player.invulnTimer > 0 ? "#00FFFF" : "#FFD700"; ctx.font = "bold 12px sans-serif"; ctx.textAlign = "left";
                     ctx.fillText(player.invulnTimer > 0 ? `👻 FANTASMA: ${(player.invulnTimer/60).toFixed(1)}s` : "👻 [ESPACIO]: FANTASMA LISTO", x, y - 28);
                 }
                 ctx.restore();
