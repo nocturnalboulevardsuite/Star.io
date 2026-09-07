@@ -12,8 +12,6 @@ st.write("¡Sobrevive, domina el Top y destruye al Agujero Negro!")
 # ==========================================
 # 🎵 CONFIGURACIÓN DE AUDIO (MÚSICA Y EFECTOS)
 # ==========================================
-RUTA_MUSICA = "test.wav" 
-
 def obtener_audio_b64(ruta):
     if os.path.exists(ruta):
         with open(ruta, "rb") as f:
@@ -23,22 +21,30 @@ def obtener_audio_b64(ruta):
             return f"data:audio/{extension};base64,{audio_base64}"
     return None
 
-# Cargar música de fondo
-audio_src = obtener_audio_b64(RUTA_MUSICA) or ""
+# Cargar música (busca en raíz y en carpeta sonidos)
+audio_src = obtener_audio_b64("test.wav") or obtener_audio_b64(os.path.join("sonidos", "test.wav")) or ""
 if not audio_src:
-    st.warning(f"⚠️ No se encontró la música de fondo: {RUTA_MUSICA}.")
+    st.warning("⚠️ No se encontró la música de fondo (test.wav).")
 
-# Cargar efectos de sonido dinámicamente (hasta 4 por acción)
+# Cargar efectos de sonido (busca en raíz y dentro de /sonidos)
 sfx_categorias = ["dash", "laser", "food", "box", "orb", "death", "respawn"]
 sfx_data = {cat: [] for cat in sfx_categorias}
 
 for cat in sfx_categorias:
     for i in range(1, 5):
-        # Buscar en .wav y .mp3
-        ruta_wav = f"{cat}{i}.wav"
-        ruta_mp3 = f"{cat}{i}.mp3"
+        posibles_rutas = [
+            f"{cat}{i}.wav",
+            f"{cat}{i}.mp3",
+            os.path.join("sonidos", f"{cat}{i}.wav"),
+            os.path.join("sonidos", f"{cat}{i}.mp3"),
+        ]
         
-        b64_str = obtener_audio_b64(ruta_wav) or obtener_audio_b64(ruta_mp3)
+        b64_str = None
+        for ruta in posibles_rutas:
+            b64_str = obtener_audio_b64(ruta)
+            if b64_str:
+                break
+                
         if b64_str:
             sfx_data[cat].append(b64_str)
 
