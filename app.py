@@ -1,10 +1,10 @@
 import streamlit as st
 import streamlit.components.v1 as components
 
-st.set_page_config(page_title="Star.io - Agujero Negro & Top Lateral", layout="wide")
+st.set_page_config(page_title="Star.io - Agujero Negro & Vidas", layout="wide")
 
-st.title("🌟 Star.io - Gravedad y Ranking Lateral")
-st.write("¡Esquiva la fuerza de atracción del Agujero Negro, domina la galaxia y sube en el Top!")
+st.title("🌟 Star.io - Batalla Galáctica")
+st.write("¡Sobrevive, domina el Top y destruye al Agujero Negro con ayuda de otros!")
 
 if 'jugando' not in st.session_state:
     st.session_state.jugando = False
@@ -26,14 +26,14 @@ if not st.session_state.jugando:
         st.button("▶️ JUGAR AHORA", on_click=iniciar_juego, type="primary", use_container_width=True)
         
         st.info("""
-        💡 **NOVEDADES:**
-        - **🏷️ Nickname Personalizado:** Ponle nombre a tu estrella antes de empezar.
-        - **👑 TOP EXTERNO:** El ranking ahora está completamente fuera del área de juego.
-        - **🌌 10.000 HP:** El Agujero Negro ahora es un jefe colosal con 10,000 puntos de vida.
+        💡 **ÚLTIMA ACTUALIZACIÓN:**
+        - **❤️ 5 Vidas Máximas:** Si mueres 5 veces, se termina el juego.
+        - **🤖 IA Colaborativa:** Los bots ahora también le dispararán al Agujero Negro si se acercan a él.
+        - **👑 Ranking Externo & 10k HP:** Top lateral mejorado y Jefe colosal.
         """)
 
 else:
-    st.button("⏹️ Volver al Menú Principal", on_click=volver_menu)
+    st.button("⏹️ Volver al Menú Principal (Reiniciar Juego)", on_click=volver_menu)
     
     codigo_juego_template = """
     <!DOCTYPE html>
@@ -66,7 +66,6 @@ else:
                 border: 1px solid #222; 
             }
             
-            /* Leaderboard Exterior Estilizado */
             #leaderboard-panel {
                 width: 240px;
                 background: #0a0a10;
@@ -109,8 +108,8 @@ else:
             }
 
             #gameover { 
-                display: none; position: absolute; color: white; top: 40%; left: 35%; text-align: center; 
-                font-size: 24px; text-shadow: 2px 2px 10px #000; pointer-events: none; z-index: 5;
+                display: none; position: absolute; color: white; top: 40%; left: 50%; transform: translateX(-50%); text-align: center; 
+                font-size: 24px; text-shadow: 2px 2px 10px #000; pointer-events: none; z-index: 5; width: 100%;
             }
             
             #orb-modal {
@@ -130,13 +129,12 @@ else:
     </head>
     <body>
         <div id="main-wrapper">
-            <!-- Lienzo del Juego -->
             <div style="position: relative;">
                 <canvas id="gameCanvas" width="900" height="650"></canvas>
                 
                 <div id="gameover">
                     <h2>¡HAS MUERTO! 💥</h2>
-                    <p style="font-size: 22px; color: #00FFFF; font-weight: bold; margin-top: 10px;">
+                    <p id="gameover-msg" style="font-size: 22px; color: #00FFFF; font-weight: bold; margin-top: 10px;">
                         👉 DALE CLICK AL JUEGO PARA REAPARECER 👈
                     </p>
                 </div>
@@ -151,7 +149,6 @@ else:
                 </div>
             </div>
             
-            <!-- Panel Lateral Externo -->
             <div id="leaderboard-panel">
                 <h3 class="lb-title">👑 TOP ESTRELLAS</h3>
                 <div id="lb-list"></div>
@@ -162,6 +159,7 @@ else:
             const canvas = document.getElementById("gameCanvas");
             const ctx = canvas.getContext("2d");
             const overScreen = document.getElementById("gameover");
+            const overMsg = document.getElementById("gameover-msg");
             const lbList = document.getElementById("lb-list");
             
             const orbModal = document.getElementById("orb-modal");
@@ -204,7 +202,6 @@ else:
                 craters: [ {x: -35, y: -25, r: 20}, {x: 35, y: -35, r: 16}, {x: 10, y: 30, r: 25}, {x: -40, y: 25, r: 14}, {x: 0, y: 0, r: 18} ]
             };
 
-            // AGUJERO NEGRO CON 10,000 HP
             let blackHole = { x: worldW * 0.7, y: worldH * 0.3, r: 75, hp: 10000, maxHp: 10000, dead: false };
 
             canvas.addEventListener('mousemove', (e) => {
@@ -215,7 +212,10 @@ else:
 
             canvas.addEventListener('mousedown', (e) => {
                 if(isPaused) return;
-                if(player.dead) { respawnPlayer(); return; }
+                if(player.dead) { 
+                    if (playerLives > 0) respawnPlayer(); 
+                    return; 
+                }
                 if(e.button === 0) shootLaser();
                 else if(e.button === 2) { e.preventDefault(); triggerDash(); }
             });
@@ -224,10 +224,26 @@ else:
                 if(isPaused) return;
                 if(e.code === 'Space') {
                     e.preventDefault();
-                    if(player.dead) respawnPlayer();
-                    else triggerInvulnerability();
+                    if(player.dead) {
+                        if(playerLives > 0) respawnPlayer();
+                    } else {
+                        triggerInvulnerability();
+                    }
                 }
             });
+
+            function handlePlayerDeath() {
+                playerLives--;
+                isGameOver = true;
+                overScreen.style.display = 'block';
+                if(playerLives > 0) {
+                    overMsg.innerText = `👉 DALE CLICK PARA REAPARECER (${playerLives} VIDAS RESTANTES) 👈`;
+                    overMsg.style.color = "#00FFFF";
+                } else {
+                    overMsg.innerText = "💀 SIN VIDAS - JUEGO TERMINADO - VUELVE AL MENÚ 💀";
+                    overMsg.style.color = "#FF3333";
+                }
+            }
 
             function respawnPlayer() {
                 player.x = Math.random() * (worldW - 200) + 100;
@@ -249,14 +265,14 @@ else:
                 isGameOver = false;
                 overScreen.style.display = 'none';
 
-                floatingTexts.push({ x: player.x, y: player.y - 30, text: "✨ ¡REAPARECISTE!", color: "#33FF66", life: 50, size: 18 });
+                floatingTexts.push({ x: player.x, y: player.y - 30, text: `✨ ¡REAPARECISTE! (${playerLives} vidas)`, color: "#33FF66", life: 50, size: 18 });
             }
 
             function triggerInvulnerability() {
                 if(!player.dead && player.hasInvulnCharge && player.invulnTimer <= 0) {
                     player.hasInvulnCharge = false;
                     player.invulnTimer = 300; 
-                    floatingTexts.push({ x: player.x, y: player.y - player.r - 25, text: "👻 ¡MODO FANTASMA ACTIVADO!", color: "#00FFFF", life: 50, size: 16 });
+                    floatingTexts.push({ x: player.x, y: player.y - player.r - 25, text: "👻 ¡MODO FANTASMA!", color: "#00FFFF", life: 50, size: 16 });
                 }
             }
 
@@ -310,6 +326,7 @@ else:
             function spawnHeart() { hearts.push({ x: Math.random() * (worldW - 100) + 50, y: Math.random() * (worldH - 100) + 50, r: 10 }); }
             function spawnOrb() { orbs.push({ x: Math.random() * (worldW - 100) + 50, y: Math.random() * (worldH - 100) + 50, r: 14, type: Math.random() < 0.5 ? 'celeste' : 'morado' }); }
 
+            let playerLives = 5;
             let player, bots, foods;
             const maxBots = 28;
             const maxFoods = 600;
@@ -318,7 +335,7 @@ else:
             const maxOrbs = 3;
 
             function init() {
-                isGameOver = false; isPaused = false;
+                isGameOver = false; isPaused = false; playerLives = 5;
                 orbModal.style.display = 'none'; overScreen.style.display = 'none';
                 floatingTexts = []; lasers = []; particles = []; boxes = []; hearts = []; orbs = [];
                 
@@ -364,8 +381,9 @@ else:
                 
                 floatingTexts.push({ x: target.x, y: target.y - target.r - 10, text: `-${Math.ceil(realDamage)}`, color: "#FF3333", life: 30, size: 24 });
 
-                if(target === player && player.hp <= 0) {
+                if(target === player && player.hp <= 0 && !player.dead) {
                     player.hp = 0; player.dead = true;
+                    handlePlayerDeath();
                 } else if(target !== player && target.hp <= 0) {
                     target.dead = true;
                     floatingTexts.push({ x: target.x, y: target.y, text: "💥 ¡DESTRUIDO!", color: "#FF3333", life: 40, size: 22 });
@@ -422,10 +440,9 @@ else:
                 meteor.x = (worldW / 2) + Math.cos(meteor.orbitAngle) * meteor.orbitRadius;
                 meteor.y = (worldH / 2) + Math.sin(meteor.orbitAngle) * meteor.orbitRadius;
 
-                // 🕳️ AGUJERO NEGRO: REGENERACIÓN RALENTIZADA Y GRAVEDAD 🌌
                 if(!blackHole.dead) { 
                     blackHole.r += 0.012; 
-                    blackHole.hp = Math.min(blackHole.maxHp, blackHole.hp + 0.02); // Regeneración lenta (+0.02)
+                    blackHole.hp = Math.min(blackHole.maxHp, blackHole.hp + 0.02);
 
                     let pullRadius = blackHole.r * 5.5;
                     let dPlayer = Math.hypot(blackHole.x - player.x, blackHole.y - player.y);
@@ -478,7 +495,7 @@ else:
                     player.y = Math.max(player.r, Math.min(worldH - player.r, player.y));
                 }
 
-                // Bots
+                // Bots e IA vs Agujero Negro
                 bots.forEach(bot => {
                     let botSpeed = 3 * Math.max(0.35, 20 / (bot.r + 5));
                     if(Math.random() < 0.02) { bot.vx = (Math.random() - 0.5) * 4; bot.vy = (Math.random() - 0.5) * 4; }
@@ -486,8 +503,17 @@ else:
                     bot.x = Math.max(bot.r, Math.min(worldW - bot.r, bot.x)); bot.y = Math.max(bot.r, Math.min(worldH - bot.r, bot.y));
 
                     if (now - (bot.lastShootTime || 0) > 2500 && Math.random() < 0.03 && bot.r > 12) {
-                        let target = !player.dead && Math.hypot(player.x - bot.x, player.y - bot.y) < 550 ? player : null;
-                        if(!target) target = bots.find(b => b !== bot && !b.dead && Math.hypot(b.x - bot.x, b.y - bot.y) < 400);
+                        let target = null;
+                        
+                        // IA: Detectar el Agujero Negro si está cerca (Radio 600)
+                        if(!blackHole.dead && Math.hypot(blackHole.x - bot.x, blackHole.y - bot.y) < 600) {
+                            target = blackHole;
+                        } else if (!player.dead && Math.hypot(player.x - bot.x, player.y - bot.y) < 550) {
+                            target = player;
+                        } else {
+                            target = bots.find(b => b !== bot && !b.dead && Math.hypot(b.x - bot.x, b.y - bot.y) < 400);
+                        }
+
                         if(target) {
                             let dx = target.x - bot.x, dy = target.y - bot.y, dist = Math.hypot(dx, dy);
                             if(dist > 0) {
@@ -498,14 +524,12 @@ else:
                     }
                 });
 
-                // Cámara
                 let focusTarget = (!player.dead) ? player : (allStars[0] || {x: worldW/2, y: worldH/2, r: 15});
                 let targetZoom = Math.max(0.25, 25 / Math.max(25, focusTarget.r * 0.6));
                 zoom += (targetZoom - zoom) * 0.05;
                 camX += (focusTarget.x - canvas.width / 2 - camX) * 0.1;
                 camY += (focusTarget.y - canvas.height / 2 - camY) * 0.1;
 
-                // Colisiones Láseres
                 for(let i = lasers.length - 1; i >= 0; i--) {
                     let l = lasers[i];
                     l.x += l.vx; l.y += l.vy; l.life--;
@@ -531,7 +555,6 @@ else:
                     if(hit || l.life <= 0) lasers.splice(i, 1);
                 }
 
-                // Cajas y Orbes
                 for(let i = orbs.length - 1; i >= 0; i--) {
                     let o = orbs[i];
                     if(!player.dead && Math.hypot(player.x - o.x, player.y - o.y) < player.r + o.r) {
@@ -545,9 +568,7 @@ else:
                         boxes.splice(i, 1);
                         let rand = Math.random();
                         if(rand < 0.50) { 
-                            player.hp += 50;
-                            if(player.hp > player.maxHp) player.maxHp = player.hp;
-                            player.r += 2;
+                            player.hp += 50; if(player.hp > player.maxHp) player.maxHp = player.hp; player.r += 2;
                             floatingTexts.push({x: player.x, y: player.y - player.r - 15, text: "❤️ +50 HP MAX", color: "#33FF66", life: 50, size: 22});
                         } else if(rand < 0.625) {
                             if(player.shields < 4) { player.shields++; floatingTexts.push({x: player.x, y: player.y - 30, text: "🛡️ ESCUDO +1", color: "#C0C0C0", life: 45, size: 18}); }
@@ -565,8 +586,7 @@ else:
                     let h = hearts[i];
                     if(!player.dead && Math.hypot(player.x - h.x, player.y - h.y) < player.r + h.r) {
                         hearts.splice(i, 1); spawnHeart();
-                        player.hp += 20;
-                        if(player.hp > player.maxHp) player.maxHp = player.hp;
+                        player.hp += 20; if(player.hp > player.maxHp) player.maxHp = player.hp;
                         floatingTexts.push({ x: player.x, y: player.y - player.r - 15, text: "+20 HP ❤️", color: "#FF3366", life: 40, size: 18 });
                     }
                 }
@@ -576,7 +596,14 @@ else:
                 if(!blackHole.dead) {
                     allStars.forEach(s => {
                         if(Math.hypot(s.x - blackHole.x, s.y - blackHole.y) < s.r + blackHole.r * 0.8) {
-                            if(s.r > blackHole.r * 1.25) { blackHole.dead = true; s.r += 35; } else takeDamage(s, 100);
+                            if(s.r > blackHole.r * 1.25) { blackHole.dead = true; s.r += 35; } 
+                            else {
+                                if(s === player && !player.dead) {
+                                    player.hp = 0; player.dead = true; handlePlayerDeath();
+                                } else if(s !== player) {
+                                    s.dead = true;
+                                }
+                            }
                         }
                     });
                 }
@@ -587,8 +614,7 @@ else:
                         if(Math.hypot(e.x - f.x, e.y - f.y) < e.r) {
                             e.r += 0.08; 
                             if(e === player) {
-                                player.hp += 0.2;
-                                if(player.hp > player.maxHp) player.maxHp = player.hp;
+                                player.hp += 0.2; if(player.hp > player.maxHp) player.maxHp = player.hp;
                             }
                             foods.splice(i, 1); spawnFood(); break;
                         }
@@ -603,10 +629,8 @@ else:
                         if(d < e1.r + e2.r) {
                             if(e1 === player && player.fireTimer > 0 && (now - (e2.lastBurnTime || 0) > 500)) {
                                 takeDamage(e2, 40); e2.lastBurnTime = now;
-                                floatingTexts.push({ x: e2.x, y: e2.y, text: "🔥 -40", color: "#FF4500", life: 30, size: 24 });
                             } else if (e2 === player && player.fireTimer > 0 && (now - (e1.lastBurnTime || 0) > 500)) {
                                 takeDamage(e1, 40); e1.lastBurnTime = now;
-                                floatingTexts.push({ x: e1.x, y: e1.y, text: "🔥 -40", color: "#FF4500", life: 30, size: 24 });
                             }
                         }
 
@@ -617,11 +641,14 @@ else:
                             if(smaller === player && player.invulnTimer > 0) continue;
                             bigger.r += smaller.r * 0.35;
                             if(bigger === player) {
-                                player.hp += 35;
-                                if(player.hp > player.maxHp) player.maxHp = player.hp;
-                                floatingTexts.push({ x: player.x, y: player.y - player.r - 15, text: "❤️ +35 HP", color: "#FF3366", life: 40, size: 20 });
+                                player.hp += 35; if(player.hp > player.maxHp) player.maxHp = player.hp;
                             } else { bigger.hp = Math.min(bigger.maxHp, bigger.hp + 35); }
-                            smaller.dead = true;
+                            
+                            if(smaller === player && !player.dead) {
+                                smaller.hp = 0; smaller.dead = true; handlePlayerDeath();
+                            } else {
+                                smaller.dead = true;
+                            }
                         }
                     }
                 }
@@ -636,10 +663,8 @@ else:
                     if(ft.life <= 0) floatingTexts.splice(i, 1);
                 }
 
-                if(player.dead && !isGameOver) { isGameOver = true; overScreen.style.display = 'block'; }
                 bots = bots.filter(b => !b.dead);
                 while(bots.length < maxBots) spawnBot();
-
                 updateLeaderboard();
             }
 
@@ -677,7 +702,6 @@ else:
 
                 if(!blackHole.dead) {
                     ctx.save(); ctx.translate(blackHole.x, blackHole.y);
-                    
                     ctx.strokeStyle = "rgba(138, 43, 226, 0.15)"; ctx.lineWidth = 2;
                     ctx.beginPath(); ctx.arc(0, 0, blackHole.r * 5.5, 0, Math.PI * 2); ctx.stroke();
 
@@ -686,7 +710,6 @@ else:
                     ctx.beginPath(); ctx.arc(0, 0, blackHole.r * 1.5, 0, Math.PI * 2); ctx.fillStyle = grad; ctx.fill();
                     ctx.beginPath(); ctx.arc(0, 0, blackHole.r, 0, Math.PI * 2); ctx.fillStyle = "#05000A"; ctx.fill();
                     
-                    // Barra de Vida
                     let bhHpPct = Math.max(0, blackHole.hp / blackHole.maxHp);
                     let barW = 160, barH = 12;
                     ctx.fillStyle = "rgba(0,0,0,0.7)"; ctx.fillRect(-barW/2, -blackHole.r * 1.5 - 28, barW, barH);
@@ -695,7 +718,6 @@ else:
                     
                     ctx.fillStyle = "#FFD700"; ctx.font = "bold 14px sans-serif"; ctx.textAlign = "center";
                     ctx.fillText(`🕳️ JEFE: ${Math.ceil(blackHole.hp)} / ${blackHole.maxHp} HP`, 0, -blackHole.r * 1.5 - 35);
-
                     ctx.restore();
                 }
 
@@ -717,7 +739,6 @@ else:
                 });
 
                 hearts.forEach(h => { ctx.font = "16px sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText("❤️", h.x, h.y); });
-
                 particles.forEach(p => { ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, Math.PI * 2); ctx.fillStyle = p.color; ctx.fill(); });
                 lasers.forEach(l => { ctx.beginPath(); ctx.arc(l.x, l.y, 5, 0, Math.PI * 2); ctx.fillStyle = l.color || "#00FFFF"; ctx.fill(); });
                 foods.forEach(f => { ctx.beginPath(); ctx.arc(f.x, f.y, f.r, 0, Math.PI * 2); ctx.fillStyle = f.color; ctx.fill(); });
@@ -754,16 +775,20 @@ else:
                 });
 
                 floatingTexts.forEach(ft => { 
-                    ctx.fillStyle = ft.color; 
-                    ctx.font = "bold " + (ft.size || 14) + "px sans-serif"; 
-                    ctx.textAlign = "center"; 
-                    ctx.fillText(ft.text, ft.x, ft.y); 
+                    ctx.fillStyle = ft.color; ctx.font = "bold " + (ft.size || 14) + "px sans-serif"; 
+                    ctx.textAlign = "center"; ctx.fillText(ft.text, ft.x, ft.y); 
                 });
                 ctx.restore();
 
-                // UI Principal (Salud del Jugador)
+                // UI Principal (Salud y Vidas del Jugador)
                 ctx.save();
                 let x = 12, y = canvas.height - 45;
+                
+                // Mostrar Vidas
+                ctx.fillStyle = "#FFF"; ctx.font = "bold 14px sans-serif"; ctx.textAlign = "left";
+                let corazones = "❤️".repeat(Math.max(0, playerLives)) + "🖤".repeat(Math.max(0, 5 - playerLives));
+                ctx.fillText(`VIDAS: ${corazones}`, x, y - 35);
+
                 ctx.fillStyle = "rgba(10, 10, 20, 0.85)"; ctx.strokeStyle = "#444"; ctx.lineWidth = 2;
                 ctx.fillRect(x, y, 220, 18); ctx.strokeRect(x, y, 220, 18);
 
@@ -782,7 +807,7 @@ else:
                 
                 if(player.hasInvulnCharge || player.invulnTimer > 0) {
                     ctx.fillStyle = player.invulnTimer > 0 ? "#00FFFF" : "#FFD700"; ctx.font = "bold 12px sans-serif"; ctx.textAlign = "left";
-                    ctx.fillText(player.invulnTimer > 0 ? `👻 FANTASMA: ${(player.invulnTimer/60).toFixed(1)}s` : "👻 [ESPACIO]: FANTASMA LISTO", x, y - 28);
+                    ctx.fillText(player.invulnTimer > 0 ? `👻 FANTASMA: ${(player.invulnTimer/60).toFixed(1)}s` : "👻 [ESPACIO]: FANTASMA LISTO", x, y - 55);
                 }
                 ctx.restore();
             }
@@ -799,7 +824,5 @@ else:
     </html>
     """
     
-    # Inyectamos el nickname del jugador en el script de JS
     codigo_juego_listo = codigo_juego_template.replace("__PLAYER_NICKNAME__", st.session_state.nickname)
-    
     components.html(codigo_juego_listo, height=680, width=1200, scrolling=False)
