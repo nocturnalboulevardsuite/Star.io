@@ -29,7 +29,7 @@ audio_src = obtener_audio_b64(RUTA_MUSICA) or ""
 # Rutas de efectos de sonido
 rutas_sfx = {
     "laser": ["sonidos/laser1.wav", "laser1.wav", "laser1.mp3"],
-    "death": ["sonidos/muerte.wav", "muerte.wav", "death1.wav"],
+    "death": ["sonidos/muerte.wav", "muerte.wav", "muerte1.wav"],
     "bh_death": ["sonidos/explosionagujeronegro.wav", "explosionagujeronegro.wav"],
     "dash": ["sonidos/dash1.wav", "dash1.wav"],
     "food": ["sonidos/food1.wav", "food1.wav"],
