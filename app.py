@@ -1,19 +1,34 @@
 import streamlit as st
 import streamlit.components.v1 as components
 import base64
+import os
 
-st.set_page_config(page_title="Star.io - Música & Vidas", layout="wide")
+st.set_page_config(page_title="Star.io - Batalla Galáctica", layout="wide")
 
 st.title("🌟 Star.io - Batalla Galáctica")
-st.write("¡Sobrevive, domina el Top y destruye al Agujero Negro con tu propia música de fondo!")
+st.write("¡Sobrevive, domina el Top y destruye al Agujero Negro!")
 
-# Inicialización de variables de estado
+# ==========================================
+# 🎵 CONFIGURACIÓN DE TU MÚSICA (BACKEND)
+# ==========================================
+# Cambia "mi_cancion.wav" por el nombre exacto de tu archivo exportado de FL Studio
+RUTA_MUSICA = "mi_cancion.wav" 
+
+audio_src = ""
+if os.path.exists(RUTA_MUSICA):
+    with open(RUTA_MUSICA, "rb") as f:
+        audio_bytes = f.read()
+        audio_base64 = base64.b64encode(audio_bytes).decode('utf-8')
+        extension = RUTA_MUSICA.split('.')[-1]
+        audio_src = f"data:audio/{extension};base64,{audio_base64}"
+else:
+    st.warning(f"⚠️ No se encontró el archivo de audio: {RUTA_MUSICA}. El juego iniciará sin música.")
+# ==========================================
+
 if 'jugando' not in st.session_state:
     st.session_state.jugando = False
 if 'nickname' not in st.session_state:
     st.session_state.nickname = "TÚ"
-if 'audio_src' not in st.session_state:
-    st.session_state.audio_src = ""
 
 def iniciar_juego():
     nombre = st.session_state.nickname_input.strip()
@@ -27,34 +42,11 @@ if not st.session_state.jugando:
     col1, col2, col3 = st.columns([1,2,1])
     with col2:
         st.text_input("✨ Ingresa el Nickname de tu Estrella:", value=st.session_state.nickname, key="nickname_input", max_chars=12)
-        
         st.write("---")
-        # Subida del archivo de audio creado en FL Studio
-        archivo_audio = st.file_uploader("🎵 Sube tu música de FL Studio (.wav o .mp3)", type=["wav", "mp3"])
-        
-        if archivo_audio is not None:
-            audio_bytes = archivo_audio.read()
-            # Convertir el archivo a base64 para inyectarlo en el HTML/JS
-            audio_base64 = base64.b64encode(audio_bytes).decode('utf-8')
-            extension = archivo_audio.name.split('.')[-1]
-            st.session_state.audio_src = f"data:audio/{extension};base64,{audio_base64}"
-            st.success("✅ ¡Música cargada lista para la batalla!")
-        else:
-            st.session_state.audio_src = ""
-            
-        st.write("---")
-        
         st.button("▶️ JUGAR AHORA", on_click=iniciar_juego, type="primary", use_container_width=True)
-        
-        st.info("""
-        💡 **ÚLTIMA ACTUALIZACIÓN:**
-        - **🎵 Música Custom:** Sube tu pista en `.wav` y controla el volumen in-game (30% por defecto).
-        - **❤️ 5 Vidas Máximas:** Si mueres 5 veces, se termina el juego.
-        - **🤖 IA Colaborativa:** Los bots ayudan a disparar al Agujero Negro.
-        """)
 
 else:
-    st.button("⏹️ Volver al Menú Principal (Cambiar Música/Reiniciar)", on_click=volver_menu)
+    st.button("⏹️ Volver al Menú Principal", on_click=volver_menu)
     
     codigo_juego_template = """
     <!DOCTYPE html>
@@ -87,30 +79,6 @@ else:
                 border: 1px solid #222; 
             }
             
-            /* Panel de volumen */
-            #volume-panel {
-                position: absolute;
-                top: 20px;
-                left: 20px;
-                background: rgba(10, 10, 20, 0.85);
-                padding: 10px 15px;
-                border: 2px solid #00FFFF;
-                border-radius: 8px;
-                display: flex;
-                align-items: center;
-                gap: 10px;
-                z-index: 10;
-                box-shadow: 0 0 10px rgba(0, 255, 255, 0.3);
-                color: white;
-                font-weight: bold;
-                font-size: 14px;
-            }
-
-            input[type=range] {
-                accent-color: #00FFFF;
-                cursor: pointer;
-            }
-            
             #leaderboard-panel {
                 width: 240px;
                 background: #0a0a10;
@@ -133,8 +101,6 @@ else:
                 padding-bottom: 12px;
                 margin-top: 0;
                 margin-bottom: 15px;
-                text-transform: uppercase;
-                letter-spacing: 1px;
             }
 
             .lb-item {
@@ -142,7 +108,6 @@ else:
                 justify-content: space-between;
                 font-size: 14px;
                 margin-bottom: 12px;
-                padding: 0 4px;
                 color: #eaeaea;
             }
 
@@ -160,15 +125,13 @@ else:
             #orb-modal {
                 display: none; position: absolute; top: 50%; left: 40%; transform: translate(-50%, -50%);
                 background: rgba(10, 10, 25, 0.95); padding: 30px; border-radius: 12px; border: 3px solid white;
-                text-align: center; z-index: 10; box-shadow: 0px 0px 30px rgba(0, 255, 255, 0.4);
+                text-align: center; z-index: 10;
             }
             
             .orb-btn {
                 width: 140px; height: 140px; background: #151525; color: white; border: 2px solid #555;
                 border-radius: 10px; font-size: 16px; font-weight: bold; cursor: pointer; transition: 0.2s;
-                display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 10px;
             }
-            
             .orb-btn:hover { background: #2a2a40; transform: scale(1.05); }
         </style>
     </head>
@@ -176,12 +139,6 @@ else:
         <div id="main-wrapper">
             <div style="position: relative;">
                 <canvas id="gameCanvas" width="900" height="650"></canvas>
-                
-                <!-- Panel de Volumen de Música -->
-                <div id="volume-panel">
-                    🔊 <input type="range" id="vol-slider" min="0" max="100" value="30">
-                </div>
-                
                 <div id="gameover">
                     <h2>¡HAS MUERTO! 💥</h2>
                     <p id="gameover-msg" style="font-size: 22px; color: #00FFFF; font-weight: bold; margin-top: 10px;">
@@ -191,7 +148,6 @@ else:
 
                 <div id="orb-modal">
                     <h2 id="orb-title" style="margin-top:0;">NUEVA MEJORA</h2>
-                    <p style="color:#DDD; margin-bottom:20px;">Elige una habilidad para tus láseres:</p>
                     <div style="display:flex; gap:20px; justify-content:center;">
                         <button id="orb-btn1" class="orb-btn"></button>
                         <button id="orb-btn2" class="orb-btn"></button>
@@ -206,27 +162,20 @@ else:
         </div>
 
         <script>
-            // === SISTEMA DE AUDIO ===
+            // === SISTEMA DE AUDIO FIJO AL 30% ===
             const audioSrc = "__AUDIO_SRC__";
             let bgMusic = null;
             
             if (audioSrc && audioSrc !== "") {
                 bgMusic = new Audio(audioSrc);
                 bgMusic.loop = true;
-                bgMusic.volume = 0.3; // 30% por defecto
+                bgMusic.volume = 0.3; // 30% fijo por defecto
             }
 
-            const volSlider = document.getElementById("vol-slider");
-            volSlider.addEventListener("input", (e) => {
-                if (bgMusic) {
-                    bgMusic.volume = e.target.value / 100;
-                }
-            });
-
-            // Reproducir música en el primer clic (política navegadores)
+            // Reproducir música en el primer clic (obligatorio por políticas de navegadores)
             document.addEventListener('mousedown', () => {
                 if (bgMusic && bgMusic.paused) {
-                    bgMusic.play().catch(err => console.log("Bloqueo de autoplay:", err));
+                    bgMusic.play().catch(err => console.log("Autoplay bloqueado:", err));
                 }
             }, { once: true });
 
@@ -287,9 +236,6 @@ else:
             });
 
             canvas.addEventListener('mousedown', (e) => {
-                // Prevenir que el clic en el slider dispare lásers
-                if(e.target.id === 'vol-slider') return; 
-
                 if(isPaused) return;
                 if(player.dead) { 
                     if (playerLives > 0) respawnPlayer(); 
@@ -343,7 +289,6 @@ else:
                 
                 isGameOver = false;
                 overScreen.style.display = 'none';
-
                 floatingTexts.push({ x: player.x, y: player.y - 30, text: `✨ ¡REAPARECISTE! (${playerLives} vidas)`, color: "#33FF66", life: 50, size: 18 });
             }
 
@@ -395,8 +340,8 @@ else:
                 player.r = Math.max(10, player.r - 0.4);
             }
 
-            const nombres = ["Alpha", "Nova", "Sirius", "Vega", "Orion", "Cosmos", "Apollo", "Zeta", "Pulsar", "Quasar", "Lyra", "Draco"];
-            const colors = ['#FF3366', '#33CCFF', '#FF9933', '#33FF66', '#CC33FF', '#FFFF33', '#FF3333', '#33FFCC'];
+            const nombres = ["Alpha", "Nova", "Sirius", "Vega", "Orion", "Cosmos", "Apollo", "Zeta", "Pulsar"];
+            const colors = ['#FF3366', '#33CCFF', '#FF9933', '#33FF66', '#CC33FF', '#FFFF33', '#FF3333'];
 
             function randomColor() { return colors[Math.floor(Math.random() * colors.length)]; }
             function randomName() { return nombres[Math.floor(Math.random() * nombres.length)]; }
@@ -409,9 +354,6 @@ else:
             let player, bots, foods;
             const maxBots = 28;
             const maxFoods = 600;
-            const maxBoxes = 5;
-            const maxHearts = 35;
-            const maxOrbs = 3;
 
             function init() {
                 isGameOver = false; isPaused = false; playerLives = 5;
@@ -427,7 +369,7 @@ else:
                 
                 bots = []; for(let i=0; i<maxBots; i++) spawnBot();
                 foods = []; for(let i=0; i<maxFoods; i++) spawnFood();
-                for(let i=0; i<maxHearts; i++) spawnHeart();
+                for(let i=0; i<35; i++) spawnHeart();
                 
                 spawnBox(); spawnBox(); spawnOrb();
                 loop();
@@ -446,23 +388,18 @@ else:
 
             function takeDamage(target, amount) {
                 if(target === player && player.invulnTimer > 0) return;
-
                 if(target === player && player.shields > 0) {
                     player.shields--;
                     floatingTexts.push({ x: player.x, y: player.y - player.r - 20, text: "🛡️ ¡ESCUDO ABSORBIÓ DAÑO!", color: "#C0C0C0", life: 40, size: 16 });
                     return;
                 }
-
                 let dmgMult = Math.max(0.25, 18 / Math.max(18, target.r));
                 let realDamage = amount * dmgMult;
-                
                 target.hp -= realDamage;
-                
                 floatingTexts.push({ x: target.x, y: target.y - target.r - 10, text: `-${Math.ceil(realDamage)}`, color: "#FF3333", life: 30, size: 24 });
 
                 if(target === player && player.hp <= 0 && !player.dead) {
-                    player.hp = 0; player.dead = true;
-                    handlePlayerDeath();
+                    player.hp = 0; player.dead = true; handlePlayerDeath();
                 } else if(target !== player && target.hp <= 0) {
                     target.dead = true;
                     floatingTexts.push({ x: target.x, y: target.y, text: "💥 ¡DESTRUIDO!", color: "#FF3333", life: 40, size: 22 });
@@ -497,32 +434,24 @@ else:
                 let allStars = [player, ...bots].filter(s => !s.dead);
                 allStars.sort((a, b) => b.r - a.r);
                 let topStars = allStars.slice(0, 10);
-
                 let html = "";
                 topStars.forEach((s, idx) => {
                     let isMe = (s === player);
-                    html += `
-                        <div class="lb-item ${isMe ? 'me' : ''}">
-                            <span>${idx + 1}. ${s.name}</span>
-                            <span>${Math.round(s.r)} pt</span>
-                        </div>
-                    `;
+                    html += `<div class="lb-item ${isMe ? 'me' : ''}"><span>${idx + 1}. ${s.name}</span><span>${Math.round(s.r)} pt</span></div>`;
                 });
                 lbList.innerHTML = html;
             }
 
             function update() {
-                if(Math.random() < 0.003 && boxes.length < maxBoxes) spawnBox();
-                if(Math.random() < 0.002 && orbs.length < maxOrbs) spawnOrb();
+                if(Math.random() < 0.003 && boxes.length < 5) spawnBox();
+                if(Math.random() < 0.002 && orbs.length < 3) spawnOrb();
 
                 meteor.orbitAngle += 0.0012; meteor.angle += 0.003;
                 meteor.x = (worldW / 2) + Math.cos(meteor.orbitAngle) * meteor.orbitRadius;
                 meteor.y = (worldH / 2) + Math.sin(meteor.orbitAngle) * meteor.orbitRadius;
 
                 if(!blackHole.dead) { 
-                    blackHole.r += 0.012; 
-                    blackHole.hp = Math.min(blackHole.maxHp, blackHole.hp + 0.02);
-
+                    blackHole.r += 0.012; blackHole.hp = Math.min(blackHole.maxHp, blackHole.hp + 0.02);
                     let pullRadius = blackHole.r * 5.5;
                     let dPlayer = Math.hypot(blackHole.x - player.x, blackHole.y - player.y);
 
@@ -530,15 +459,7 @@ else:
                         let pullForce = (1 - dPlayer / pullRadius) * 2.8;
                         player.x += ((blackHole.x - player.x) / dPlayer) * pullForce;
                         player.y += ((blackHole.y - player.y) / dPlayer) * pullForce;
-
-                        if(Math.random() < 0.25) {
-                            particles.push({
-                                x: player.x, y: player.y,
-                                vx: ((blackHole.x - player.x) / dPlayer) * 3,
-                                vy: ((blackHole.y - player.y) / dPlayer) * 3,
-                                color: "#8A2BE2", life: 12
-                            });
-                        }
+                        if(Math.random() < 0.25) particles.push({ x: player.x, y: player.y, vx: ((blackHole.x - player.x) / dPlayer) * 3, vy: ((blackHole.y - player.y) / dPlayer) * 3, color: "#8A2BE2", life: 12 });
                     }
                 }
 
@@ -547,12 +468,7 @@ else:
                 if(player.speedBoostTimer > 0) player.speedBoostTimer--;
 
                 if(player.fireTimer > 0 && !player.dead) {
-                    for(let i=0; i<2; i++) {
-                        particles.push({
-                            x: player.x + (Math.random() - 0.5) * player.r * 1.5, y: player.y + (Math.random() - 0.5) * player.r * 1.5,
-                            vx: (Math.random() - 0.5) * 2, vy: -Math.random() * 3, color: Math.random() > 0.5 ? "#FF4500" : "#FFD700", life: 20
-                        });
-                    }
+                    for(let i=0; i<2; i++) particles.push({ x: player.x + (Math.random() - 0.5) * player.r * 1.5, y: player.y + (Math.random() - 0.5) * player.r * 1.5, vx: (Math.random() - 0.5) * 2, vy: -Math.random() * 3, color: Math.random() > 0.5 ? "#FF4500" : "#FFD700", life: 20 });
                 }
 
                 let allStars = [player, ...bots].filter(s => !s.dead);
@@ -580,14 +496,9 @@ else:
                     bot.x = Math.max(bot.r, Math.min(worldW - bot.r, bot.x)); bot.y = Math.max(bot.r, Math.min(worldH - bot.r, bot.y));
 
                     if (now - (bot.lastShootTime || 0) > 2500 && Math.random() < 0.03 && bot.r > 12) {
-                        let target = null;
-                        if(!blackHole.dead && Math.hypot(blackHole.x - bot.x, blackHole.y - bot.y) < 600) {
-                            target = blackHole;
-                        } else if (!player.dead && Math.hypot(player.x - bot.x, player.y - bot.y) < 550) {
-                            target = player;
-                        } else {
-                            target = bots.find(b => b !== bot && !b.dead && Math.hypot(b.x - bot.x, b.y - bot.y) < 400);
-                        }
+                        let target = (!blackHole.dead && Math.hypot(blackHole.x - bot.x, blackHole.y - bot.y) < 600) ? blackHole : 
+                                     (!player.dead && Math.hypot(player.x - bot.x, player.y - bot.y) < 550) ? player : 
+                                     bots.find(b => b !== bot && !b.dead && Math.hypot(b.x - bot.x, b.y - bot.y) < 400);
 
                         if(target) {
                             let dx = target.x - bot.x, dy = target.y - bot.y, dist = Math.hypot(dx, dy);
@@ -673,11 +584,8 @@ else:
                         if(Math.hypot(s.x - blackHole.x, s.y - blackHole.y) < s.r + blackHole.r * 0.8) {
                             if(s.r > blackHole.r * 1.25) { blackHole.dead = true; s.r += 35; } 
                             else {
-                                if(s === player && !player.dead) {
-                                    player.hp = 0; player.dead = true; handlePlayerDeath();
-                                } else if(s !== player) {
-                                    s.dead = true;
-                                }
+                                if(s === player && !player.dead) { player.hp = 0; player.dead = true; handlePlayerDeath(); } 
+                                else if(s !== player) { s.dead = true; }
                             }
                         }
                     });
@@ -688,9 +596,7 @@ else:
                     for(let e of allStars) {
                         if(Math.hypot(e.x - f.x, e.y - f.y) < e.r) {
                             e.r += 0.08; 
-                            if(e === player) {
-                                player.hp += 0.2; if(player.hp > player.maxHp) player.maxHp = player.hp;
-                            }
+                            if(e === player) { player.hp += 0.2; if(player.hp > player.maxHp) player.maxHp = player.hp; }
                             foods.splice(i, 1); spawnFood(); break;
                         }
                     }
@@ -702,11 +608,8 @@ else:
                         let d = Math.hypot(e1.x - e2.x, e1.y - e2.y);
                         
                         if(d < e1.r + e2.r) {
-                            if(e1 === player && player.fireTimer > 0 && (now - (e2.lastBurnTime || 0) > 500)) {
-                                takeDamage(e2, 40); e2.lastBurnTime = now;
-                            } else if (e2 === player && player.fireTimer > 0 && (now - (e1.lastBurnTime || 0) > 500)) {
-                                takeDamage(e1, 40); e1.lastBurnTime = now;
-                            }
+                            if(e1 === player && player.fireTimer > 0 && (now - (e2.lastBurnTime || 0) > 500)) { takeDamage(e2, 40); e2.lastBurnTime = now; } 
+                            else if (e2 === player && player.fireTimer > 0 && (now - (e1.lastBurnTime || 0) > 500)) { takeDamage(e1, 40); e1.lastBurnTime = now; }
                         }
 
                         let bigger = e1.r > e2.r ? e1 : e2;
@@ -715,28 +618,17 @@ else:
                         if(d < bigger.r * 0.75 && bigger.r > smaller.r * 1.15) {
                             if(smaller === player && player.invulnTimer > 0) continue;
                             bigger.r += smaller.r * 0.35;
-                            if(bigger === player) {
-                                player.hp += 35; if(player.hp > player.maxHp) player.maxHp = player.hp;
-                            } else { bigger.hp = Math.min(bigger.maxHp, bigger.hp + 35); }
+                            if(bigger === player) { player.hp += 35; if(player.hp > player.maxHp) player.maxHp = player.hp; } 
+                            else { bigger.hp = Math.min(bigger.maxHp, bigger.hp + 35); }
                             
-                            if(smaller === player && !player.dead) {
-                                smaller.hp = 0; smaller.dead = true; handlePlayerDeath();
-                            } else {
-                                smaller.dead = true;
-                            }
+                            if(smaller === player && !player.dead) { smaller.hp = 0; smaller.dead = true; handlePlayerDeath(); } 
+                            else { smaller.dead = true; }
                         }
                     }
                 }
 
-                for(let i = particles.length - 1; i >= 0; i--) {
-                    let p = particles[i]; p.x += p.vx; p.y += p.vy; p.life--;
-                    if(p.life <= 0) particles.splice(i, 1);
-                }
-
-                for(let i = floatingTexts.length - 1; i >= 0; i--) {
-                    let ft = floatingTexts[i]; ft.y -= 0.8; ft.life--;
-                    if(ft.life <= 0) floatingTexts.splice(i, 1);
-                }
+                for(let i = particles.length - 1; i >= 0; i--) { let p = particles[i]; p.x += p.vx; p.y += p.vy; p.life--; if(p.life <= 0) particles.splice(i, 1); }
+                for(let i = floatingTexts.length - 1; i >= 0; i--) { let ft = floatingTexts[i]; ft.y -= 0.8; ft.life--; if(ft.life <= 0) floatingTexts.splice(i, 1); }
 
                 bots = bots.filter(b => !b.dead);
                 while(bots.length < maxBots) spawnBot();
@@ -748,17 +640,9 @@ else:
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
 
                 ctx.fillStyle = "rgba(255, 255, 255, 0.4)";
-                bgStarsLayer1.forEach(s => {
-                    let px = (s.x - camX * 0.08) % canvas.width; if (px < 0) px += canvas.width;
-                    let py = (s.y - camY * 0.08) % canvas.height; if (py < 0) py += canvas.height;
-                    ctx.beginPath(); ctx.arc(px, py, s.r, 0, Math.PI * 2); ctx.fill();
-                });
+                bgStarsLayer1.forEach(s => { let px = (s.x - camX * 0.08) % canvas.width; if (px < 0) px += canvas.width; let py = (s.y - camY * 0.08) % canvas.height; if (py < 0) py += canvas.height; ctx.beginPath(); ctx.arc(px, py, s.r, 0, Math.PI * 2); ctx.fill(); });
                 ctx.fillStyle = "rgba(180, 200, 255, 0.7)";
-                bgStarsLayer2.forEach(s => {
-                    let px = (s.x - camX * 0.2) % canvas.width; if (px < 0) px += canvas.width;
-                    let py = (s.y - camY * 0.2) % canvas.height; if (py < 0) py += canvas.height;
-                    ctx.beginPath(); ctx.arc(px, py, s.r, 0, Math.PI * 2); ctx.fill();
-                });
+                bgStarsLayer2.forEach(s => { let px = (s.x - camX * 0.2) % canvas.width; if (px < 0) px += canvas.width; let py = (s.y - camY * 0.2) % canvas.height; if (py < 0) py += canvas.height; ctx.beginPath(); ctx.arc(px, py, s.r, 0, Math.PI * 2); ctx.fill(); });
 
                 let shakeX = 0, shakeY = 0;
                 if(!player.dead && player.hp <= 40 && player.hp > 0) { shakeX = (Math.random() - 0.5) * 9; shakeY = (Math.random() - 0.5) * 9; }
@@ -777,9 +661,7 @@ else:
 
                 if(!blackHole.dead) {
                     ctx.save(); ctx.translate(blackHole.x, blackHole.y);
-                    ctx.strokeStyle = "rgba(138, 43, 226, 0.15)"; ctx.lineWidth = 2;
-                    ctx.beginPath(); ctx.arc(0, 0, blackHole.r * 5.5, 0, Math.PI * 2); ctx.stroke();
-
+                    ctx.strokeStyle = "rgba(138, 43, 226, 0.15)"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(0, 0, blackHole.r * 5.5, 0, Math.PI * 2); ctx.stroke();
                     let grad = ctx.createRadialGradient(0, 0, blackHole.r * 0.4, 0, 0, blackHole.r * 1.5);
                     grad.addColorStop(0, "#000"); grad.addColorStop(0.5, "#8A2BE2"); grad.addColorStop(1, "rgba(255, 0, 128, 0)");
                     ctx.beginPath(); ctx.arc(0, 0, blackHole.r * 1.5, 0, Math.PI * 2); ctx.fillStyle = grad; ctx.fill();
@@ -805,8 +687,7 @@ else:
 
                 orbs.forEach(o => {
                     ctx.save(); ctx.translate(o.x, o.y);
-                    ctx.beginPath(); ctx.arc(0, 0, o.r, 0, Math.PI * 2);
-                    ctx.fillStyle = o.type === 'celeste' ? '#00FFFF' : '#CC33FF'; ctx.fill();
+                    ctx.beginPath(); ctx.arc(0, 0, o.r, 0, Math.PI * 2); ctx.fillStyle = o.type === 'celeste' ? '#00FFFF' : '#CC33FF'; ctx.fill();
                     ctx.strokeStyle = "white"; ctx.lineWidth = 2; ctx.stroke();
                     ctx.globalAlpha = 0.5; ctx.beginPath(); ctx.arc(0, 0, o.r + Math.sin(Date.now() / 150)*4, 0, Math.PI * 2);
                     ctx.strokeStyle = o.type === 'celeste' ? '#00FFFF' : '#CC33FF'; ctx.lineWidth = 2; ctx.stroke();
@@ -849,15 +730,11 @@ else:
                     ctx.fillText(s.name + (s.r >= LARGE_THRESHOLD ? " 👑" : ""), s.x, s.y + s.r + 15);
                 });
 
-                floatingTexts.forEach(ft => { 
-                    ctx.fillStyle = ft.color; ctx.font = "bold " + (ft.size || 14) + "px sans-serif"; 
-                    ctx.textAlign = "center"; ctx.fillText(ft.text, ft.x, ft.y); 
-                });
+                floatingTexts.forEach(ft => { ctx.fillStyle = ft.color; ctx.font = "bold " + (ft.size || 14) + "px sans-serif"; ctx.textAlign = "center"; ctx.fillText(ft.text, ft.x, ft.y); });
                 ctx.restore();
 
                 ctx.save();
                 let x = 12, y = canvas.height - 45;
-                
                 ctx.fillStyle = "#FFF"; ctx.font = "bold 14px sans-serif"; ctx.textAlign = "left";
                 let corazones = "❤️".repeat(Math.max(0, playerLives)) + "🖤".repeat(Math.max(0, 5 - playerLives));
                 ctx.fillText(`VIDAS: ${corazones}`, x, y - 35);
@@ -898,6 +775,6 @@ else:
     """
     
     codigo_juego_listo = codigo_juego_template.replace("__PLAYER_NICKNAME__", st.session_state.nickname)
-    codigo_juego_listo = codigo_juego_listo.replace("__AUDIO_SRC__", st.session_state.audio_src)
+    codigo_juego_listo = codigo_juego_listo.replace("__AUDIO_SRC__", audio_src)
     
     components.html(codigo_juego_listo, height=680, width=1200, scrolling=False)
