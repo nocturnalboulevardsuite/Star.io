@@ -4,12 +4,16 @@ import streamlit.components.v1 as components
 st.set_page_config(page_title="Star.io - Agujero Negro & Top Lateral", layout="wide")
 
 st.title("🌟 Star.io - Gravedad y Ranking Lateral")
-st.write("¡Esquiva la fuerza de atracción del Agujero Negro y domina la galaxia!")
+st.write("¡Esquiva la fuerza de atracción del Agujero Negro, domina la galaxia y sube en el Top!")
 
 if 'jugando' not in st.session_state:
     st.session_state.jugando = False
+if 'nickname' not in st.session_state:
+    st.session_state.nickname = "TÚ"
 
 def iniciar_juego():
+    nombre = st.session_state.nickname_input.strip()
+    st.session_state.nickname = nombre if nombre else "TÚ"
     st.session_state.jugando = True
 
 def volver_menu():
@@ -18,44 +22,60 @@ def volver_menu():
 if not st.session_state.jugando:
     col1, col2, col3 = st.columns([1,2,1])
     with col2:
+        st.text_input("✨ Ingresa el Nickname de tu Estrella:", value=st.session_state.nickname, key="nickname_input", max_chars=12)
         st.button("▶️ JUGAR AHORA", on_click=iniciar_juego, type="primary", use_container_width=True)
+        
         st.info("""
         💡 **NOVEDADES:**
-        - **👑 TOP ESTRELLAS EXTERNO:** Ubicado a la derecha del canvas para una experiencia visual limpia.
-        - **🌌 GRAVEDAD REAL:** El Agujero Negro genera una atracción gravitatoria activa. ¡Usa tu Dash si te absorbe!
-        - **❤️ VIDA DEL JEFE:** Barra de salud clara sobre el Agujero Negro con regeneración ralentizada.
+        - **🏷️ Nickname Personalizado:** Ponle nombre a tu estrella antes de empezar.
+        - **👑 TOP EXTERNO:** El ranking ahora está completamente fuera del área de juego.
+        - **🌌 10.000 HP:** El Agujero Negro ahora es un jefe colosal con 10,000 puntos de vida.
         """)
 
 else:
     st.button("⏹️ Volver al Menú Principal", on_click=volver_menu)
     
-    codigo_juego = """
+    codigo_juego_template = """
     <!DOCTYPE html>
     <html>
     <head>
         <style>
-            body { margin: 0; overflow: hidden; background-color: #050508; display: flex; justify-content: center; align-items: center; height: 100vh; user-select: none; font-family: sans-serif; }
+            body { 
+                margin: 0; 
+                overflow: hidden; 
+                background-color: #050508; 
+                display: flex; 
+                justify-content: center; 
+                align-items: center; 
+                height: 100vh; 
+                user-select: none; 
+                font-family: sans-serif; 
+            }
             
-            #game-container {
+            #main-wrapper {
                 display: flex;
-                gap: 15px;
-                align-items: center;
-                position: relative;
+                flex-direction: row;
+                gap: 20px;
+                align-items: stretch;
             }
 
-            canvas { background-color: #080812; cursor: crosshair; border-radius: 8px; border: 1px solid #222; }
+            canvas { 
+                background-color: #080812; 
+                cursor: crosshair; 
+                border-radius: 8px; 
+                border: 1px solid #222; 
+            }
             
-            /* Leaderboard Lateral */
+            /* Leaderboard Exterior Estilizado */
             #leaderboard-panel {
-                width: 220px;
-                height: 600px;
-                background: rgba(12, 12, 28, 0.92);
+                width: 240px;
+                background: #0a0a10;
                 border: 2px solid #00FFFF;
-                border-radius: 10px;
-                padding: 15px;
+                border-radius: 8px;
+                padding: 20px 15px;
                 box-sizing: border-box;
                 color: white;
-                box-shadow: 0 0 20px rgba(0, 255, 255, 0.2);
+                box-shadow: 0 0 15px rgba(0, 255, 255, 0.3);
                 display: flex;
                 flex-direction: column;
             }
@@ -66,25 +86,26 @@ else:
                 color: #00FFFF;
                 text-align: center;
                 border-bottom: 2px solid rgba(0, 255, 255, 0.3);
-                padding-bottom: 8px;
+                padding-bottom: 12px;
                 margin-top: 0;
-                margin-bottom: 12px;
+                margin-bottom: 15px;
+                text-transform: uppercase;
+                letter-spacing: 1px;
             }
 
             .lb-item {
                 display: flex;
                 justify-content: space-between;
-                font-size: 13px;
-                margin-bottom: 8px;
-                padding: 4px 6px;
-                border-radius: 4px;
+                font-size: 14px;
+                margin-bottom: 12px;
+                padding: 0 4px;
+                color: #eaeaea;
             }
 
             .lb-item.me {
-                background: rgba(255, 255, 0, 0.15);
-                border: 1px solid #FFFF00;
-                color: #FFFF00;
+                color: #00FFFF;
                 font-weight: bold;
+                text-shadow: 0 0 5px rgba(0, 255, 255, 0.5);
             }
 
             #gameover { 
@@ -97,37 +118,43 @@ else:
                 background: rgba(10, 10, 25, 0.95); padding: 30px; border-radius: 12px; border: 3px solid white;
                 text-align: center; z-index: 10; box-shadow: 0px 0px 30px rgba(0, 255, 255, 0.4);
             }
+            
             .orb-btn {
                 width: 140px; height: 140px; background: #151525; color: white; border: 2px solid #555;
                 border-radius: 10px; font-size: 16px; font-weight: bold; cursor: pointer; transition: 0.2s;
                 display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 10px;
             }
+            
             .orb-btn:hover { background: #2a2a40; transform: scale(1.05); }
         </style>
     </head>
     <body>
-        <div id="game-container">
-            <canvas id="gameCanvas" width="900" height="600"></canvas>
+        <div id="main-wrapper">
+            <!-- Lienzo del Juego -->
+            <div style="position: relative;">
+                <canvas id="gameCanvas" width="900" height="650"></canvas>
+                
+                <div id="gameover">
+                    <h2>¡HAS MUERTO! 💥</h2>
+                    <p style="font-size: 22px; color: #00FFFF; font-weight: bold; margin-top: 10px;">
+                        👉 DALE CLICK AL JUEGO PARA REAPARECER 👈
+                    </p>
+                </div>
+
+                <div id="orb-modal">
+                    <h2 id="orb-title" style="margin-top:0;">NUEVA MEJORA</h2>
+                    <p style="color:#DDD; margin-bottom:20px;">Elige una habilidad para tus láseres:</p>
+                    <div style="display:flex; gap:20px; justify-content:center;">
+                        <button id="orb-btn1" class="orb-btn"></button>
+                        <button id="orb-btn2" class="orb-btn"></button>
+                    </div>
+                </div>
+            </div>
             
+            <!-- Panel Lateral Externo -->
             <div id="leaderboard-panel">
                 <h3 class="lb-title">👑 TOP ESTRELLAS</h3>
                 <div id="lb-list"></div>
-            </div>
-
-            <div id="gameover">
-                <h2>¡HAS MUERTO! 💥</h2>
-                <p style="font-size: 22px; color: #00FFFF; font-weight: bold; margin-top: 10px;">
-                    👉 DALE CLICK A LA PANTALLA PARA REAPARECER 👈
-                </p>
-            </div>
-
-            <div id="orb-modal">
-                <h2 id="orb-title" style="margin-top:0;">NUEVA MEJORA</h2>
-                <p style="color:#DDD; margin-bottom:20px;">Elige una habilidad para tus láseres:</p>
-                <div style="display:flex; gap:20px; justify-content:center;">
-                    <button id="orb-btn1" class="orb-btn"></button>
-                    <button id="orb-btn2" class="orb-btn"></button>
-                </div>
             </div>
         </div>
 
@@ -177,7 +204,8 @@ else:
                 craters: [ {x: -35, y: -25, r: 20}, {x: 35, y: -35, r: 16}, {x: 10, y: 30, r: 25}, {x: -40, y: 25, r: 14}, {x: 0, y: 0, r: 18} ]
             };
 
-            let blackHole = { x: worldW * 0.7, y: worldH * 0.3, r: 75, hp: 1200, maxHp: 1200, dead: false };
+            // AGUJERO NEGRO CON 10,000 HP
+            let blackHole = { x: worldW * 0.7, y: worldH * 0.3, r: 75, hp: 10000, maxHp: 10000, dead: false };
 
             canvas.addEventListener('mousemove', (e) => {
                 const rect = canvas.getBoundingClientRect();
@@ -272,7 +300,7 @@ else:
                 player.r = Math.max(10, player.r - 0.4);
             }
 
-            const nombres = ["Alpha", "Nova", "Sirius", "Vega", "Orion", "Cosmos", "Apollo", "Zeta", "Pulsar", "Quasar"];
+            const nombres = ["Alpha", "Nova", "Sirius", "Vega", "Orion", "Cosmos", "Apollo", "Zeta", "Pulsar", "Quasar", "Lyra", "Draco"];
             const colors = ['#FF3366', '#33CCFF', '#FF9933', '#33FF66', '#CC33FF', '#FFFF33', '#FF3333', '#33FFCC'];
 
             function randomColor() { return colors[Math.floor(Math.random() * colors.length)]; }
@@ -296,7 +324,7 @@ else:
                 
                 player = { 
                     x: Math.random() * worldW, y: Math.random() * worldH, 
-                    r: 18, color: '#FFFFFF', name: "TÚ", speed: 3.5, dead: false,
+                    r: 18, color: '#FFFFFF', name: "__PLAYER_NICKNAME__", speed: 3.5, dead: false,
                     hp: 200, maxHp: 200, shields: 0, hasInvulnCharge: false, invulnTimer: 0, fireTimer: 0, speedBoostTimer: 0,
                     laserRange: 1.0, laserDamage: 1.0, shotType: 'normal'
                 };
@@ -378,7 +406,7 @@ else:
                     let isMe = (s === player);
                     html += `
                         <div class="lb-item ${isMe ? 'me' : ''}">
-                            <span>${idx + 1}. ${s.name} ${isMe ? '⭐' : ''}</span>
+                            <span>${idx + 1}. ${s.name}</span>
                             <span>${Math.round(s.r)} pt</span>
                         </div>
                     `;
@@ -399,7 +427,6 @@ else:
                     blackHole.r += 0.012; 
                     blackHole.hp = Math.min(blackHole.maxHp, blackHole.hp + 0.02); // Regeneración lenta (+0.02)
 
-                    // Atracción gravitatoria constante
                     let pullRadius = blackHole.r * 5.5;
                     let dPlayer = Math.hypot(blackHole.x - player.x, blackHole.y - player.y);
 
@@ -408,7 +435,6 @@ else:
                         player.x += ((blackHole.x - player.x) / dPlayer) * pullForce;
                         player.y += ((blackHole.y - player.y) / dPlayer) * pullForce;
 
-                        // Efecto visual de succión
                         if(Math.random() < 0.25) {
                             particles.push({
                                 x: player.x, y: player.y,
@@ -546,6 +572,7 @@ else:
                 }
 
                 allStars.forEach(s => { if(Math.hypot(s.x - meteor.x, s.y - meteor.y) < s.r + meteor.r * 0.85) takeDamage(s, 100); });
+                
                 if(!blackHole.dead) {
                     allStars.forEach(s => {
                         if(Math.hypot(s.x - blackHole.x, s.y - blackHole.y) < s.r + blackHole.r * 0.8) {
@@ -648,15 +675,12 @@ else:
                 meteor.craters.forEach(c => { ctx.beginPath(); ctx.arc(c.x, c.y, c.r, 0, Math.PI * 2); ctx.fillStyle = "#696969"; ctx.fill(); });
                 ctx.restore();
 
-                // 🕳️ DIBUJO DEL AGUJERO NEGRO Y SU BARRA DE VIDA DE JEFE 🕳️
                 if(!blackHole.dead) {
                     ctx.save(); ctx.translate(blackHole.x, blackHole.y);
                     
-                    // Zona gravitatoria sutil
                     ctx.strokeStyle = "rgba(138, 43, 226, 0.15)"; ctx.lineWidth = 2;
                     ctx.beginPath(); ctx.arc(0, 0, blackHole.r * 5.5, 0, Math.PI * 2); ctx.stroke();
 
-                    // Cuerpo del agujero negro
                     let grad = ctx.createRadialGradient(0, 0, blackHole.r * 0.4, 0, 0, blackHole.r * 1.5);
                     grad.addColorStop(0, "#000"); grad.addColorStop(0.5, "#8A2BE2"); grad.addColorStop(1, "rgba(255, 0, 128, 0)");
                     ctx.beginPath(); ctx.arc(0, 0, blackHole.r * 1.5, 0, Math.PI * 2); ctx.fillStyle = grad; ctx.fill();
@@ -664,13 +688,13 @@ else:
                     
                     // Barra de Vida
                     let bhHpPct = Math.max(0, blackHole.hp / blackHole.maxHp);
-                    let barW = 140, barH = 10;
-                    ctx.fillStyle = "rgba(0,0,0,0.7)"; ctx.fillRect(-barW/2, -blackHole.r * 1.5 - 25, barW, barH);
-                    ctx.fillStyle = "#CC33FF"; ctx.fillRect(-barW/2 + 1, -blackHole.r * 1.5 - 24, (barW - 2) * bhHpPct, barH - 2);
-                    ctx.strokeStyle = "#FFFFFF"; ctx.lineWidth = 1; ctx.strokeRect(-barW/2, -blackHole.r * 1.5 - 25, barW, barH);
+                    let barW = 160, barH = 12;
+                    ctx.fillStyle = "rgba(0,0,0,0.7)"; ctx.fillRect(-barW/2, -blackHole.r * 1.5 - 28, barW, barH);
+                    ctx.fillStyle = "#CC33FF"; ctx.fillRect(-barW/2 + 1, -blackHole.r * 1.5 - 27, (barW - 2) * bhHpPct, barH - 2);
+                    ctx.strokeStyle = "#FFFFFF"; ctx.lineWidth = 1; ctx.strokeRect(-barW/2, -blackHole.r * 1.5 - 28, barW, barH);
                     
-                    ctx.fillStyle = "#FFD700"; ctx.font = "bold 13px sans-serif"; ctx.textAlign = "center";
-                    ctx.fillText(`🕳️ JEFE: ${Math.ceil(blackHole.hp)} / ${blackHole.maxHp} HP`, 0, -blackHole.r * 1.5 - 32);
+                    ctx.fillStyle = "#FFD700"; ctx.font = "bold 14px sans-serif"; ctx.textAlign = "center";
+                    ctx.fillText(`🕳️ JEFE: ${Math.ceil(blackHole.hp)} / ${blackHole.maxHp} HP`, 0, -blackHole.r * 1.5 - 35);
 
                     ctx.restore();
                 }
@@ -737,7 +761,7 @@ else:
                 });
                 ctx.restore();
 
-                // UI Principal
+                // UI Principal (Salud del Jugador)
                 ctx.save();
                 let x = 12, y = canvas.height - 45;
                 ctx.fillStyle = "rgba(10, 10, 20, 0.85)"; ctx.strokeStyle = "#444"; ctx.lineWidth = 2;
@@ -775,4 +799,7 @@ else:
     </html>
     """
     
-    components.html(codigo_juego, height=640, width=1180, scrolling=False)
+    # Inyectamos el nickname del jugador en el script de JS
+    codigo_juego_listo = codigo_juego_template.replace("__PLAYER_NICKNAME__", st.session_state.nickname)
+    
+    components.html(codigo_juego_listo, height=680, width=1200, scrolling=False)
