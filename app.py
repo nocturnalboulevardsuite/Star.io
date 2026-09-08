@@ -6,11 +6,11 @@ import json
 
 st.set_page_config(page_title="Star.io - Batalla Galáctica", layout="wide")
 
-st.title("🌟 Star.io - Batalla Galáctica")
-st.write("¡Sobrevive, domina el Top, destruye al Agujero Negro y enfréntate a la Luna!")
+st.title("🌟 StarZ.io - Batalla Galáctica")
+st.write("¡Sobrevive, llega al Top, destruye al Agujero Negro y mira lo que pasará!")
 
 # ==========================================
-# 🎵 CONFIGURACIÓN DE AUDIO
+# 🎵 CONFIGURACIÓN DE AUDIO RISO
 # ==========================================
 RUTA_MUSICA = "test.wav" 
 
@@ -63,7 +63,7 @@ def volver_menu():
 if not st.session_state.jugando:
     col1, col2, col3 = st.columns([1,2,1])
     with col2:
-        st.text_input("✨ Ingresa el Nickname de tu Estrella:", value=st.session_state.nickname, key="nickname_input", max_chars=12)
+        st.text_input("Ingresa tu Nickname Estrella:", value=st.session_state.nickname, key="nickname_input", max_chars=12)
         st.write("---")
         st.button("▶️ JUGAR AHORA", on_click=iniciar_juego, type="primary", use_container_width=True)
 
@@ -94,18 +94,64 @@ else:
             #mute-btn, #settings-btn { background: none; border: none; font-size: 22px; cursor: pointer; padding: 0; margin: 0; outline: none; transition: transform 0.2s; color: white; }
             #mute-btn:hover, #settings-btn:hover { transform: scale(1.15); }
 
-            /* Ajustes de radio vintage */
-            #settings-modal { display: none; position: absolute; top: 50%; left: 40%; transform: translate(-50%, -50%); background: #2b1d14; border: 6px solid #8b5a2b; border-radius: 16px; padding: 25px; z-index: 20; color: #fff; text-align: center; box-shadow: inset 0 0 20px #000, 0 10px 30px rgba(0,0,0,0.9); width: 320px; }
+            /* Ajustes de radio vintage tipo Caja Fuerte */
+            #settings-modal { display: none; position: absolute; top: 50%; left: 40%; transform: translate(-50%, -50%); background: #2b1d14; border: 6px solid #1a110b; border-radius: 16px; padding: 25px; z-index: 20; color: #fff; text-align: center; box-shadow: inset 0 0 20px #000, 0 15px 40px rgba(0,0,0,0.95); width: 340px; }
             #close-settings { position: absolute; top: 10px; right: 15px; background: none; border: none; color: #d4af37; font-size: 20px; cursor: pointer; font-weight: bold; }
             #close-settings:hover { color: #fff; }
-            .radio-title { margin: 0 0 20px 0; color: #d4af37; font-family: 'Courier New', Courier, monospace; letter-spacing: 2px; font-size: 22px; text-shadow: 1px 1px 2px #000; border-bottom: 2px solid #8b5a2b; padding-bottom: 10px; }
-            .knob-container { display: flex; gap: 40px; justify-content: center; margin-top: 10px; }
+            .radio-title { margin: 0 0 20px 0; color: #d4af37; font-family: 'Courier New', Courier, monospace; letter-spacing: 2px; font-size: 22px; text-shadow: 1px 1px 2px #000; border-bottom: 2px solid #1a110b; padding-bottom: 10px; }
+            .knob-container { display: flex; gap: 45px; justify-content: center; margin-top: 10px; }
             .knob-wrapper { display: flex; flex-direction: column; align-items: center; }
-            .knob-wrapper label { font-family: 'Courier New', Courier, monospace; font-weight: bold; margin-bottom: 15px; color: #d4af37; font-size: 14px; letter-spacing: 1px; }
-            .knob-bg { width: 70px; height: 70px; border-radius: 50%; background: #1a110b; display: flex; justify-content: center; align-items: center; border: 2px solid #4a3018; box-shadow: inset 0 0 10px #000; }
-            .knob { width: 54px; height: 54px; border-radius: 50%; background: linear-gradient(135deg, #444, #111); border: 3px solid #666; box-shadow: 2px 2px 5px rgba(0,0,0,0.7), inset 0 0 8px rgba(255,255,255,0.3); position: relative; cursor: grab; }
+            .knob-wrapper label { font-family: 'Courier New', Courier, monospace; font-weight: bold; margin-bottom: 20px; color: #d4af37; font-size: 15px; letter-spacing: 2px; }
+            
+            /* Diseño de Perilla Estilo Dial de Caja Fuerte */
+            .knob-bg { 
+                width: 100px; 
+                height: 100px; 
+                border-radius: 50%; 
+                background: #111; 
+                display: flex; 
+                justify-content: center; 
+                align-items: center; 
+                border: 4px solid #3a2512; 
+                box-shadow: inset 0 0 15px rgba(0,0,0,0.9); 
+                position: relative; 
+            }
+            .knob { 
+                width: 62px; 
+                height: 62px; 
+                border-radius: 50%; 
+                background: conic-gradient(from 180deg, #666 0%, #d4af37 25%, #666 50%, #d4af37 75%, #666 100%); 
+                border: 2px solid #222; 
+                box-shadow: 0 6px 12px rgba(0,0,0,0.8), inset 0 0 8px rgba(255,255,255,0.4); 
+                position: relative; 
+                cursor: grab; 
+                z-index: 5;
+            }
             .knob:active { cursor: grabbing; }
-            .knob-indicator { width: 4px; height: 14px; background: #d4af37; position: absolute; top: 4px; left: 50%; transform: translateX(-50%); border-radius: 2px; box-shadow: 0 0 3px #000; }
+            /* Centro negro del dial */
+            .knob::after {
+                content: '';
+                position: absolute;
+                top: 50%; left: 50%;
+                transform: translate(-50%, -50%);
+                width: 36px; height: 36px;
+                background: radial-gradient(circle, #222, #050505);
+                border-radius: 50%;
+                box-shadow: inset 0 0 5px rgba(255,255,255,0.1);
+            }
+            .knob-indicator { 
+                width: 0; 
+                height: 0; 
+                border-left: 5px solid transparent;
+                border-right: 5px solid transparent;
+                border-bottom: 12px solid #FF3333; 
+                position: absolute; 
+                top: -3px; 
+                left: 50%; 
+                transform: translateX(-50%); 
+                z-index: 6; 
+                filter: drop-shadow(0 2px 2px rgba(0,0,0,0.8));
+            }
         </style>
     </head>
     <body>
@@ -137,7 +183,7 @@ else:
                     <div class="knob-container">
                         <div class="knob-wrapper">
                             <label>MÚSICA</label>
-                            <div class="knob-bg">
+                            <div class="knob-bg" id="bg-music">
                                 <div class="knob" id="knob-music">
                                     <div class="knob-indicator"></div>
                                 </div>
@@ -145,7 +191,7 @@ else:
                         </div>
                         <div class="knob-wrapper">
                             <label>EFECTOS</label>
-                            <div class="knob-bg">
+                            <div class="knob-bg" id="bg-sfx">
                                 <div class="knob" id="knob-sfx">
                                     <div class="knob-indicator"></div>
                                 </div>
@@ -181,6 +227,40 @@ else:
                 bgMusic.volume = musicVolume;
             }
 
+            // === SONIDO DE DIAL MECÁNICO (CAJA FUERTE) ===
+            let safeClickCtx = null;
+            function playSafeClick() {
+                if (!isUserInteracted) return;
+                try {
+                    if (!safeClickCtx) {
+                        const AudioContext = window.AudioContext || window.webkitAudioContext;
+                        safeClickCtx = new AudioContext();
+                    }
+                    if (safeClickCtx.state === 'suspended') safeClickCtx.resume();
+                    
+                    let osc = safeClickCtx.createOscillator();
+                    let gainNode = safeClickCtx.createGain();
+                    let filter = safeClickCtx.createBiquadFilter();
+                    
+                    osc.type = 'square';
+                    osc.frequency.setValueAtTime(800, safeClickCtx.currentTime);
+                    osc.frequency.exponentialRampToValueAtTime(80, safeClickCtx.currentTime + 0.015);
+                    
+                    filter.type = 'bandpass';
+                    filter.frequency.value = 1500;
+                    
+                    gainNode.gain.setValueAtTime(0.4, safeClickCtx.currentTime);
+                    gainNode.gain.exponentialRampToValueAtTime(0.01, safeClickCtx.currentTime + 0.015);
+                    
+                    osc.connect(filter);
+                    filter.connect(gainNode);
+                    gainNode.connect(safeClickCtx.destination);
+                    
+                    osc.start();
+                    osc.stop(safeClickCtx.currentTime + 0.015);
+                } catch(e) {}
+            }
+
             muteBtn.addEventListener('mousedown', (e) => e.stopPropagation());
             settingsBtn.addEventListener('mousedown', (e) => e.stopPropagation());
             settingsModal.addEventListener('mousedown', (e) => e.stopPropagation());
@@ -197,15 +277,57 @@ else:
                 }
             });
 
-            // Lógica de las Perillas (Knobs)
+            // Lógica de las Perillas tipo Dial
             function setupKnob(knobId, initialVol, callback) {
                 const knob = document.getElementById(knobId);
+                const knobBg = knob.parentElement;
                 let isDragging = false;
+                let lastStep = -1;
                 
-                // Rango de -135deg (0 vol) a 135deg (1 vol) = 270 grados en total
+                // Generar rayitas y números tipo caja fuerte programáticamente
+                // Rango visual: de -135 a 135 grados
+                for(let i=0; i<=10; i++) {
+                    let angle = -135 + (i * 27);
+                    
+                    // Rayitas
+                    let tick = document.createElement('div');
+                    tick.style.position = 'absolute';
+                    tick.style.width = '2px';
+                    tick.style.height = '6px';
+                    tick.style.background = '#d4af37';
+                    tick.style.top = '4px';
+                    tick.style.left = '49px'; // centro del contenedor (100/2 - 1)
+                    tick.style.transformOrigin = '1px 46px'; // pivote en el centro del fondo
+                    tick.style.transform = `rotate(${angle}deg)`;
+                    knobBg.appendChild(tick);
+                    
+                    // Números (0 a 100)
+                    let num = document.createElement('div');
+                    num.style.position = 'absolute';
+                    num.style.color = '#d4af37';
+                    num.style.fontSize = '10px';
+                    num.style.fontFamily = 'monospace';
+                    num.style.fontWeight = 'bold';
+                    num.style.width = '16px';
+                    num.style.textAlign = 'center';
+                    num.style.left = '42px'; // (100/2 - 8)
+                    num.style.top = '14px';
+                    num.style.transformOrigin = '8px 36px'; // pivote
+                    num.style.transform = `rotate(${angle}deg)`;
+                    num.innerText = i * 10;
+                    knobBg.appendChild(num);
+                }
+                
                 function updateKnobTransform(vol) {
                     let angle = (vol * 270) - 135;
                     knob.style.transform = `rotate(${angle}deg)`;
+                    
+                    // Calcular "clicks" audibles basándose en el volumen (ej: 40 ranuras)
+                    let currentStep = Math.round(vol * 40);
+                    if (lastStep !== -1 && currentStep !== lastStep) {
+                        playSafeClick();
+                    }
+                    lastStep = currentStep;
                 }
                 updateKnobTransform(initialVol);
                 
@@ -223,12 +345,10 @@ else:
                     const centerX = rect.left + rect.width / 2;
                     const centerY = rect.top + rect.height / 2;
                     
-                    // Calcular ángulo respecto al centro
                     let angle = Math.atan2(e.clientY - centerY, e.clientX - centerX) * (180 / Math.PI);
-                    angle += 90; // Ajustar para que 0 esté arriba
+                    angle += 90;
                     if(angle < -180) angle += 360;
                     
-                    // Limitar rotación entre -135 y 135
                     if(angle < -135 && angle > -180) angle = -135;
                     if(angle > 135 || (angle < -135 && angle <= -180)) {
                         if (angle < -135 && angle > -270) angle = 135;
@@ -236,10 +356,8 @@ else:
                         else angle = 135;
                     }
                     
-                    knob.style.transform = `rotate(${angle}deg)`;
-                    
-                    // Convertir ángulo de vuelta a volumen (0 a 1)
                     let volume = (angle + 135) / 270;
+                    updateKnobTransform(volume);
                     callback(volume);
                 });
             }
