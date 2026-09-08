@@ -83,15 +83,29 @@ else:
             .lb-item { display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 12px; color: #eaeaea; }
             .lb-item.me { color: #00FFFF; font-weight: bold; text-shadow: 0 0 5px rgba(0, 255, 255, 0.5); }
             #gameover { display: none; position: absolute; color: white; top: 40%; left: 50%; transform: translateX(-50%); text-align: center; font-size: 24px; text-shadow: 2px 2px 10px #000; pointer-events: none; z-index: 5; width: 100%; }
+            
+            /* Modal de orbes */
             #orb-modal { display: none; position: absolute; top: 50%; left: 40%; transform: translate(-50%, -50%); background: rgba(10, 10, 25, 0.95); padding: 30px; border-radius: 12px; border: 3px solid white; text-align: center; z-index: 10; }
             .orb-btn { width: 160px; height: 160px; background: #151525; color: white; border: 2px solid #555; border-radius: 10px; font-size: 16px; font-weight: bold; cursor: pointer; transition: 0.2s; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.4; }
             .orb-btn:hover { background: #2a2a40; transform: scale(1.05); }
+            
+            /* Controles de audio */
             #audio-controls { position: absolute; top: 15px; left: 15px; background: rgba(10, 10, 20, 0.85); border: 2px solid #00FFFF; border-radius: 8px; padding: 8px 15px; display: flex; align-items: center; gap: 12px; z-index: 15; box-shadow: 0 0 10px rgba(0, 255, 255, 0.2); }
-            #mute-btn { background: none; border: none; font-size: 22px; cursor: pointer; padding: 0; margin: 0; outline: none; transition: transform 0.2s; color: white; }
-            #mute-btn:hover { transform: scale(1.15); }
-            input[type=range] { -webkit-appearance: none; width: 90px; background: transparent; }
-            input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 16px; width: 16px; border-radius: 50%; background: #00FFFF; cursor: pointer; margin-top: -6px; box-shadow: 0 0 5px #00FFFF; }
-            input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 4px; cursor: pointer; background: #444; border-radius: 2px; }
+            #mute-btn, #settings-btn { background: none; border: none; font-size: 22px; cursor: pointer; padding: 0; margin: 0; outline: none; transition: transform 0.2s; color: white; }
+            #mute-btn:hover, #settings-btn:hover { transform: scale(1.15); }
+
+            /* Ajustes de radio vintage */
+            #settings-modal { display: none; position: absolute; top: 50%; left: 40%; transform: translate(-50%, -50%); background: #2b1d14; border: 6px solid #8b5a2b; border-radius: 16px; padding: 25px; z-index: 20; color: #fff; text-align: center; box-shadow: inset 0 0 20px #000, 0 10px 30px rgba(0,0,0,0.9); width: 320px; }
+            #close-settings { position: absolute; top: 10px; right: 15px; background: none; border: none; color: #d4af37; font-size: 20px; cursor: pointer; font-weight: bold; }
+            #close-settings:hover { color: #fff; }
+            .radio-title { margin: 0 0 20px 0; color: #d4af37; font-family: 'Courier New', Courier, monospace; letter-spacing: 2px; font-size: 22px; text-shadow: 1px 1px 2px #000; border-bottom: 2px solid #8b5a2b; padding-bottom: 10px; }
+            .knob-container { display: flex; gap: 40px; justify-content: center; margin-top: 10px; }
+            .knob-wrapper { display: flex; flex-direction: column; align-items: center; }
+            .knob-wrapper label { font-family: 'Courier New', Courier, monospace; font-weight: bold; margin-bottom: 15px; color: #d4af37; font-size: 14px; letter-spacing: 1px; }
+            .knob-bg { width: 70px; height: 70px; border-radius: 50%; background: #1a110b; display: flex; justify-content: center; align-items: center; border: 2px solid #4a3018; box-shadow: inset 0 0 10px #000; }
+            .knob { width: 54px; height: 54px; border-radius: 50%; background: linear-gradient(135deg, #444, #111); border: 3px solid #666; box-shadow: 2px 2px 5px rgba(0,0,0,0.7), inset 0 0 8px rgba(255,255,255,0.3); position: relative; cursor: grab; }
+            .knob:active { cursor: grabbing; }
+            .knob-indicator { width: 4px; height: 14px; background: #d4af37; position: absolute; top: 4px; left: 50%; transform: translateX(-50%); border-radius: 2px; box-shadow: 0 0 3px #000; }
         </style>
     </head>
     <body>
@@ -99,18 +113,44 @@ else:
             <div style="position: relative;">
                 <div id="audio-controls">
                     <button id="mute-btn" title="Activar/Silenciar">🔇</button>
-                    <input type="range" id="volume-slider" min="0" max="1" step="0.05" value="0.3" title="Volumen">
+                    <button id="settings-btn" title="Ajustes de Sonido">⚙️</button>
                 </div>
                 <canvas id="gameCanvas" width="900" height="650"></canvas>
+                
                 <div id="gameover">
                     <h2 id="gameover-title">¡HAS MUERTO! 💥</h2>
                     <p id="gameover-msg" style="font-size: 22px; color: #00FFFF; font-weight: bold; margin-top: 10px;">👉 DALE CLICK AL JUEGO PARA REAPARECER 👈</p>
                 </div>
+                
                 <div id="orb-modal">
                     <h2 id="orb-title" style="margin-top:0;">NUEVA MEJORA</h2>
                     <div style="display:flex; gap:20px; justify-content:center;">
                         <button id="orb-btn1" class="orb-btn"></button>
                         <button id="orb-btn2" class="orb-btn"></button>
+                    </div>
+                </div>
+
+                <!-- Modal de Radio Vintage -->
+                <div id="settings-modal">
+                    <button id="close-settings">✖</button>
+                    <h3 class="radio-title">📻 FRECUENCIA</h3>
+                    <div class="knob-container">
+                        <div class="knob-wrapper">
+                            <label>MÚSICA</label>
+                            <div class="knob-bg">
+                                <div class="knob" id="knob-music">
+                                    <div class="knob-indicator"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="knob-wrapper">
+                            <label>EFECTOS</label>
+                            <div class="knob-bg">
+                                <div class="knob" id="knob-sfx">
+                                    <div class="knob-indicator"></div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -127,25 +167,104 @@ else:
             let bgMusic = null;
             let isUserInteracted = false;
             
+            let musicVolume = 0.3;
+            let sfxVolume = 0.5;
+            
             const muteBtn = document.getElementById("mute-btn");
-            const volSlider = document.getElementById("volume-slider");
+            const settingsBtn = document.getElementById("settings-btn");
+            const settingsModal = document.getElementById("settings-modal");
+            const closeSettings = document.getElementById("close-settings");
 
             if (audioSrc && audioSrc !== "") {
                 bgMusic = new Audio(audioSrc);
                 bgMusic.loop = true;
-                bgMusic.volume = volSlider.value;
+                bgMusic.volume = musicVolume;
             }
 
             muteBtn.addEventListener('mousedown', (e) => e.stopPropagation());
-            volSlider.addEventListener('mousedown', (e) => e.stopPropagation());
+            settingsBtn.addEventListener('mousedown', (e) => e.stopPropagation());
+            settingsModal.addEventListener('mousedown', (e) => e.stopPropagation());
+
+            settingsBtn.addEventListener('click', () => { 
+                settingsModal.style.display = 'block'; 
+                isPaused = true; 
+            });
+            
+            closeSettings.addEventListener('click', () => { 
+                settingsModal.style.display = 'none'; 
+                if (orbModal.style.display === 'none') {
+                    isPaused = false; 
+                }
+            });
+
+            // Lógica de las Perillas (Knobs)
+            function setupKnob(knobId, initialVol, callback) {
+                const knob = document.getElementById(knobId);
+                let isDragging = false;
+                
+                // Rango de -135deg (0 vol) a 135deg (1 vol) = 270 grados en total
+                function updateKnobTransform(vol) {
+                    let angle = (vol * 270) - 135;
+                    knob.style.transform = `rotate(${angle}deg)`;
+                }
+                updateKnobTransform(initialVol);
+                
+                knob.addEventListener('mousedown', (e) => {
+                    isDragging = true;
+                    e.preventDefault(); 
+                });
+                
+                window.addEventListener('mouseup', () => { isDragging = false; });
+                
+                window.addEventListener('mousemove', (e) => {
+                    if(!isDragging) return;
+                    
+                    const rect = knob.getBoundingClientRect();
+                    const centerX = rect.left + rect.width / 2;
+                    const centerY = rect.top + rect.height / 2;
+                    
+                    // Calcular ángulo respecto al centro
+                    let angle = Math.atan2(e.clientY - centerY, e.clientX - centerX) * (180 / Math.PI);
+                    angle += 90; // Ajustar para que 0 esté arriba
+                    if(angle < -180) angle += 360;
+                    
+                    // Limitar rotación entre -135 y 135
+                    if(angle < -135 && angle > -180) angle = -135;
+                    if(angle > 135 || (angle < -135 && angle <= -180)) {
+                        if (angle < -135 && angle > -270) angle = 135;
+                        else if (angle < -90) angle = -135;
+                        else angle = 135;
+                    }
+                    
+                    knob.style.transform = `rotate(${angle}deg)`;
+                    
+                    // Convertir ángulo de vuelta a volumen (0 a 1)
+                    let volume = (angle + 135) / 270;
+                    callback(volume);
+                });
+            }
+
+            setupKnob('knob-music', musicVolume, (v) => { 
+                musicVolume = v;
+                if(bgMusic) bgMusic.volume = musicVolume; 
+                if(musicVolume > 0 && bgMusic && bgMusic.paused && isUserInteracted) {
+                    bgMusic.play().catch(()=>{});
+                    muteBtn.innerText = "🔊";
+                } else if (musicVolume === 0 && bgMusic) {
+                    bgMusic.pause();
+                    muteBtn.innerText = "🔇";
+                }
+            });
+
+            setupKnob('knob-sfx', sfxVolume, (v) => { sfxVolume = v; });
 
             function playSfx(type, volMultiplier = 1.0) {
-                if (!isUserInteracted) return;
+                if (!isUserInteracted || sfxVolume === 0) return;
                 let soundArray = sfxData[type];
                 if (soundArray && soundArray.length > 0) {
                     let randomSrc = soundArray[Math.floor(Math.random() * soundArray.length)];
                     let snd = new Audio(randomSrc);
-                    snd.volume = Math.min(1.0, volSlider.value * volMultiplier);
+                    snd.volume = Math.min(1.0, sfxVolume * volMultiplier);
                     snd.play().catch(e => console.log("SFX play bloqueado", e));
                 }
             }
@@ -153,7 +272,9 @@ else:
             document.getElementById("gameCanvas").addEventListener('mousedown', () => {
                 if (!isUserInteracted) {
                     isUserInteracted = true;
-                    if (bgMusic && bgMusic.paused) { bgMusic.play().then(() => { muteBtn.innerText = "🔊"; }).catch(err => {}); }
+                    if (bgMusic && bgMusic.paused && musicVolume > 0) { 
+                        bgMusic.play().then(() => { muteBtn.innerText = "🔊"; }).catch(err => {}); 
+                    }
                 }
             });
 
@@ -161,14 +282,9 @@ else:
                 if(!bgMusic) return;
                 if(bgMusic.paused) {
                     bgMusic.play(); muteBtn.innerText = "🔊";
-                    if(volSlider.value == 0) { volSlider.value = 0.3; bgMusic.volume = 0.3; }
-                } else { bgMusic.pause(); muteBtn.innerText = "🔇"; }
-            });
-
-            volSlider.addEventListener('input', (e) => {
-                if(bgMusic) bgMusic.volume = e.target.value;
-                if(e.target.value > 0 && bgMusic && bgMusic.paused) { bgMusic.play(); muteBtn.innerText = "🔊"; } 
-                else if (e.target.value == 0 && bgMusic) { bgMusic.pause(); muteBtn.innerText = "🔇"; }
+                } else { 
+                    bgMusic.pause(); muteBtn.innerText = "🔇"; 
+                }
             });
 
             // === SISTEMA DEL JUEGO ===
@@ -421,7 +537,6 @@ else:
                 if(Math.random() < 0.0015 && redBoxes.length < 2) spawnRedBox();
                 if(Math.random() < 0.002 && orbs.length < 3) spawnOrb();
 
-                // Lógica del Disparo Láser Continuo
                 if (!player.dead && player.continuousLaserTimer > 0) {
                     player.continuousLaserTimer--;
                     if (player.continuousLaserTimer % 4 === 0 && player.r > 12) {
@@ -430,14 +545,12 @@ else:
                         let dx = targetX - player.x, dy = targetY - player.y;
                         let angle = Math.atan2(dy, dx);
                         
-                        // Láser ultra rápido, continuo, color rojo, no gasta casi masa
                         fireLaserProjectile(player, angle, 20, 60 * player.laserRange, "#FF0000", player.laserDamage * 0.6);
-                        if (player.continuousLaserTimer % 12 === 0) playSfx("laser", 0.3); // Sonido espaciado para no saturar
+                        if (player.continuousLaserTimer % 12 === 0) playSfx("laser", 0.3);
                         player.r = Math.max(10, player.r - 0.1); 
                     }
                 }
 
-                // Lógica de la Luna y su Fase Jefe
                 if (!meteor.isBoss) {
                     meteor.orbitAngle += 0.0012; 
                     meteor.x = (worldW / 2) + Math.cos(meteor.orbitAngle) * meteor.orbitRadius; 
@@ -490,7 +603,6 @@ else:
                 }
                 meteor.angle += 0.003;
 
-                // Agujero Negro
                 if(!blackHole.dead) { 
                     blackHole.r += 0.012; blackHole.hp = Math.min(blackHole.maxHp, blackHole.hp + 0.02);
                     let pullRadius = blackHole.r * 5.5; let dPlayer = Math.hypot(blackHole.x - player.x, blackHole.y - player.y);
@@ -506,7 +618,6 @@ else:
 
                 let allStars = [player, ...bots].filter(s => !s.dead); const now = Date.now();
 
-                // Movimiento del jugador
                 if(!player.dead && cinematicTimer <= 0) {
                     let targetX = (screenMouseX - canvas.width / 2) / zoom + camX + canvas.width / 2;
                     let targetY = (screenMouseY - canvas.height / 2) / zoom + camY + canvas.height / 2;
@@ -539,7 +650,6 @@ else:
                     }
                 });
 
-                // Control de Cámara
                 if (cinematicTimer > 0) {
                     cinematicTimer--;
                     meteor.r += (150 - meteor.r) * 0.03; 
@@ -553,7 +663,6 @@ else:
                     camX += (focusTarget.x - canvas.width / 2 - camX) * 0.1; camY += (focusTarget.y - canvas.height / 2 - camY) * 0.1;
                 }
 
-                // Colisiones de Láseres
                 for(let i = lasers.length - 1; i >= 0; i--) {
                     let l = lasers[i]; l.x += l.vx; l.y += l.vy; l.life--; let hit = false; let dmg = 22 * (l.damageMult || 1);
 
@@ -593,7 +702,6 @@ else:
                     if(hit || l.life <= 0) lasers.splice(i, 1);
                 }
 
-                // Recolección de Power-ups
                 for(let i = orbs.length - 1; i >= 0; i--) { let o = orbs[i]; if(!player.dead && Math.hypot(player.x - o.x, player.y - o.y) < player.r + o.r) { playSfx("orb"); showOrbMenu(o.type); orbs.splice(i, 1); } }
                 
                 for(let i = redBoxes.length - 1; i >= 0; i--) {
@@ -720,8 +828,6 @@ else:
                 }
 
                 boxes.forEach(b => { ctx.save(); ctx.translate(b.x, b.y); ctx.fillStyle = "#FFD700"; ctx.strokeStyle = "#FF8C00"; ctx.lineWidth = 3; ctx.fillRect(-b.r, -b.r, b.r*2, b.r*2); ctx.strokeRect(-b.r, -b.r, b.r*2, b.r*2); ctx.fillStyle = "#000"; ctx.font = "bold 16px sans-serif"; ctx.textAlign = "center"; ctx.fillText("?", 0, 5); ctx.restore(); });
-                
-                // Dibujar cajas rojas (Láser Continuo)
                 redBoxes.forEach(rb => { ctx.save(); ctx.translate(rb.x, rb.y); ctx.fillStyle = "#FF0000"; ctx.strokeStyle = "#8B0000"; ctx.lineWidth = 3; ctx.fillRect(-rb.r, -rb.r, rb.r*2, rb.r*2); ctx.strokeRect(-rb.r, -rb.r, rb.r*2, rb.r*2); ctx.fillStyle = "#FFF"; ctx.font = "bold 16px sans-serif"; ctx.textAlign = "center"; ctx.fillText("🔥", 0, 6); ctx.restore(); });
 
                 orbs.forEach(o => { ctx.save(); ctx.translate(o.x, o.y); ctx.beginPath(); ctx.arc(0, 0, o.r, 0, Math.PI * 2); ctx.fillStyle = o.type === 'celeste' ? '#00FFFF' : '#CC33FF'; ctx.fill(); ctx.strokeStyle = "white"; ctx.lineWidth = 2; ctx.stroke(); ctx.globalAlpha = 0.5; ctx.beginPath(); ctx.arc(0, 0, o.r + Math.sin(Date.now() / 150)*4, 0, Math.PI * 2); ctx.strokeStyle = o.type === 'celeste' ? '#00FFFF' : '#CC33FF'; ctx.lineWidth = 2; ctx.stroke(); ctx.restore(); });
