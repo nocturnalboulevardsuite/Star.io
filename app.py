@@ -322,7 +322,7 @@ else:
                     let angle = (vol * 270) - 135;
                     knob.style.transform = `rotate(${angle}deg)`;
                     
-                    // Calcular "clicks" audibles basándose en el volumen (ej: 40 ranuras)
+                    // Calcular "clicks" audibles basándose en el volumen
                     let currentStep = Math.round(vol * 40);
                     if (lastStep !== -1 && currentStep !== lastStep) {
                         playSafeClick();
@@ -345,16 +345,16 @@ else:
                     const centerX = rect.left + rect.width / 2;
                     const centerY = rect.top + rect.height / 2;
                     
-                    let angle = Math.atan2(e.clientY - centerY, e.clientX - centerX) * (180 / Math.PI);
-                    angle += 90;
-                    if(angle < -180) angle += 360;
+                    // Cálculo matemático corregido del ángulo para la perilla
+                    let angle = Math.atan2(e.clientY - centerY, e.clientX - centerX) * (180 / Math.PI) + 90;
                     
-                    if(angle < -135 && angle > -180) angle = -135;
-                    if(angle > 135 || (angle < -135 && angle <= -180)) {
-                        if (angle < -135 && angle > -270) angle = 135;
-                        else if (angle < -90) angle = -135;
-                        else angle = 135;
-                    }
+                    // Normalizar rango a [-180, 180]
+                    while (angle > 180) angle -= 360;
+                    while (angle < -180) angle += 360;
+                    
+                    // Delimitar topes entre -135 (0%) y 135 (100%) sin saltos bruscos
+                    if (angle > 135) angle = 135;
+                    if (angle < -135) angle = -135;
                     
                     let volume = (angle + 135) / 270;
                     updateKnobTransform(volume);
