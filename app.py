@@ -7,7 +7,7 @@ import json
 st.set_page_config(page_title="Star.io - Batalla Galáctica", layout="wide")
 
 st.title("🌟 StarZ.io - Batalla Galáctica")
-st.write("¡Sobrevive, llega al Top, destruye al Agujero Negro y mira lo que pasará!")
+st.write("Sobrevive y pasa etapas matando a los bosses finales")
 
 # ==========================================
 # 🎵 CONFIGURACIÓN DE AUDIO RISO
