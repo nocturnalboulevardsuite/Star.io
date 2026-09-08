@@ -68,7 +68,7 @@ if not st.session_state.jugando:
         st.button("▶️ JUGAR AHORA", on_click=iniciar_juego, type="primary", use_container_width=True)
 
 else:
-    st.button("⏹️ Volver al Menú Principal", on_click=volver_menu)
+    st.button("Volver al Menú Principal", on_click=volver_menu)
     
     codigo_juego_template = """
     <!DOCTYPE html>
@@ -164,8 +164,8 @@ else:
                 <canvas id="gameCanvas" width="900" height="650"></canvas>
                 
                 <div id="gameover">
-                    <h2 id="gameover-title">¡HAS MUERTO! 💥</h2>
-                    <p id="gameover-msg" style="font-size: 22px; color: #00FFFF; font-weight: bold; margin-top: 10px;">👉 DALE CLICK AL JUEGO PARA REAPARECER 👈</p>
+                    <h2 id="gameover-title">¡Te moriste Stupid!</h2>
+                    <p id="gameover-msg" style="font-size: 22px; color: #00FFFF; font-weight: bold; margin-top: 10px;">DALE CLICK AL JUEGO PARA REAPARECER</p>
                 </div>
                 
                 <div id="orb-modal">
@@ -476,7 +476,7 @@ else:
                 isGameOver = true;
                 playSfx("death", 0.3);
                 overScreen.style.display = 'block';
-                if(playerLives > 0) { overTitle.innerText = "¡HAS MUERTO! 💥"; overMsg.innerText = `👉 DALE CLICK PARA REAPARECER (${playerLives} VIDAS RESTANTES) 👈`; overMsg.style.color = "#00FFFF"; } 
+                if(playerLives > 0) { overTitle.innerText = "te moriste stupid"; overMsg.innerText = `DALE CLICK PARA REAPARECER (${playerLives} VIDAS RESTANTES)`; overMsg.style.color = "#00FFFF"; } 
                 else { overTitle.innerText = "FIN DE LA PARTIDA"; overMsg.innerText = "💀 SIN VIDAS - JUEGO TERMINADO - VUELVE AL MENÚ 💀"; overMsg.style.color = "#FF3333"; }
             }
 
@@ -489,7 +489,7 @@ else:
                 isGameOver = false; overScreen.style.display = 'none';
                 
                 playSfx("respawn");
-                floatingTexts.push({ x: player.x, y: player.y - 30, text: `✨ ¡REAPARECISTE! (${playerLives} vidas)`, color: "#33FF66", life: 50, size: 18 });
+                floatingTexts.push({ x: player.x, y: player.y - 30, text: ` ¡REAPARECISTE! (${playerLives} vidas)`, color: "#33FF66", life: 50, size: 18 });
             }
 
             function triggerInvulnerability() {
