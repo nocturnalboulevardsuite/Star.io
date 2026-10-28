@@ -3,14 +3,29 @@ import streamlit.components.v1 as components
 import base64
 import os
 import json
+import math
 
 st.set_page_config(page_title="Star.io - Batalla Galáctica", layout="wide")
 
-st.title("🌟 StarZ.io - Batalla Galáctica")
-st.write("Sobrevive y pasa etapas matando a los bosses finales")
+
+def svg_estrella(size=52):
+    pts = []
+    for i in range(10):
+        r = 22 if i % 2 == 0 else 9
+        a = -math.pi / 2 + i * math.pi / 5
+        pts.append(f"{24 + r * math.cos(a):.2f},{24 + r * math.sin(a):.2f}")
+    return (
+        f'<svg viewBox="0 0 48 48" width="{size}" height="{size}">'
+        '<defs><linearGradient id="gstar" x1="0" y1="0" x2="0" y2="1">'
+        '<stop offset="0%" stop-color="#FFF6A0"/><stop offset="100%" stop-color="#FFB800"/>'
+        '</linearGradient></defs>'
+        f'<polygon points="{" ".join(pts)}" fill="url(#gstar)" stroke="#FF8C00" stroke-width="2" stroke-linejoin="round"/>'
+        '<circle cx="19" cy="20" r="2" fill="#5a3a00"/><circle cx="29" cy="20" r="2" fill="#5a3a00"/>'
+        '</svg>'
+    )
 
 # ==========================================
-# 🎵 CONFIGURACIÓN DE AUDIO RISO
+# CONFIGURACIÓN DE AUDIO RISO
 # ==========================================
 RUTA_MUSICA = "test.wav" 
 
@@ -61,13 +76,30 @@ def volver_menu():
     st.session_state.jugando = False
 
 if not st.session_state.jugando:
+    st.markdown(
+        '<div style="display:flex;align-items:center;gap:14px;margin-bottom:4px;">'
+        + svg_estrella(52)
+        + '<h1 style="margin:0;padding:0;">StarZ.io - Batalla Galáctica</h1></div>',
+        unsafe_allow_html=True,
+    )
+    st.write("Sobrevive y pasa etapas matando a los bosses finales")
     col1, col2, col3 = st.columns([1,2,1])
     with col2:
         st.text_input("Ingresa tu Nickname Estrella:", value=st.session_state.nickname, key="nickname_input", max_chars=12)
         st.write("---")
-        st.button("▶️ JUGAR AHORA", on_click=iniciar_juego, type="primary", use_container_width=True)
+        st.button("JUGAR AHORA", on_click=iniciar_juego, type="primary", use_container_width=True)
 
 else:
+    # Mientras se juega: sin encabezado, sin márgenes y la página NO puede hacer scroll.
+    # El juego ocupa todo el alto de la ventana.
+    st.markdown("""
+<style>
+header[data-testid="stHeader"], [data-testid="stToolbar"], footer { display: none !important; }
+.block-container, [data-testid="stMainBlockContainer"] { padding-top: 0.6rem !important; padding-bottom: 0 !important; padding-left: 0.8rem !important; padding-right: 0.8rem !important; max-width: 100% !important; }
+html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"], section.main { overflow: hidden !important; overscroll-behavior: none !important; }
+iframe { height: calc(100vh - 95px) !important; width: 100% !important; border: none !important; border-radius: 10px; }
+</style>
+""", unsafe_allow_html=True)
     st.button("Volver al Menú Principal", on_click=volver_menu)
     
     codigo_juego_template = """
@@ -75,30 +107,31 @@ else:
     <html>
     <head>
         <style>
-            body { margin: 0; overflow: hidden; background-color: #050508; display: flex; justify-content: center; align-items: center; height: 100vh; user-select: none; font-family: sans-serif; }
-            #main-wrapper { display: flex; flex-direction: row; gap: 20px; align-items: stretch; }
-            canvas { background-color: #080812; cursor: crosshair; border-radius: 8px; border: 1px solid #222; }
-            #leaderboard-panel { width: 240px; background: #0a0a10; border: 2px solid #00FFFF; border-radius: 8px; padding: 20px 15px; box-sizing: border-box; color: white; box-shadow: 0 0 15px rgba(0, 255, 255, 0.3); display: flex; flex-direction: column; }
-            .lb-title { font-size: 16px; font-weight: bold; color: #00FFFF; text-align: center; border-bottom: 2px solid rgba(0, 255, 255, 0.3); padding-bottom: 12px; margin-top: 0; margin-bottom: 15px; }
-            .lb-item { display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 12px; color: #eaeaea; }
+            html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; overscroll-behavior: none; background-color: #050508; user-select: none; font-family: sans-serif; }
+            #game-root { position: relative; width: 100vw; height: 100vh; overflow: hidden; }
+            canvas { display: block; width: 100%; height: 100%; background-color: #080812; cursor: crosshair; touch-action: none; }
+            #leaderboard-panel { position: absolute; top: 15px; right: 15px; width: 230px; background: rgba(10, 10, 16, 0.82); border: 2px solid #00FFFF; border-radius: 10px; padding: 14px 14px 6px 14px; box-sizing: border-box; color: white; box-shadow: 0 0 15px rgba(0, 255, 255, 0.3); pointer-events: none; z-index: 12; }
+            .lb-title { display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 16px; font-weight: bold; color: #00FFFF; text-align: center; border-bottom: 2px solid rgba(0, 255, 255, 0.3); padding-bottom: 10px; margin-top: 0; margin-bottom: 12px; }
+            .lb-item { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 8px; color: #eaeaea; }
             .lb-item.me { color: #00FFFF; font-weight: bold; text-shadow: 0 0 5px rgba(0, 255, 255, 0.5); }
             #gameover { display: none; position: absolute; color: white; top: 40%; left: 50%; transform: translateX(-50%); text-align: center; font-size: 24px; text-shadow: 2px 2px 10px #000; pointer-events: none; z-index: 5; width: 100%; }
             
             /* Modal de orbes */
-            #orb-modal { display: none; position: absolute; top: 50%; left: 40%; transform: translate(-50%, -50%); background: rgba(10, 10, 25, 0.95); padding: 30px; border-radius: 12px; border: 3px solid white; text-align: center; z-index: 10; }
-            .orb-btn { width: 160px; height: 160px; background: #151525; color: white; border: 2px solid #555; border-radius: 10px; font-size: 16px; font-weight: bold; cursor: pointer; transition: 0.2s; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.4; }
+            #orb-modal { display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(10, 10, 25, 0.95); padding: 30px; border-radius: 12px; border: 3px solid white; text-align: center; z-index: 10; }
+            .orb-btn { width: 160px; height: 160px; background: #151525; color: white; border: 2px solid #555; border-radius: 10px; font-size: 16px; font-weight: bold; cursor: pointer; transition: 0.2s; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; line-height: 1.4; }
             .orb-btn:hover { background: #2a2a40; transform: scale(1.05); }
             
             /* Controles de audio */
             #audio-controls { position: absolute; top: 15px; left: 15px; background: rgba(10, 10, 20, 0.85); border: 2px solid #00FFFF; border-radius: 8px; padding: 8px 15px; display: flex; align-items: center; gap: 12px; z-index: 15; box-shadow: 0 0 10px rgba(0, 255, 255, 0.2); }
-            #mute-btn, #settings-btn { background: none; border: none; font-size: 22px; cursor: pointer; padding: 0; margin: 0; outline: none; transition: transform 0.2s; color: white; }
+            #mute-btn, #settings-btn { background: none; border: none; cursor: pointer; padding: 0; margin: 0; outline: none; transition: transform 0.2s; display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; }
             #mute-btn:hover, #settings-btn:hover { transform: scale(1.15); }
 
             /* Ajustes de radio vintage tipo Caja Fuerte */
-            #settings-modal { display: none; position: absolute; top: 50%; left: 40%; transform: translate(-50%, -50%); background: #2b1d14; border: 6px solid #1a110b; border-radius: 16px; padding: 25px; z-index: 20; color: #fff; text-align: center; box-shadow: inset 0 0 20px #000, 0 15px 40px rgba(0,0,0,0.95); width: 340px; }
-            #close-settings { position: absolute; top: 10px; right: 15px; background: none; border: none; color: #d4af37; font-size: 20px; cursor: pointer; font-weight: bold; }
+            #settings-modal { display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #2b1d14; border: 6px solid #1a110b; border-radius: 16px; padding: 25px; z-index: 20; color: #fff; text-align: center; box-shadow: inset 0 0 20px #000, 0 15px 40px rgba(0,0,0,0.95); width: 340px; }
+            #close-settings { position: absolute; top: 10px; right: 12px; background: none; border: none; color: #d4af37; cursor: pointer; padding: 2px; display: flex; }
+            #gameover-skull { display: none; margin: 0 auto 4px auto; width: 64px; height: 64px; filter: drop-shadow(0 0 10px rgba(255, 51, 51, 0.7)); }
             #close-settings:hover { color: #fff; }
-            .radio-title { margin: 0 0 20px 0; color: #d4af37; font-family: 'Courier New', Courier, monospace; letter-spacing: 2px; font-size: 22px; text-shadow: 1px 1px 2px #000; border-bottom: 2px solid #1a110b; padding-bottom: 10px; }
+            .radio-title { display: flex; align-items: center; justify-content: center; gap: 10px; margin: 0 0 20px 0; color: #d4af37; font-family: 'Courier New', Courier, monospace; letter-spacing: 2px; font-size: 22px; text-shadow: 1px 1px 2px #000; border-bottom: 2px solid #1a110b; padding-bottom: 10px; }
             .knob-container { display: flex; gap: 45px; justify-content: center; margin-top: 10px; }
             .knob-wrapper { display: flex; flex-direction: column; align-items: center; }
             .knob-wrapper label { font-family: 'Courier New', Courier, monospace; font-weight: bold; margin-bottom: 20px; color: #d4af37; font-size: 15px; letter-spacing: 2px; }
@@ -155,54 +188,87 @@ else:
         </style>
     </head>
     <body>
-        <div id="main-wrapper">
-            <div style="position: relative;">
-                <div id="audio-controls">
-                    <button id="mute-btn" title="Activar/Silenciar">🔇</button>
-                    <button id="settings-btn" title="Ajustes de Sonido">⚙️</button>
-                </div>
-                <canvas id="gameCanvas" width="900" height="650"></canvas>
-                
-                <div id="gameover">
-                    <h2 id="gameover-title">¡Te moriste Stupid!</h2>
-                    <p id="gameover-msg" style="font-size: 22px; color: #00FFFF; font-weight: bold; margin-top: 10px;">DALE CLICK AL JUEGO PARA REAPARECER</p>
-                </div>
-                
-                <div id="orb-modal">
-                    <h2 id="orb-title" style="margin-top:0;">NUEVA MEJORA</h2>
-                    <div style="display:flex; gap:20px; justify-content:center;">
-                        <button id="orb-btn1" class="orb-btn"></button>
-                        <button id="orb-btn2" class="orb-btn"></button>
-                    </div>
-                </div>
+        <div id="game-root">
+            <canvas id="gameCanvas"></canvas>
 
-                <!-- Modal de Radio Vintage -->
-                <div id="settings-modal">
-                    <button id="close-settings">✖</button>
-                    <h3 class="radio-title">📻 FRECUENCIA</h3>
-                    <div class="knob-container">
-                        <div class="knob-wrapper">
-                            <label>MÚSICA</label>
-                            <div class="knob-bg" id="bg-music">
-                                <div class="knob" id="knob-music">
-                                    <div class="knob-indicator"></div>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="knob-wrapper">
-                            <label>EFECTOS</label>
-                            <div class="knob-bg" id="bg-sfx">
-                                <div class="knob" id="knob-sfx">
-                                    <div class="knob-indicator"></div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+            <div id="audio-controls">
+                <button id="mute-btn" title="Activar/Silenciar"></button>
+                <button id="settings-btn" title="Ajustes de Sonido">
+                    <svg viewBox="0 0 24 24" width="24" height="24">
+                        <circle cx="12" cy="12" r="8.5" fill="none" stroke="#00FFFF" stroke-width="4" stroke-dasharray="3.34 3.34"/>
+                        <circle cx="12" cy="12" r="6.5" fill="none" stroke="#00FFFF" stroke-width="2.5"/>
+                        <circle cx="12" cy="12" r="2.2" fill="#00FFFF"/>
+                    </svg>
+                </button>
+            </div>
+
+            <div id="leaderboard-panel">
+                <h3 class="lb-title">
+                    <svg viewBox="0 0 24 20" width="22" height="18">
+                        <path d="M2 16 L2 6 L7 10 L12 2 L17 10 L22 6 L22 16 Z" fill="#FFD700" stroke="#B8860B" stroke-width="1.2" stroke-linejoin="round"/>
+                        <rect x="2" y="16" width="20" height="3" rx="1" fill="#DAA520"/>
+                        <circle cx="12" cy="2.5" r="1.6" fill="#FFF3A0"/><circle cx="2" cy="6" r="1.4" fill="#FFF3A0"/><circle cx="22" cy="6" r="1.4" fill="#FFF3A0"/>
+                        <circle cx="12" cy="12" r="1.8" fill="#FF3366"/>
+                    </svg>
+                    <span>TOP ESTRELLAS</span>
+                </h3>
+                <div id="lb-list"></div>
+            </div>
+
+            <div id="gameover">
+                <svg id="gameover-skull" viewBox="0 0 48 48">
+                    <path d="M24 4C13 4 6 11.5 6 21c0 6 3 10.5 7 13v6c0 1.5 1 2.5 2.5 2.5h17c1.5 0 2.5-1 2.5-2.5v-6c4-2.5 7-7 7-13C42 11.5 35 4 24 4z" fill="#EEEEEE" stroke="#FF3333" stroke-width="2"/>
+                    <ellipse cx="16.5" cy="22" rx="5" ry="5.5" fill="#111"/>
+                    <ellipse cx="31.5" cy="22" rx="5" ry="5.5" fill="#111"/>
+                    <path d="M24 28 L21 33 L27 33 Z" fill="#111"/>
+                    <path d="M19 37v5 M24 37v5 M29 37v5" stroke="#111" stroke-width="2"/>
+                </svg>
+                <h2 id="gameover-title">¡Te moriste Stupid!</h2>
+                <p id="gameover-msg" style="font-size: 22px; color: #00FFFF; font-weight: bold; margin-top: 10px;">DALE CLICK AL JUEGO PARA REAPARECER</p>
+            </div>
+
+            <div id="orb-modal">
+                <h2 id="orb-title" style="margin-top:0; display:flex; align-items:center; justify-content:center; gap:10px;">NUEVA MEJORA</h2>
+                <div style="display:flex; gap:20px; justify-content:center;">
+                    <button id="orb-btn1" class="orb-btn"></button>
+                    <button id="orb-btn2" class="orb-btn"></button>
                 </div>
             </div>
-            <div id="leaderboard-panel">
-                <h3 class="lb-title">👑 TOP ESTRELLAS</h3>
-                <div id="lb-list"></div>
+
+            <!-- Modal de Radio Vintage -->
+            <div id="settings-modal">
+                <button id="close-settings" title="Cerrar">
+                    <svg viewBox="0 0 24 24" width="20" height="20"><path d="M6 6 L18 18 M18 6 L6 18" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>
+                </button>
+                <h3 class="radio-title">
+                    <svg viewBox="0 0 32 24" width="32" height="24">
+                        <line x1="8" y1="6" x2="24" y2="1" stroke="#d4af37" stroke-width="1.5" stroke-linecap="round"/>
+                        <rect x="2" y="6" width="28" height="17" rx="3" fill="#3a2512" stroke="#d4af37" stroke-width="1.5"/>
+                        <circle cx="10" cy="14.5" r="5" fill="#1a110b" stroke="#d4af37" stroke-width="1"/>
+                        <circle cx="10" cy="14.5" r="1.5" fill="#d4af37"/>
+                        <rect x="18" y="10" width="9" height="3" rx="1" fill="#d4af37"/>
+                        <circle cx="20" cy="18" r="1.8" fill="#d4af37"/><circle cx="25" cy="18" r="1.8" fill="#d4af37"/>
+                    </svg>
+                    <span>FRECUENCIA</span>
+                </h3>
+                <div class="knob-container">
+                    <div class="knob-wrapper">
+                        <label>MÚSICA</label>
+                        <div class="knob-bg" id="bg-music">
+                            <div class="knob" id="knob-music">
+                                <div class="knob-indicator"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="knob-wrapper">
+                        <label>EFECTOS</label>
+                        <div class="knob-bg" id="bg-sfx">
+                            <div class="knob" id="knob-sfx">
+                                <div class="knob-indicator"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -220,6 +286,53 @@ else:
             const settingsBtn = document.getElementById("settings-btn");
             const settingsModal = document.getElementById("settings-modal");
             const closeSettings = document.getElementById("close-settings");
+
+            // === ICONOS SVG (HTML) ===
+            const SPEAKER_BODY = '<path d="M3 9 H7 L12 5 V19 L7 15 H3 Z" fill="#00FFFF" stroke="#00FFFF" stroke-width="1" stroke-linejoin="round"/>';
+            const ICON_SOUND_ON = '<svg viewBox="0 0 24 24" width="24" height="24">' + SPEAKER_BODY +
+                '<path d="M15.5 8.5 A5 5 0 0 1 15.5 15.5" stroke="#00FFFF" stroke-width="2" fill="none" stroke-linecap="round"/>' +
+                '<path d="M18.5 5.5 A9 9 0 0 1 18.5 18.5" stroke="#00FFFF" stroke-width="2" fill="none" stroke-linecap="round"/></svg>';
+            const ICON_SOUND_OFF = '<svg viewBox="0 0 24 24" width="24" height="24">' + SPEAKER_BODY +
+                '<path d="M15.5 9 L21 15 M21 9 L15.5 15" stroke="#FF3366" stroke-width="2.4" stroke-linecap="round"/></svg>';
+            function setMuteIcon(on) { muteBtn.innerHTML = on ? ICON_SOUND_ON : ICON_SOUND_OFF; }
+            setMuteIcon(false);
+
+            function spikyPoints(cx, cy, n, ro, ri) {
+                let p = [];
+                for (let i = 0; i < n * 2; i++) {
+                    let r = (i % 2 === 0) ? ro : ri;
+                    let a = -Math.PI / 2 + (Math.PI * i) / n;
+                    p.push((cx + Math.cos(a) * r).toFixed(1) + "," + (cy + Math.sin(a) * r).toFixed(1));
+                }
+                return p.join(" ");
+            }
+            function svgOrb(color, id) {
+                return '<svg viewBox="0 0 24 24" width="28" height="28"><defs><radialGradient id="' + id + '" cx="35%" cy="35%" r="70%">' +
+                    '<stop offset="0%" stop-color="#FFFFFF"/><stop offset="40%" stop-color="' + color + '"/><stop offset="100%" stop-color="#000"/></radialGradient></defs>' +
+                    '<circle cx="12" cy="12" r="10" fill="url(#' + id + ')" stroke="' + color + '" stroke-width="1.5"/></svg>';
+            }
+            const ICON_RANGE = '<svg viewBox="0 0 48 48" width="52" height="52">' +
+                '<path d="M20 33 Q24 44 24 46 Q24 44 28 33 Z" fill="#FFA500"/>' +
+                '<path d="M22 33 Q24 39 24 41 Q24 39 26 33 Z" fill="#FFFF66"/>' +
+                '<path d="M15 23 L9 32 L16 31 Z M33 23 L39 32 L32 31 Z" fill="#00BFFF" stroke="#00FFFF" stroke-width="1.5" stroke-linejoin="round"/>' +
+                '<path d="M24 3 C31 8 34 16 33 25 L29 33 H19 L15 25 C14 16 17 8 24 3 Z" fill="#E8F8FF" stroke="#00FFFF" stroke-width="2" stroke-linejoin="round"/>' +
+                '<circle cx="24" cy="17" r="4" fill="#0a3a5a" stroke="#00FFFF" stroke-width="1.5"/></svg>';
+            const ICON_DAMAGE = '<svg viewBox="0 0 48 48" width="52" height="52">' +
+                '<polygon points="' + spikyPoints(24, 24, 10, 22, 11) + '" fill="#FF4500" stroke="#FFD700" stroke-width="2" stroke-linejoin="round"/>' +
+                '<polygon points="' + spikyPoints(24, 24, 10, 13, 7) + '" fill="#FFE066"/>' +
+                '<circle cx="24" cy="24" r="4" fill="#FFFFFF"/></svg>';
+            const ICON_MULTI = '<svg viewBox="0 0 48 48" width="52" height="52" fill="none" stroke="#CC33FF" stroke-width="3" stroke-linecap="round">' +
+                '<defs><marker id="mk-multi" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="4" markerHeight="4" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#E199FF" stroke="none"/></marker></defs>' +
+                '<line x1="24" y1="44" x2="24" y2="9" marker-end="url(#mk-multi)"/>' +
+                '<line x1="24" y1="44" x2="10" y2="13" marker-end="url(#mk-multi)"/>' +
+                '<line x1="24" y1="44" x2="38" y2="13" marker-end="url(#mk-multi)"/></svg>';
+            const ICON_CROSS = '<svg viewBox="0 0 48 48" width="52" height="52" fill="none" stroke="#CC33FF" stroke-width="3" stroke-linecap="round">' +
+                '<defs><marker id="mk-cross" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="4" markerHeight="4" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#E199FF" stroke="none"/></marker></defs>' +
+                '<line x1="24" y1="24" x2="24" y2="6" marker-end="url(#mk-cross)"/>' +
+                '<line x1="24" y1="24" x2="42" y2="24" marker-end="url(#mk-cross)"/>' +
+                '<line x1="24" y1="24" x2="24" y2="42" marker-end="url(#mk-cross)"/>' +
+                '<line x1="24" y1="24" x2="6" y2="24" marker-end="url(#mk-cross)"/>' +
+                '<circle cx="24" cy="24" r="4.5" fill="#CC33FF" stroke="#FFFFFF" stroke-width="1.5"/></svg>';
 
             if (audioSrc && audioSrc !== "") {
                 bgMusic = new Audio(audioSrc);
@@ -367,10 +480,10 @@ else:
                 if(bgMusic) bgMusic.volume = musicVolume; 
                 if(musicVolume > 0 && bgMusic && bgMusic.paused && isUserInteracted) {
                     bgMusic.play().catch(()=>{});
-                    muteBtn.innerText = "🔊";
+                    setMuteIcon(true);
                 } else if (musicVolume === 0 && bgMusic) {
                     bgMusic.pause();
-                    muteBtn.innerText = "🔇";
+                    setMuteIcon(false);
                 }
             });
 
@@ -391,7 +504,7 @@ else:
                 if (!isUserInteracted) {
                     isUserInteracted = true;
                     if (bgMusic && bgMusic.paused && musicVolume > 0) { 
-                        bgMusic.play().then(() => { muteBtn.innerText = "🔊"; }).catch(err => {}); 
+                        bgMusic.play().then(() => { setMuteIcon(true); }).catch(err => {}); 
                     }
                 }
             });
@@ -399,9 +512,9 @@ else:
             muteBtn.addEventListener('click', () => {
                 if(!bgMusic) return;
                 if(bgMusic.paused) {
-                    bgMusic.play(); muteBtn.innerText = "🔊";
+                    bgMusic.play(); setMuteIcon(true);
                 } else { 
-                    bgMusic.pause(); muteBtn.innerText = "🔇"; 
+                    bgMusic.pause(); setMuteIcon(false); 
                 }
             });
 
@@ -411,6 +524,7 @@ else:
             const overScreen = document.getElementById("gameover");
             const overTitle = document.getElementById("gameover-title");
             const overMsg = document.getElementById("gameover-msg");
+            const overSkull = document.getElementById("gameover-skull");
             const lbList = document.getElementById("lb-list");
             const orbModal = document.getElementById("orb-modal");
             const orbTitle = document.getElementById("orb-title");
@@ -418,6 +532,13 @@ else:
             const btn2 = document.getElementById("orb-btn2");
 
             window.addEventListener('contextmenu', (e) => e.preventDefault());
+
+            // Bloquear el scroll de la página: la rueda del mouse y las teclas se quedan dentro del juego
+            window.addEventListener('wheel', (e) => e.preventDefault(), { passive: false });
+            window.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
+            window.addEventListener('keydown', (e) => {
+                if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'PageUp', 'PageDown', 'Home', 'End'].includes(e.code)) e.preventDefault();
+            });
 
             const worldW = 3200;
             const worldH = 3200;
@@ -437,10 +558,24 @@ else:
             let floatingTexts = []; let lasers = []; let particles = []; let boxes = []; let redBoxes = []; let hearts = []; let orbs = [];
             let bgStarsLayer1 = []; let bgStarsLayer2 = [];
             
-            for(let i=0; i<120; i++) {
-                bgStarsLayer1.push({x: Math.random() * canvas.width, y: Math.random() * canvas.height, r: Math.random() * 1.5 + 0.5});
-                bgStarsLayer2.push({x: Math.random() * canvas.width, y: Math.random() * canvas.height, r: Math.random() * 2.5 + 1.0});
+            function genBgStars() {
+                bgStarsLayer1 = []; bgStarsLayer2 = [];
+                let count = Math.max(120, Math.min(400, Math.round((canvas.width * canvas.height) / 5000)));
+                for(let i=0; i<count; i++) {
+                    bgStarsLayer1.push({x: Math.random() * canvas.width, y: Math.random() * canvas.height, r: Math.random() * 1.5 + 0.5});
+                    bgStarsLayer2.push({x: Math.random() * canvas.width, y: Math.random() * canvas.height, r: Math.random() * 2.5 + 1.0});
+                }
             }
+
+            // El canvas ocupa toda la ventana del juego y se adapta si cambia de tamaño
+            function resizeCanvas() {
+                canvas.width = Math.max(300, window.innerWidth);
+                canvas.height = Math.max(300, window.innerHeight);
+                genBgStars();
+            }
+            resizeCanvas();
+            screenMouseX = canvas.width / 2; screenMouseY = canvas.height / 2;
+            window.addEventListener('resize', resizeCanvas);
 
             let meteor = { 
                 orbitAngle: 0, orbitRadius: 450, x: worldW / 2, y: worldH / 2, r: 100, angle: 0, 
@@ -450,7 +585,7 @@ else:
             };
             let blackHole = { x: worldW * 0.7, y: worldH * 0.3, r: 75, hp: 10000, maxHp: 10000, dead: false };
 
-            canvas.addEventListener('mousemove', (e) => {
+            window.addEventListener('mousemove', (e) => {
                 const rect = canvas.getBoundingClientRect();
                 screenMouseX = e.clientX - rect.left; screenMouseY = e.clientY - rect.top;
             });
@@ -476,8 +611,8 @@ else:
                 isGameOver = true;
                 playSfx("death", 0.3);
                 overScreen.style.display = 'block';
-                if(playerLives > 0) { overTitle.innerText = "te moriste stupid"; overMsg.innerText = `DALE CLICK PARA REAPARECER (${playerLives} VIDAS RESTANTES)`; overMsg.style.color = "#00FFFF"; } 
-                else { overTitle.innerText = "FIN DE LA PARTIDA"; overMsg.innerText = "💀 SIN VIDAS - JUEGO TERMINADO - VUELVE AL MENÚ 💀"; overMsg.style.color = "#FF3333"; }
+                if(playerLives > 0) { overSkull.style.display = 'none'; overTitle.innerText = "te moriste stupid"; overMsg.innerText = `DALE CLICK PARA REAPARECER (${playerLives} VIDAS RESTANTES)`; overMsg.style.color = "#00FFFF"; } 
+                else { overSkull.style.display = 'block'; overTitle.innerText = "FIN DE LA PARTIDA"; overMsg.innerText = "SIN VIDAS - JUEGO TERMINADO - VUELVE AL MENÚ"; overMsg.style.color = "#FF3333"; }
             }
 
             function respawnPlayer() {
@@ -489,13 +624,13 @@ else:
                 isGameOver = false; overScreen.style.display = 'none';
                 
                 playSfx("respawn");
-                floatingTexts.push({ x: player.x, y: player.y - 30, text: ` ¡REAPARECISTE! (${playerLives} vidas)`, color: "#33FF66", life: 50, size: 18 });
+                floatingTexts.push({ x: player.x, y: player.y - 30, text: `¡REAPARECISTE! (${playerLives} vidas)`, icon: "star", color: "#33FF66", life: 50, size: 18 });
             }
 
             function triggerInvulnerability() {
                 if(!player.dead && player.hasInvulnCharge && player.invulnTimer <= 0) {
                     player.hasInvulnCharge = false; player.invulnTimer = 300; 
-                    floatingTexts.push({ x: player.x, y: player.y - player.r - 25, text: "👻 ¡MODO FANTASMA!", color: "#00FFFF", life: 50, size: 16 });
+                    floatingTexts.push({ x: player.x, y: player.y - player.r - 25, text: "¡MODO FANTASMA!", icon: "ghost", color: "#00FFFF", life: 50, size: 16 });
                 }
             }
 
@@ -504,7 +639,7 @@ else:
                 if(!player.dead && now - lastDashTime >= dashCooldown) {
                     lastDashTime = now; dashTimer = 12; 
                     playSfx("dash");
-                    floatingTexts.push({ x: player.x, y: player.y - player.r - 20, text: "⚡ DASH!", color: "#00FFFF", life: 30, size: 18 });
+                    floatingTexts.push({ x: player.x, y: player.y - player.r - 20, text: "DASH!", icon: "bolt", color: "#00FFFF", life: 30, size: 18 });
                 }
             }
 
@@ -593,7 +728,7 @@ else:
             function takeDamage(target, amount) {
                 if(target === player && player.invulnTimer > 0) return;
                 if(target === player && player.shields > 0) {
-                    player.shields--; floatingTexts.push({ x: player.x, y: player.y - player.r - 20, text: "🛡️ ¡ESCUDO ABSORBIÓ DAÑO!", color: "#C0C0C0", life: 40, size: 16 });
+                    player.shields--; floatingTexts.push({ x: player.x, y: player.y - player.r - 20, text: "¡ESCUDO ABSORBIÓ DAÑO!", icon: "shield", color: "#C0C0C0", life: 40, size: 16 });
                     return;
                 }
                 let dmgMult = Math.max(0.25, 18 / Math.max(18, target.r));
@@ -603,7 +738,7 @@ else:
                 if(target === player && player.hp <= 0 && !player.dead) { player.hp = 0; player.dead = true; handlePlayerDeath(); } 
                 else if(target !== player && target.hp <= 0) { 
                     target.dead = true; 
-                    floatingTexts.push({ x: target.x, y: target.y, text: "💥 ¡DESTRUIDO!", color: "#FF3333", life: 40, size: 22 }); 
+                    floatingTexts.push({ x: target.x, y: target.y, text: "¡DESTRUIDO!", icon: "burst", color: "#FF3333", life: 40, size: 22 }); 
                 }
             }
 
@@ -626,20 +761,20 @@ else:
                 btn1.onclick = null; btn2.onclick = null;
 
                 if(type === 'celeste') {
-                    orbTitle.style.color = '#00FFFF'; orbTitle.innerText = "🔵 ORBE CELESTE";
-                    btn1.style.borderColor = '#00FFFF'; btn1.innerHTML = "🚀<br>MAYOR DISTANCIA"; btn1.onclick = () => applyUpgrade('range');
-                    btn2.style.borderColor = '#00FFFF'; btn2.innerHTML = "💥<br>MAYOR DAÑO"; btn2.onclick = () => applyUpgrade('damage');
+                    orbTitle.style.color = '#00FFFF'; orbTitle.innerHTML = svgOrb('#00FFFF', 'orb-grad-c') + "<span>ORBE CELESTE</span>";
+                    btn1.style.borderColor = '#00FFFF'; btn1.innerHTML = ICON_RANGE + "<span>MAYOR DISTANCIA</span>"; btn1.onclick = () => applyUpgrade('range');
+                    btn2.style.borderColor = '#00FFFF'; btn2.innerHTML = ICON_DAMAGE + "<span>MAYOR DAÑO</span>"; btn2.onclick = () => applyUpgrade('damage');
                 } else {
-                    orbTitle.style.color = '#CC33FF'; orbTitle.innerText = "🟣 ORBE MORADO";
+                    orbTitle.style.color = '#CC33FF'; orbTitle.innerHTML = svgOrb('#CC33FF', 'orb-grad-m') + "<span>ORBE MORADO</span>";
                     let nextMulti = Math.min(10, player.multiLevel + 1);
                     let nextCross = Math.min(10, player.crossLevel + 1);
                     
                     btn1.style.borderColor = '#CC33FF'; 
-                    btn1.innerHTML = `🔱<br>DISPARO MÚLTIPLE<br><span style="color:#FFD700;font-size:14px;margin-top:6px;display:block;">Nv. ${nextMulti}</span>`; 
+                    btn1.innerHTML = `${ICON_MULTI}<span>DISPARO MÚLTIPLE</span><span style="color:#FFD700;font-size:14px;display:block;">Nv. ${nextMulti}</span>`; 
                     btn1.onclick = () => applyUpgrade('multi');
                     
                     btn2.style.borderColor = '#CC33FF'; 
-                    btn2.innerHTML = `➕<br>DISPARO EN CRUZ<br><span style="color:#FFD700;font-size:14px;margin-top:6px;display:block;">Nv. ${nextCross}</span>`; 
+                    btn2.innerHTML = `${ICON_CROSS}<span>DISPARO EN CRUZ</span><span style="color:#FFD700;font-size:14px;display:block;">Nv. ${nextCross}</span>`; 
                     btn2.onclick = () => applyUpgrade('cross');
                 }
             }
@@ -676,7 +811,7 @@ else:
                 } else if (!meteor.dead && cinematicTimer <= 0) {
                     if (meteor.hp <= meteor.maxHp * 0.5 && !meteor.isPhase2) {
                         meteor.isPhase2 = true;
-                        floatingTexts.push({ x: meteor.x, y: meteor.y - 140, text: "🔴 FASE 2: LUNA CÍCLOPE ACTIVADA 🔴", color: "#FF0000", life: 180, size: 36 });
+                        floatingTexts.push({ x: meteor.x, y: meteor.y - 140, text: "FASE 2: LUNA CÍCLOPE ACTIVADA", icon: "eye", iconBoth: true, color: "#FF0000", life: 180, size: 36 });
                     }
                     if (meteor.isPhase2 && !meteor.phase2MusicStarted) { meteor.phase2MusicStarted = true; }
 
@@ -697,7 +832,7 @@ else:
                             meteor.laserChargeTimer = 60; 
                             let angleToPlayer = Math.atan2(player.y - meteor.y, player.x - meteor.x);
                             meteor.laserAngle = angleToPlayer - 0.7; 
-                            floatingTexts.push({ x: meteor.x, y: meteor.y - 100, text: "👁️ ¡LÁSER CÍCLOPE INMINENTE!", color: "#FF0055", life: 60, size: 28 });
+                            floatingTexts.push({ x: meteor.x, y: meteor.y - 100, text: "¡LÁSER CÍCLOPE INMINENTE!", icon: "eye", color: "#FF0055", life: 60, size: 28 });
                         }
                         if (meteor.laserChargeTimer > 0) {
                             meteor.laserChargeTimer--;
@@ -793,7 +928,7 @@ else:
                             if (bgMusic && sfxData["luna_musica"] && sfxData["luna_musica"].length > 0) {
                                 bgMusic.pause(); bgMusic.src = sfxData["luna_musica"][0]; bgMusic.currentTime = 0; bgMusic.play().catch(e => console.log(e));
                             }
-                            floatingTexts.push({ x: meteor.x, y: meteor.y - 120, text: "⚠️ LA LUNA DESPIERTA ⚠️", color: "#FF4500", life: 180, size: 40 });
+                            floatingTexts.push({ x: meteor.x, y: meteor.y - 120, text: "LA LUNA DESPIERTA", icon: "warning", iconBoth: true, color: "#FF4500", life: 180, size: 40 });
                         } 
                         hit = true;
                     }
@@ -802,7 +937,7 @@ else:
                         meteor.hp -= dmg; hit = true;
                         if(meteor.hp <= 0 && !meteor.dead) {
                             meteor.dead = true; playSfx("bh_death", 2.5); 
-                            floatingTexts.push({ x: meteor.x, y: meteor.y, text: "🌟 VICTORIA GALÁCTICA 🌟", color: "#FFD700", life: 300, size: 50 });
+                            floatingTexts.push({ x: meteor.x, y: meteor.y, text: "VICTORIA GALÁCTICA", icon: "star", iconBoth: true, color: "#FFD700", life: 300, size: 50 });
                             if (bgMusic && audioSrc) { bgMusic.pause(); bgMusic.src = audioSrc; bgMusic.currentTime = 0; bgMusic.play().catch(e => console.log(e)); }
                         }
                     }
@@ -827,7 +962,7 @@ else:
                     if(!player.dead && Math.hypot(player.x - rb.x, player.y - rb.y) < player.r + rb.r) {
                         redBoxes.splice(i, 1); playSfx("box");
                         player.continuousLaserTimer = 300; 
-                        floatingTexts.push({x: player.x, y: player.y - 40, text: "🔴 ¡MODO LÁSER CONTINUO!", color: "#FF0000", life: 60, size: 22});
+                        floatingTexts.push({x: player.x, y: player.y - 40, text: "¡MODO LÁSER CONTINUO!", icon: "dot", color: "#FF0000", life: 60, size: 22});
                     }
                 }
                 
@@ -835,15 +970,15 @@ else:
                     let b = boxes[i];
                     if(!player.dead && Math.hypot(player.x - b.x, player.y - b.y) < player.r + b.r) {
                         boxes.splice(i, 1); playSfx("box"); let rand = Math.random();
-                        if(rand < 0.50) { player.hp += 50; if(player.hp > player.maxHp) player.maxHp = player.hp; player.r += 2; floatingTexts.push({x: player.x, y: player.y - player.r - 15, text: "❤️ +50 HP MAX", color: "#33FF66", life: 50, size: 22}); } 
-                        else if(rand < 0.625) { if(player.shields < 4) { player.shields++; floatingTexts.push({x: player.x, y: player.y - 30, text: "🛡️ ESCUDO +1", color: "#C0C0C0", life: 45, size: 18}); } } 
-                        else if(rand < 0.750) { player.fireTimer = 360; floatingTexts.push({x: player.x, y: player.y - 30, text: "🔥 ¡AURA DE FUEGO!", color: "#FF4500", life: 50, size: 22}); } 
-                        else if(rand < 0.875) { player.hasInvulnCharge = true; floatingTexts.push({x: player.x, y: player.y - 30, text: "👻 ¡FANTASMA LISTO!", color: "#00FFFF", life: 55, size: 18}); } 
-                        else { player.speedBoostTimer = 300; floatingTexts.push({x: player.x, y: player.y - 30, text: "⚡ ¡VELOCIDAD!", color: "#FFFF33", life: 45, size: 18}); }
+                        if(rand < 0.50) { player.hp += 50; if(player.hp > player.maxHp) player.maxHp = player.hp; player.r += 2; floatingTexts.push({x: player.x, y: player.y - player.r - 15, text: "+50 HP MAX", icon: "heart", color: "#33FF66", life: 50, size: 22}); } 
+                        else if(rand < 0.625) { if(player.shields < 4) { player.shields++; floatingTexts.push({x: player.x, y: player.y - 30, text: "ESCUDO +1", icon: "shield", color: "#C0C0C0", life: 45, size: 18}); } } 
+                        else if(rand < 0.750) { player.fireTimer = 360; floatingTexts.push({x: player.x, y: player.y - 30, text: "¡AURA DE FUEGO!", icon: "fire", color: "#FF4500", life: 50, size: 22}); } 
+                        else if(rand < 0.875) { player.hasInvulnCharge = true; floatingTexts.push({x: player.x, y: player.y - 30, text: "¡FANTASMA LISTO!", icon: "ghost", color: "#00FFFF", life: 55, size: 18}); } 
+                        else { player.speedBoostTimer = 300; floatingTexts.push({x: player.x, y: player.y - 30, text: "¡VELOCIDAD!", icon: "bolt", color: "#FFFF33", life: 45, size: 18}); }
                     }
                 }
 
-                for(let i = hearts.length - 1; i >= 0; i--) { let h = hearts[i]; if(!player.dead && Math.hypot(player.x - h.x, player.y - h.y) < player.r + h.r) { hearts.splice(i, 1); spawnHeart(); playSfx("food"); player.hp += 20; if(player.hp > player.maxHp) player.maxHp = player.hp; floatingTexts.push({ x: player.x, y: player.y - player.r - 15, text: "+20 HP ❤️", color: "#FF3366", life: 40, size: 18 }); } }
+                for(let i = hearts.length - 1; i >= 0; i--) { let h = hearts[i]; if(!player.dead && Math.hypot(player.x - h.x, player.y - h.y) < player.r + h.r) { hearts.splice(i, 1); spawnHeart(); playSfx("food"); player.hp += 20; if(player.hp > player.maxHp) player.maxHp = player.hp; floatingTexts.push({ x: player.x, y: player.y - player.r - 15, text: "+20 HP", icon: "heart", color: "#FF3366", life: 40, size: 18 }); } }
 
                 if(!meteor.dead) { allStars.forEach(s => { if(Math.hypot(s.x - meteor.x, s.y - meteor.y) < s.r + meteor.r * 0.85) takeDamage(s, 100); }); }
                 
@@ -892,6 +1027,204 @@ else:
                 updateLeaderboard();
             }
 
+            // === ICONOS DIBUJADOS EN CANVAS (reemplazan a los emojis) ===
+            function heartPath(c, x, y, s) {
+                const t = y - s * 0.45;
+                c.beginPath();
+                c.moveTo(x, t + s * 0.25);
+                c.bezierCurveTo(x, t, x - s * 0.5, t, x - s * 0.5, t + s * 0.28);
+                c.bezierCurveTo(x - s * 0.5, t + s * 0.55, x - s * 0.1, t + s * 0.7, x, t + s * 0.9);
+                c.bezierCurveTo(x + s * 0.1, t + s * 0.7, x + s * 0.5, t + s * 0.55, x + s * 0.5, t + s * 0.28);
+                c.bezierCurveTo(x + s * 0.5, t, x, t, x, t + s * 0.25);
+                c.closePath();
+            }
+            function starPath(c, x, y, n, rOut, rIn, rot) {
+                c.beginPath();
+                for (let i = 0; i < n * 2; i++) {
+                    let r = (i % 2 === 0) ? rOut : rIn;
+                    let a = rot + (Math.PI * i) / n;
+                    c.lineTo(x + Math.cos(a) * r, y + Math.sin(a) * r);
+                }
+                c.closePath();
+            }
+            function flamePath(c, x, y, s) {
+                c.beginPath();
+                c.moveTo(x, y - s * 0.5);
+                c.bezierCurveTo(x + s * 0.12, y - s * 0.28, x + s * 0.42, y - s * 0.12, x + s * 0.38, y + s * 0.16);
+                c.bezierCurveTo(x + s * 0.35, y + s * 0.4, x + s * 0.16, y + s * 0.5, x, y + s * 0.5);
+                c.bezierCurveTo(x - s * 0.16, y + s * 0.5, x - s * 0.35, y + s * 0.4, x - s * 0.38, y + s * 0.16);
+                c.bezierCurveTo(x - s * 0.4, y - s * 0.04, x - s * 0.24, y - s * 0.14, x - s * 0.18, y - s * 0.3);
+                c.bezierCurveTo(x - s * 0.06, y - s * 0.16, x - s * 0.04, y - s * 0.36, x, y - s * 0.5);
+                c.closePath();
+            }
+            function shieldPath(c, x, y, s) {
+                c.beginPath();
+                c.moveTo(x, y - s * 0.5);
+                c.lineTo(x + s * 0.4, y - s * 0.34);
+                c.lineTo(x + s * 0.4, y - s * 0.02);
+                c.quadraticCurveTo(x + s * 0.38, y + s * 0.34, x, y + s * 0.5);
+                c.quadraticCurveTo(x - s * 0.38, y + s * 0.34, x - s * 0.4, y - s * 0.02);
+                c.lineTo(x - s * 0.4, y - s * 0.34);
+                c.closePath();
+            }
+
+            // Dibuja un icono centrado en (x, y) de tamaño s
+            function drawIcon(c, type, x, y, s, color) {
+                c.save();
+                c.shadowBlur = 0; c.lineJoin = "round"; c.lineCap = "round";
+                switch (type) {
+                    case 'heart': {
+                        heartPath(c, x, y, s);
+                        let g = c.createLinearGradient(x, y - s * 0.45, x, y + s * 0.45);
+                        g.addColorStop(0, "#FF6B8A"); g.addColorStop(1, "#C8102E");
+                        c.fillStyle = g; c.fill();
+                        c.lineWidth = Math.max(1, s * 0.07); c.strokeStyle = "#7A0019"; c.stroke();
+                        c.beginPath(); c.ellipse(x - s * 0.24, y - s * 0.17, s * 0.09, s * 0.06, -0.6, 0, Math.PI * 2);
+                        c.fillStyle = "rgba(255,255,255,0.8)"; c.fill();
+                        break;
+                    }
+                    case 'heartEmpty': {
+                        heartPath(c, x, y, s);
+                        c.fillStyle = "#1a1a1a"; c.fill();
+                        c.lineWidth = Math.max(1, s * 0.07); c.strokeStyle = "#555"; c.stroke();
+                        break;
+                    }
+                    case 'ghost': {
+                        const r = s * 0.4, top = y - s * 0.08, bot = y + s * 0.45;
+                        c.beginPath();
+                        c.moveTo(x - r, bot);
+                        c.lineTo(x - r, top);
+                        c.arc(x, top, r, Math.PI, 0);
+                        c.lineTo(x + r, bot);
+                        const n = 3, w = (2 * r) / n;
+                        for (let i = 0; i < n; i++) { let x0 = x + r - i * w; c.quadraticCurveTo(x0 - w / 2, bot - s * 0.2, x0 - w, bot); }
+                        c.closePath();
+                        c.fillStyle = "rgba(235, 252, 255, 0.95)"; c.fill();
+                        c.lineWidth = Math.max(1, s * 0.06); c.strokeStyle = color || "#00FFFF"; c.stroke();
+                        c.fillStyle = "#102030";
+                        c.beginPath(); c.ellipse(x - r * 0.38, top, s * 0.07, s * 0.11, 0, 0, Math.PI * 2); c.fill();
+                        c.beginPath(); c.ellipse(x + r * 0.38, top, s * 0.07, s * 0.11, 0, 0, Math.PI * 2); c.fill();
+                        c.beginPath(); c.ellipse(x, top + s * 0.2, s * 0.06, s * 0.08, 0, 0, Math.PI * 2); c.fill();
+                        break;
+                    }
+                    case 'bolt': {
+                        const p = [[0.12, -0.5], [-0.32, 0.06], [-0.04, 0.06], [-0.14, 0.5], [0.32, -0.08], [0.04, -0.08]];
+                        c.beginPath();
+                        p.forEach((pt, i) => { let X = x + pt[0] * s, Y = y + pt[1] * s; if (i === 0) c.moveTo(X, Y); else c.lineTo(X, Y); });
+                        c.closePath();
+                        let g = c.createLinearGradient(x, y - s * 0.5, x, y + s * 0.5);
+                        g.addColorStop(0, "#FFF56B"); g.addColorStop(1, "#FFB000");
+                        c.fillStyle = g; c.fill();
+                        c.lineWidth = Math.max(1, s * 0.06); c.strokeStyle = "#A35F00"; c.stroke();
+                        break;
+                    }
+                    case 'shield': case 'shieldEmpty': {
+                        shieldPath(c, x, y, s);
+                        if (type === 'shield') {
+                            let g = c.createLinearGradient(x - s * 0.4, y - s * 0.5, x + s * 0.4, y + s * 0.5);
+                            g.addColorStop(0, "#F5F5F5"); g.addColorStop(1, "#7E7E7E");
+                            c.fillStyle = g; c.fill();
+                            c.lineWidth = Math.max(1, s * 0.07); c.strokeStyle = "#FFFFFF"; c.stroke();
+                            c.beginPath(); c.moveTo(x, y - s * 0.38); c.lineTo(x, y + s * 0.38);
+                            c.moveTo(x - s * 0.28, y - s * 0.08); c.lineTo(x + s * 0.28, y - s * 0.08);
+                            c.lineWidth = Math.max(1, s * 0.06); c.strokeStyle = "rgba(60,60,60,0.6)"; c.stroke();
+                        } else {
+                            c.fillStyle = "rgba(80, 80, 80, 0.3)"; c.fill();
+                            c.lineWidth = 1; c.strokeStyle = "rgba(255,255,255,0.35)"; c.stroke();
+                        }
+                        break;
+                    }
+                    case 'burst': {
+                        starPath(c, x, y, 10, s * 0.5, s * 0.26, -Math.PI / 2);
+                        c.fillStyle = "#FF4500"; c.fill();
+                        c.lineWidth = Math.max(1, s * 0.05); c.strokeStyle = "#FFD700"; c.stroke();
+                        starPath(c, x, y, 10, s * 0.3, s * 0.16, -Math.PI / 2);
+                        c.fillStyle = "#FFE066"; c.fill();
+                        break;
+                    }
+                    case 'star': {
+                        starPath(c, x, y, 5, s * 0.5, s * 0.22, -Math.PI / 2);
+                        let g = c.createLinearGradient(x, y - s * 0.5, x, y + s * 0.5);
+                        g.addColorStop(0, "#FFF6A0"); g.addColorStop(1, "#FFB800");
+                        c.fillStyle = g; c.fill();
+                        c.lineWidth = Math.max(1, s * 0.06); c.strokeStyle = "#B8860B"; c.stroke();
+                        break;
+                    }
+                    case 'fire': {
+                        flamePath(c, x, y, s);
+                        let g = c.createLinearGradient(x, y + s * 0.5, x, y - s * 0.5);
+                        g.addColorStop(0, "#FF8C00"); g.addColorStop(1, "#FF2200");
+                        c.fillStyle = g; c.fill();
+                        c.lineWidth = Math.max(1, s * 0.05); c.strokeStyle = "#7A1000"; c.stroke();
+                        flamePath(c, x, y + s * 0.17, s * 0.55);
+                        c.fillStyle = "#FFE066"; c.fill();
+                        break;
+                    }
+                    case 'eye': {
+                        c.beginPath();
+                        c.moveTo(x - s * 0.5, y);
+                        c.quadraticCurveTo(x, y - s * 0.48, x + s * 0.5, y);
+                        c.quadraticCurveTo(x, y + s * 0.48, x - s * 0.5, y);
+                        c.closePath();
+                        c.fillStyle = "#FFFFFF"; c.fill();
+                        c.lineWidth = Math.max(1, s * 0.07); c.strokeStyle = "#FF0055"; c.stroke();
+                        c.beginPath(); c.arc(x, y, s * 0.17, 0, Math.PI * 2); c.fillStyle = "#FF0033"; c.fill();
+                        c.beginPath(); c.arc(x, y, s * 0.08, 0, Math.PI * 2); c.fillStyle = "#000"; c.fill();
+                        c.beginPath(); c.arc(x - s * 0.05, y - s * 0.06, s * 0.035, 0, Math.PI * 2); c.fillStyle = "#FFF"; c.fill();
+                        break;
+                    }
+                    case 'warning': {
+                        c.beginPath();
+                        c.moveTo(x, y - s * 0.45); c.lineTo(x + s * 0.5, y + s * 0.4); c.lineTo(x - s * 0.5, y + s * 0.4);
+                        c.closePath();
+                        c.fillStyle = "#FFC400"; c.fill();
+                        c.lineWidth = Math.max(1, s * 0.08); c.strokeStyle = "#3a2a00"; c.stroke();
+                        c.fillStyle = "#1a1200";
+                        c.fillRect(x - s * 0.05, y - s * 0.18, s * 0.1, s * 0.32);
+                        c.beginPath(); c.arc(x, y + s * 0.26, s * 0.06, 0, Math.PI * 2); c.fill();
+                        break;
+                    }
+                    case 'crown': {
+                        const pts = [[2, 16], [2, 6], [7, 10], [12, 2], [17, 10], [22, 6], [22, 16]];
+                        const X = (px) => x + ((px - 12) / 24) * s, Y = (py) => y + ((py - 10.5) / 24) * s;
+                        c.beginPath();
+                        pts.forEach((p, i) => { if (i === 0) c.moveTo(X(p[0]), Y(p[1])); else c.lineTo(X(p[0]), Y(p[1])); });
+                        c.closePath();
+                        c.fillStyle = "#FFD700"; c.fill();
+                        c.lineWidth = Math.max(1, s * 0.06); c.strokeStyle = "#8B6508"; c.stroke();
+                        c.fillStyle = "#DAA520"; c.fillRect(X(2), Y(16), (20 / 24) * s, (3 / 24) * s);
+                        c.fillStyle = "#FF3366"; c.beginPath(); c.arc(X(12), Y(12), s * 0.07, 0, Math.PI * 2); c.fill();
+                        c.fillStyle = "#FFF3A0";
+                        [[12, 2], [2, 6], [22, 6]].forEach(p => { c.beginPath(); c.arc(X(p[0]), Y(p[1]), s * 0.06, 0, Math.PI * 2); c.fill(); });
+                        break;
+                    }
+                    case 'moon': {
+                        let g = c.createRadialGradient(x - s * 0.15, y - s * 0.15, s * 0.05, x, y, s * 0.45);
+                        g.addColorStop(0, "#FFC890"); g.addColorStop(1, "#C04000");
+                        c.beginPath(); c.arc(x, y, s * 0.45, 0, Math.PI * 2); c.fillStyle = g; c.fill();
+                        c.fillStyle = "rgba(120, 20, 0, 0.6)";
+                        c.beginPath(); c.arc(x + s * 0.12, y - s * 0.1, s * 0.1, 0, Math.PI * 2); c.fill();
+                        c.beginPath(); c.arc(x - s * 0.14, y + s * 0.14, s * 0.08, 0, Math.PI * 2); c.fill();
+                        c.beginPath(); c.arc(x + s * 0.15, y + s * 0.2, s * 0.05, 0, Math.PI * 2); c.fill();
+                        break;
+                    }
+                    case 'dot': {
+                        let g = c.createRadialGradient(x - s * 0.12, y - s * 0.12, s * 0.03, x, y, s * 0.4);
+                        g.addColorStop(0, "#FFFFFF"); g.addColorStop(0.35, "#FF2020"); g.addColorStop(1, "#7A0000");
+                        c.beginPath(); c.arc(x, y, s * 0.38, 0, Math.PI * 2); c.fillStyle = g; c.fill();
+                        c.lineWidth = 1; c.strokeStyle = "rgba(255,255,255,0.7)"; c.stroke();
+                        break;
+                    }
+                    case 'vortex': {
+                        c.beginPath(); c.arc(x, y, s * 0.45, 0, Math.PI * 2); c.fillStyle = "#05000A"; c.fill();
+                        c.lineWidth = Math.max(1, s * 0.1); c.strokeStyle = "#CC33FF"; c.stroke();
+                        c.beginPath(); c.arc(x, y, s * 0.24, 0.3, Math.PI * 1.7); c.lineWidth = Math.max(1, s * 0.07); c.strokeStyle = "#8A2BE2"; c.stroke();
+                        break;
+                    }
+                }
+                c.restore();
+            }
+
             function draw() {
                 ctx.fillStyle = "#06060E"; ctx.fillRect(0, 0, canvas.width, canvas.height);
                 ctx.fillStyle = "rgba(255, 255, 255, 0.4)"; bgStarsLayer1.forEach(s => { let px = (s.x - camX * 0.08) % canvas.width; if (px < 0) px += canvas.width; let py = (s.y - camY * 0.08) % canvas.height; if (py < 0) py += canvas.height; ctx.beginPath(); ctx.arc(px, py, s.r, 0, Math.PI * 2); ctx.fill(); });
@@ -932,7 +1265,10 @@ else:
                         ctx.fillStyle = meteor.isPhase2 ? "#FF0000" : "#FF4500"; ctx.fillRect(-barW/2 + 1, -meteor.r - 39, (barW - 2) * bossHpPct, barH - 2); 
                         ctx.strokeStyle = "#FFFFFF"; ctx.lineWidth = 2; ctx.strokeRect(-barW/2, -meteor.r - 40, barW, barH);
                         ctx.fillStyle = "#FFD700"; ctx.font = "bold 16px sans-serif"; ctx.textAlign = "center"; 
-                        ctx.fillText(`${meteor.isPhase2 ? '🔴 LUNA CÍCLOPE (FASE 2)' : '🌕 LUNA SANGRIENTA'}: ${Math.ceil(meteor.hp)} / ${meteor.maxHp} HP`, 0, -meteor.r - 48); 
+                        let bossLabel = `${meteor.isPhase2 ? 'LUNA CÍCLOPE (FASE 2)' : 'LUNA SANGRIENTA'}: ${Math.ceil(meteor.hp)} / ${meteor.maxHp} HP`;
+                        ctx.fillText(bossLabel, 0, -meteor.r - 48);
+                        let blw = ctx.measureText(bossLabel).width; drawIcon(ctx, meteor.isPhase2 ? 'eye' : 'moon', -blw / 2 - 14, -meteor.r - 54, 20);
+                        
                         ctx.restore();
                     }
                 }
@@ -942,14 +1278,16 @@ else:
                     let grad = ctx.createRadialGradient(0, 0, blackHole.r * 0.4, 0, 0, blackHole.r * 1.5); grad.addColorStop(0, "#000"); grad.addColorStop(0.5, "#8A2BE2"); grad.addColorStop(1, "rgba(255, 0, 128, 0)");
                     ctx.beginPath(); ctx.arc(0, 0, blackHole.r * 1.5, 0, Math.PI * 2); ctx.fillStyle = grad; ctx.fill(); ctx.beginPath(); ctx.arc(0, 0, blackHole.r, 0, Math.PI * 2); ctx.fillStyle = "#05000A"; ctx.fill();
                     let bhHpPct = Math.max(0, blackHole.hp / blackHole.maxHp); let barW = 160, barH = 12; ctx.fillStyle = "rgba(0,0,0,0.7)"; ctx.fillRect(-barW/2, -blackHole.r * 1.5 - 28, barW, barH); ctx.fillStyle = "#CC33FF"; ctx.fillRect(-barW/2 + 1, -blackHole.r * 1.5 - 27, (barW - 2) * bhHpPct, barH - 2); ctx.strokeStyle = "#FFFFFF"; ctx.lineWidth = 1; ctx.strokeRect(-barW/2, -blackHole.r * 1.5 - 28, barW, barH);
-                    ctx.fillStyle = "#FFD700"; ctx.font = "bold 14px sans-serif"; ctx.textAlign = "center"; ctx.fillText(`🕳️ AGUJERO NEGRO: ${Math.ceil(blackHole.hp)} / ${blackHole.maxHp} HP`, 0, -blackHole.r * 1.5 - 35); ctx.restore();
+                    ctx.fillStyle = "#FFD700"; ctx.font = "bold 14px sans-serif"; ctx.textAlign = "center"; let bhLabel = `AGUJERO NEGRO: ${Math.ceil(blackHole.hp)} / ${blackHole.maxHp} HP`; ctx.fillText(bhLabel, 0, -blackHole.r * 1.5 - 35);
+                    let bhw = ctx.measureText(bhLabel).width; drawIcon(ctx, 'vortex', -bhw / 2 - 13, -blackHole.r * 1.5 - 40, 18); ctx.restore();
                 }
 
                 boxes.forEach(b => { ctx.save(); ctx.translate(b.x, b.y); ctx.fillStyle = "#FFD700"; ctx.strokeStyle = "#FF8C00"; ctx.lineWidth = 3; ctx.fillRect(-b.r, -b.r, b.r*2, b.r*2); ctx.strokeRect(-b.r, -b.r, b.r*2, b.r*2); ctx.fillStyle = "#000"; ctx.font = "bold 16px sans-serif"; ctx.textAlign = "center"; ctx.fillText("?", 0, 5); ctx.restore(); });
-                redBoxes.forEach(rb => { ctx.save(); ctx.translate(rb.x, rb.y); ctx.fillStyle = "#FF0000"; ctx.strokeStyle = "#8B0000"; ctx.lineWidth = 3; ctx.fillRect(-rb.r, -rb.r, rb.r*2, rb.r*2); ctx.strokeRect(-rb.r, -rb.r, rb.r*2, rb.r*2); ctx.fillStyle = "#FFF"; ctx.font = "bold 16px sans-serif"; ctx.textAlign = "center"; ctx.fillText("🔥", 0, 6); ctx.restore(); });
+                redBoxes.forEach(rb => { ctx.save(); ctx.translate(rb.x, rb.y); ctx.fillStyle = "#FF0000"; ctx.strokeStyle = "#8B0000"; ctx.lineWidth = 3; ctx.fillRect(-rb.r, -rb.r, rb.r*2, rb.r*2); ctx.strokeRect(-rb.r, -rb.r, rb.r*2, rb.r*2); drawIcon(ctx, 'fire', 0, 0, rb.r * 1.4); ctx.restore(); });
 
                 orbs.forEach(o => { ctx.save(); ctx.translate(o.x, o.y); ctx.beginPath(); ctx.arc(0, 0, o.r, 0, Math.PI * 2); ctx.fillStyle = o.type === 'celeste' ? '#00FFFF' : '#CC33FF'; ctx.fill(); ctx.strokeStyle = "white"; ctx.lineWidth = 2; ctx.stroke(); ctx.globalAlpha = 0.5; ctx.beginPath(); ctx.arc(0, 0, o.r + Math.sin(Date.now() / 150)*4, 0, Math.PI * 2); ctx.strokeStyle = o.type === 'celeste' ? '#00FFFF' : '#CC33FF'; ctx.lineWidth = 2; ctx.stroke(); ctx.restore(); });
-                hearts.forEach(h => { ctx.font = "16px sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText("❤️", h.x, h.y); });
+                hearts.forEach(h => { drawIcon(ctx, 'heart', h.x, h.y, 20); });
+                ctx.textBaseline = "middle";
                 particles.forEach(p => { ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, Math.PI * 2); ctx.fillStyle = p.color; ctx.fill(); });
                 
                 lasers.forEach(l => { 
@@ -979,24 +1317,38 @@ else:
                         let hpP = Math.max(0, s.hp / s.maxHp); ctx.fillStyle = "rgba(0,0,0,0.5)"; ctx.fillRect(s.x - 15, s.y - s.r - 12, 30, 4);
                         ctx.fillStyle = s.hp > (s.maxHp*0.5) ? "#33FF66" : (s.hp > (s.maxHp*0.2) ? "#FFFF33" : "#FF3333"); ctx.fillRect(s.x - 15, s.y - s.r - 12, 30 * hpP, 4);
                     }
-                    ctx.fillStyle = "white"; ctx.font = "bold 12px sans-serif"; ctx.textAlign = "center"; ctx.fillText(s.name + (s.r >= LARGE_THRESHOLD ? " 👑" : ""), s.x, s.y + s.r + 15);
+                    ctx.fillStyle = "white"; ctx.font = "bold 12px sans-serif"; ctx.textAlign = "center"; ctx.fillText(s.name, s.x, s.y + s.r + 15);
+                    if (s.r >= LARGE_THRESHOLD) { let nw = ctx.measureText(s.name).width; drawIcon(ctx, 'crown', s.x + nw / 2 + 12, s.y + s.r + 14, 16); }
                 });
 
-                floatingTexts.forEach(ft => { ctx.fillStyle = ft.color; ctx.font = "bold " + (ft.size || 14) + "px sans-serif"; ctx.textAlign = "center"; ctx.fillText(ft.text, ft.x, ft.y); });
+                floatingTexts.forEach(ft => {
+                    let fs = ft.size || 14;
+                    ctx.save(); ctx.globalAlpha = Math.min(1, ft.life / 15);
+                    ctx.fillStyle = ft.color; ctx.font = "bold " + fs + "px sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+                    ctx.fillText(ft.text, ft.x, ft.y);
+                    if (ft.icon) {
+                        let w = ctx.measureText(ft.text).width; let is = fs * 1.15;
+                        drawIcon(ctx, ft.icon, ft.x - w / 2 - is * 0.7, ft.y, is, ft.color);
+                        if (ft.iconBoth) drawIcon(ctx, ft.icon, ft.x + w / 2 + is * 0.7, ft.y, is, ft.color);
+                    }
+                    ctx.restore();
+                });
                 ctx.restore();
 
                 ctx.save(); let x = 12, y = canvas.height - 45; ctx.fillStyle = "#FFF"; ctx.font = "bold 14px sans-serif"; ctx.textAlign = "left";
-                let corazones = "❤️".repeat(Math.max(0, playerLives)) + "🖤".repeat(Math.max(0, 5 - playerLives)); ctx.fillText(`VIDAS: ${corazones}`, x, y - 35);
+                ctx.fillText("VIDAS:", x, y - 35); let vw = ctx.measureText("VIDAS: ").width;
+                for(let i = 0; i < 5; i++) { drawIcon(ctx, i < playerLives ? 'heart' : 'heartEmpty', x + vw + 10 + i * 22, y - 40, 18); }
                 ctx.fillStyle = "rgba(10, 10, 20, 0.85)"; ctx.strokeStyle = "#444"; ctx.lineWidth = 2; ctx.fillRect(x, y, 220, 18); ctx.strokeRect(x, y, 220, 18);
                 let hpPct = Math.max(0, player.hp / player.maxHp); ctx.fillStyle = player.hp > (player.maxHp*0.5) ? "#33FF66" : (player.hp > (player.maxHp*0.2) ? "#FFFF33" : "#FF3333"); ctx.fillRect(x + 2, y + 2, 216 * hpPct, 14);
                 ctx.fillStyle = "#FFF"; ctx.font = "bold 11px sans-serif"; ctx.textAlign = "center"; ctx.fillText(`SALUD: ${Math.ceil(player.hp)} / ${Math.ceil(player.maxHp)} HP`, x + 110, y + 13);
 
-                for(let i = 0; i < 4; i++) { ctx.beginPath(); ctx.arc(x + (i * 22) + 10, y - 14, 7, 0, Math.PI * 2); ctx.fillStyle = i < player.shields ? "#A0A0A0" : "rgba(80, 80, 80, 0.3)"; ctx.fill(); ctx.strokeStyle = "#FFF"; ctx.lineWidth = 1; ctx.stroke(); }
+                for(let i = 0; i < 4; i++) { drawIcon(ctx, i < player.shields ? 'shield' : 'shieldEmpty', x + (i * 22) + 10, y - 14, 18); }
                 
-                let buffStatus = "";
-                if(player.hasInvulnCharge || player.invulnTimer > 0) { buffStatus += (player.invulnTimer > 0 ? `👻 FANTASMA: ${(player.invulnTimer/60).toFixed(1)}s   ` : "👻 [ESPACIO] FANTASMA LISTO   "); }
-                if(player.continuousLaserTimer > 0) { buffStatus += `🔴 LÁSER CONTINUO: ${(player.continuousLaserTimer/60).toFixed(1)}s`; }
-                if(buffStatus !== "") { ctx.fillStyle = "#FFD700"; ctx.font = "bold 12px sans-serif"; ctx.textAlign = "left"; ctx.fillText(buffStatus, x, y - 55); }
+                let bx = x; const by = y - 58;
+                ctx.font = "bold 12px sans-serif"; ctx.textAlign = "left";
+                const buffSeg = (icon, text) => { drawIcon(ctx, icon, bx + 8, by - 4, 16); ctx.fillStyle = "#FFD700"; ctx.fillText(text, bx + 20, by); bx += 20 + ctx.measureText(text).width + 18; };
+                if(player.hasInvulnCharge || player.invulnTimer > 0) { buffSeg('ghost', player.invulnTimer > 0 ? `FANTASMA: ${(player.invulnTimer/60).toFixed(1)}s` : "[ESPACIO] FANTASMA LISTO"); }
+                if(player.continuousLaserTimer > 0) { buffSeg('dot', `LÁSER CONTINUO: ${(player.continuousLaserTimer/60).toFixed(1)}s`); }
                 ctx.restore();
             }
 
@@ -1011,4 +1363,4 @@ else:
     codigo_juego_listo = codigo_juego_listo.replace("__AUDIO_SRC__", audio_src)
     codigo_juego_listo = codigo_juego_listo.replace("__SFX_DATA__", sfx_json)
     
-    components.html(codigo_juego_listo, height=680, width=1200, scrolling=False)
+    components.html(codigo_juego_listo, height=850, scrolling=False)
