@@ -3,26 +3,8 @@ import streamlit.components.v1 as components
 import base64
 import os
 import json
-import math
 
 st.set_page_config(page_title="Star.io - Batalla Galáctica", layout="wide")
-
-
-def svg_estrella(size=52):
-    pts = []
-    for i in range(10):
-        r = 22 if i % 2 == 0 else 9
-        a = -math.pi / 2 + i * math.pi / 5
-        pts.append(f"{24 + r * math.cos(a):.2f},{24 + r * math.sin(a):.2f}")
-    return (
-        f'<svg viewBox="0 0 48 48" width="{size}" height="{size}">'
-        '<defs><linearGradient id="gstar" x1="0" y1="0" x2="0" y2="1">'
-        '<stop offset="0%" stop-color="#FFF6A0"/><stop offset="100%" stop-color="#FFB800"/>'
-        '</linearGradient></defs>'
-        f'<polygon points="{" ".join(pts)}" fill="url(#gstar)" stroke="#FF8C00" stroke-width="2" stroke-linejoin="round"/>'
-        '<circle cx="19" cy="20" r="2" fill="#5a3a00"/><circle cx="29" cy="20" r="2" fill="#5a3a00"/>'
-        '</svg>'
-    )
 
 # ==========================================
 # CONFIGURACIÓN DE AUDIO RISO
@@ -62,50 +44,22 @@ for cat, rutas in rutas_sfx.items():
 
 sfx_json = json.dumps(sfx_data)
 
-if 'jugando' not in st.session_state:
-    st.session_state.jugando = False
-if 'nickname' not in st.session_state:
-    st.session_state.nickname = "TÚ"
-
-def iniciar_juego():
-    nombre = st.session_state.nickname_input.strip()
-    st.session_state.nickname = nombre if nombre else "TÚ"
-    st.session_state.jugando = True
-
-def volver_menu():
-    st.session_state.jugando = False
-
-if not st.session_state.jugando:
-    st.markdown(
-        '<div style="display:flex;align-items:center;gap:14px;margin-bottom:4px;">'
-        + svg_estrella(52)
-        + '<h1 style="margin:0;padding:0;">StarZ.io - Batalla Galáctica</h1></div>',
-        unsafe_allow_html=True,
-    )
-    st.write("Sobrevive y pasa etapas matando a los bosses finales")
-    col1, col2, col3 = st.columns([1,2,1])
-    with col2:
-        st.text_input("Ingresa tu Nickname Estrella:", value=st.session_state.nickname, key="nickname_input", max_chars=12)
-        st.write("---")
-        st.button("JUGAR AHORA", on_click=iniciar_juego, type="primary", use_container_width=True)
-
-else:
-    # Mientras se juega: sin encabezado, sin márgenes y la página NO puede hacer scroll.
-    # El juego ocupa todo el alto de la ventana.
-    st.markdown("""
+# El juego ocupa toda la pantalla del navegador y la página nunca hace scroll
+st.markdown("""
 <style>
-header[data-testid="stHeader"], [data-testid="stToolbar"], footer { display: none !important; }
-.block-container, [data-testid="stMainBlockContainer"] { padding-top: 0.6rem !important; padding-bottom: 0 !important; padding-left: 0.8rem !important; padding-right: 0.8rem !important; max-width: 100% !important; }
-html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"], section.main { overflow: hidden !important; overscroll-behavior: none !important; }
-iframe { height: calc(100vh - 95px) !important; width: 100% !important; border: none !important; border-radius: 10px; }
+header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecoration"], [data-testid="stSidebarCollapsedControl"], footer { display: none !important; }
+.block-container, [data-testid="stMainBlockContainer"] { padding: 0 !important; max-width: 100% !important; }
+html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"], section.main { overflow: hidden !important; overscroll-behavior: none !important; background: #050508 !important; }
+iframe { position: fixed !important; top: 0 !important; left: 0 !important; width: 100vw !important; height: 100vh !important; border: none !important; z-index: 999 !important; }
 </style>
 """, unsafe_allow_html=True)
-    st.button("Volver al Menú Principal", on_click=volver_menu)
-    
-    codigo_juego_template = """
+
+codigo_juego_template = """
     <!DOCTYPE html>
     <html>
     <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&display=swap" rel="stylesheet">
         <style>
             html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; overscroll-behavior: none; background-color: #050508; user-select: none; font-family: sans-serif; }
             #game-root { position: relative; width: 100vw; height: 100vh; overflow: hidden; }
@@ -127,8 +81,34 @@ iframe { height: calc(100vh - 95px) !important; width: 100% !important; border: 
             #mute-btn:hover, #settings-btn:hover { transform: scale(1.15); }
 
             /* Ajustes de radio vintage tipo Caja Fuerte */
-            #settings-modal { display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #2b1d14; border: 6px solid #1a110b; border-radius: 16px; padding: 25px; z-index: 20; color: #fff; text-align: center; box-shadow: inset 0 0 20px #000, 0 15px 40px rgba(0,0,0,0.95); width: 340px; }
+            #settings-modal { display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #2b1d14; border: 6px solid #1a110b; border-radius: 16px; padding: 25px; z-index: 40; color: #fff; text-align: center; box-shadow: inset 0 0 20px #000, 0 15px 40px rgba(0,0,0,0.95); width: 340px; }
             #close-settings { position: absolute; top: 10px; right: 12px; background: none; border: none; color: #d4af37; cursor: pointer; padding: 2px; display: flex; }
+            /* ===== MENÚ PRINCIPAL ===== */
+            #main-menu { position: absolute; inset: 0; z-index: 30; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 26px; background: radial-gradient(ellipse at center, rgba(5, 5, 20, 0.15) 0%, rgba(5, 5, 12, 0.75) 75%); font-family: 'Orbitron', 'Segoe UI', sans-serif; }
+            .menu-logo { display: flex; align-items: center; gap: 18px; }
+            .menu-logo svg { filter: drop-shadow(0 0 18px rgba(255, 200, 0, 0.55)); animation: logoSpin 14s linear infinite; }
+            @keyframes logoSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+            @media (prefers-reduced-motion: reduce) { .menu-logo svg { animation: none; } }
+            .menu-title { margin: 0; font-size: clamp(42px, 7vw, 84px); font-weight: 900; line-height: 1; color: #FFFFFF; letter-spacing: 3px; text-shadow: 0 0 10px #00FFFF, 0 0 30px rgba(0, 255, 255, 0.6), 4px 4px 0 #CC33FF; }
+            .menu-sub { margin-top: 8px; font-size: clamp(13px, 1.6vw, 18px); font-weight: 700; color: #FFD700; letter-spacing: 8px; }
+            .menu-panel { width: min(360px, 86vw); display: flex; flex-direction: column; gap: 14px; padding: 26px 24px; background: rgba(10, 10, 22, 0.88); border: 2px solid #00FFFF; border-radius: 16px; box-shadow: 0 0 25px rgba(0, 255, 255, 0.3), inset 0 0 25px rgba(0, 255, 255, 0.06); }
+            .menu-pilot { text-align: center; color: #9adfe6; font-size: 13px; letter-spacing: 2px; margin-bottom: 4px; }
+            .menu-pilot b { color: #FFFFFF; font-size: 16px; }
+            .menu-btn { display: flex; align-items: center; gap: 14px; width: 100%; padding: 14px 18px; font-family: inherit; font-size: 19px; font-weight: 700; letter-spacing: 3px; color: #00FFFF; background: #0d1424; border: 2px solid #00b8c4; border-radius: 10px; cursor: pointer; transition: transform 0.12s, background 0.12s, box-shadow 0.12s; }
+            .menu-btn svg { flex-shrink: 0; }
+            .menu-btn:hover, .menu-btn:focus-visible { background: #12233a; transform: translateX(4px); box-shadow: 0 0 14px rgba(0, 255, 255, 0.45); outline: none; }
+            .menu-btn.primary { justify-content: center; font-size: 26px; padding: 18px; color: #06060E; background: linear-gradient(180deg, #7DFFFF 0%, #00D5E0 100%); border-color: #FFFFFF; box-shadow: 0 0 22px rgba(0, 255, 255, 0.55); }
+            .menu-btn.primary:hover, .menu-btn.primary:focus-visible { transform: scale(1.04); background: linear-gradient(180deg, #A8FFFF 0%, #22E5EE 100%); }
+            #name-panel { display: none; gap: 8px; }
+            #name-input { flex: 1; min-width: 0; padding: 10px 12px; font-family: inherit; font-size: 16px; font-weight: 700; letter-spacing: 1px; color: #FFFFFF; background: #05050c; border: 2px solid #CC33FF; border-radius: 8px; outline: none; }
+            #name-input:focus { box-shadow: 0 0 10px rgba(204, 51, 255, 0.6); }
+            #name-ok { padding: 0 14px; font-family: inherit; font-weight: 700; font-size: 14px; color: #FFFFFF; background: #CC33FF; border: none; border-radius: 8px; cursor: pointer; }
+            .menu-controls { display: flex; gap: 22px; flex-wrap: wrap; justify-content: center; color: #8a93b0; font-size: 11px; letter-spacing: 1px; }
+            .menu-controls span { display: flex; align-items: center; gap: 8px; }
+            .key { font-style: normal; display: inline-block; padding: 4px 8px; color: #FFFFFF; background: #1a1d2e; border: 1px solid #3a4060; border-bottom-width: 3px; border-radius: 5px; font-size: 10px; font-weight: 700; }
+            #home-btn { background: none; border: none; cursor: pointer; padding: 0; margin: 0; outline: none; transition: transform 0.2s; display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; }
+            #home-btn:hover { transform: scale(1.15); }
+
             #gameover-skull { display: none; margin: 0 auto 4px auto; width: 64px; height: 64px; filter: drop-shadow(0 0 10px rgba(255, 51, 51, 0.7)); }
             #close-settings:hover { color: #fff; }
             .radio-title { display: flex; align-items: center; justify-content: center; gap: 10px; margin: 0 0 20px 0; color: #d4af37; font-family: 'Courier New', Courier, monospace; letter-spacing: 2px; font-size: 22px; text-shadow: 1px 1px 2px #000; border-bottom: 2px solid #1a110b; padding-bottom: 10px; }
@@ -192,6 +172,9 @@ iframe { height: calc(100vh - 95px) !important; width: 100% !important; border: 
             <canvas id="gameCanvas"></canvas>
 
             <div id="audio-controls">
+                <button id="home-btn" title="Volver al menú">
+                    <svg viewBox="0 0 24 24" width="24" height="24"><path d="M3 11.5 L12 4 L21 11.5" fill="none" stroke="#00FFFF" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 10 V20 H10 V14.5 H14 V20 H18 V10" fill="none" stroke="#00FFFF" stroke-width="2.2" stroke-linejoin="round"/></svg>
+                </button>
                 <button id="mute-btn" title="Activar/Silenciar"></button>
                 <button id="settings-btn" title="Ajustes de Sonido">
                     <svg viewBox="0 0 24 24" width="24" height="24">
@@ -232,6 +215,48 @@ iframe { height: calc(100vh - 95px) !important; width: 100% !important; border: 
                 <div style="display:flex; gap:20px; justify-content:center;">
                     <button id="orb-btn1" class="orb-btn"></button>
                     <button id="orb-btn2" class="orb-btn"></button>
+                </div>
+            </div>
+
+            <!-- MENÚ PRINCIPAL -->
+            <div id="main-menu">
+                <div class="menu-logo">
+                    <svg viewBox="0 0 48 48" width="96" height="96">
+                        <defs><linearGradient id="logo-grad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#FFF6A0"/><stop offset="100%" stop-color="#FFB800"/></linearGradient></defs>
+                        <polygon points="24.00,2.00 29.29,16.72 44.92,17.20 32.56,26.78 36.93,41.80 24.00,33.00 11.07,41.80 15.44,26.78 3.08,17.20 18.71,16.72" fill="url(#logo-grad)" stroke="#FF8C00" stroke-width="1.6" stroke-linejoin="round"/>
+                        <circle cx="20" cy="22" r="1.8" fill="#5a3a00"/><circle cx="28" cy="22" r="1.8" fill="#5a3a00"/>
+                    </svg>
+                    <div>
+                        <h1 class="menu-title">StarZ.io</h1>
+                        <div class="menu-sub">BATALLA GALÁCTICA</div>
+                    </div>
+                </div>
+
+                <div class="menu-panel">
+                    <div class="menu-pilot">PILOTO <b id="menu-name">TÚ</b></div>
+                    <button class="menu-btn primary" id="btn-play">
+                        <svg viewBox="0 0 24 24" width="26" height="26"><path d="M7 4.5 L19.5 12 L7 19.5 Z" fill="#06060E" stroke="#06060E" stroke-width="2" stroke-linejoin="round"/></svg>
+                        JUGAR
+                    </button>
+                    <button class="menu-btn" id="btn-sound">
+                        <svg viewBox="0 0 24 24" width="24" height="24"><path d="M3 9 H7 L12 5 V19 L7 15 H3 Z" fill="#00FFFF"/><path d="M15.5 8.5 A5 5 0 0 1 15.5 15.5" stroke="#00FFFF" stroke-width="2" fill="none" stroke-linecap="round"/><path d="M18.5 5.5 A9 9 0 0 1 18.5 18.5" stroke="#00FFFF" stroke-width="2" fill="none" stroke-linecap="round"/></svg>
+                        SONIDO
+                    </button>
+                    <button class="menu-btn" id="btn-name">
+                        <svg viewBox="0 0 24 24" width="24" height="24"><circle cx="12" cy="8" r="4" fill="none" stroke="#00FFFF" stroke-width="2.2"/><path d="M4 21 C4 15.5 8 13.5 12 13.5 C16 13.5 20 15.5 20 21" fill="none" stroke="#00FFFF" stroke-width="2.2" stroke-linecap="round"/></svg>
+                        NOMBRE
+                    </button>
+                    <div id="name-panel">
+                        <input id="name-input" type="text" maxlength="12" placeholder="Tu nombre" autocomplete="off">
+                        <button id="name-ok">LISTO</button>
+                    </div>
+                </div>
+
+                <div class="menu-controls">
+                    <span><i class="key">CLICK IZQ</i> Disparar</span>
+                    <span><i class="key">CLICK DER</i> Dash</span>
+                    <span><i class="key">ESPACIO</i> Modo fantasma</span>
+                    <span><i class="key">MOUSE</i> Moverse</span>
                 </div>
             </div>
 
@@ -278,6 +303,11 @@ iframe { height: calc(100vh - 95px) !important; width: 100% !important; border: 
             const sfxData = __SFX_DATA__; 
             let bgMusic = null;
             let isUserInteracted = false;
+            let usingBossTrack = false;
+            let gameState = 'menu';   // 'menu' o 'playing'
+
+            let playerName = "TÚ";
+            try { let saved = localStorage.getItem('starz_name'); if (saved) playerName = saved; } catch (e) {}
             
             let musicVolume = 0.3;
             let sfxVolume = 0.5;
@@ -500,7 +530,8 @@ iframe { height: calc(100vh - 95px) !important; width: 100% !important; border: 
                 }
             }
 
-            document.getElementById("gameCanvas").addEventListener('mousedown', () => {
+            // El primer click en cualquier parte (menú o juego) activa la música
+            document.addEventListener('pointerdown', () => {
                 if (!isUserInteracted) {
                     isUserInteracted = true;
                     if (bgMusic && bgMusic.paused && musicVolume > 0) { 
@@ -591,14 +622,14 @@ iframe { height: calc(100vh - 95px) !important; width: 100% !important; border: 
             });
 
             canvas.addEventListener('mousedown', (e) => {
-                if(isPaused) return;
-                if(player.dead) { if (playerLives > 0) respawnPlayer(); return; }
+                if(gameState !== 'playing' || isPaused) return;
+                if(player.dead) { if (playerLives > 0) respawnPlayer(); else goToMenu(); return; }
                 if(e.button === 0) shootLaser();
                 else if(e.button === 2) { e.preventDefault(); triggerDash(); }
             });
 
             window.addEventListener('keydown', (e) => {
-                if(isPaused) return;
+                if(gameState !== 'playing' || isPaused) return;
                 if(e.code === 'Space') {
                     e.preventDefault();
                     if(player.dead) { if(playerLives > 0) respawnPlayer(); } 
@@ -612,7 +643,7 @@ iframe { height: calc(100vh - 95px) !important; width: 100% !important; border: 
                 playSfx("death", 0.3);
                 overScreen.style.display = 'block';
                 if(playerLives > 0) { overSkull.style.display = 'none'; overTitle.innerText = "te moriste stupid"; overMsg.innerText = `DALE CLICK PARA REAPARECER (${playerLives} VIDAS RESTANTES)`; overMsg.style.color = "#00FFFF"; } 
-                else { overSkull.style.display = 'block'; overTitle.innerText = "FIN DE LA PARTIDA"; overMsg.innerText = "SIN VIDAS - JUEGO TERMINADO - VUELVE AL MENÚ"; overMsg.style.color = "#FF3333"; }
+                else { overSkull.style.display = 'block'; overTitle.innerText = "FIN DE LA PARTIDA"; overMsg.innerText = "SIN VIDAS - DALE CLICK PARA VOLVER AL MENÚ"; overMsg.style.color = "#FF3333"; }
             }
 
             function respawnPlayer() {
@@ -699,6 +730,13 @@ iframe { height: calc(100vh - 95px) !important; width: 100% !important; border: 
 
             function init() {
                 isGameOver = false; isPaused = false; playerLives = 5; cinematicTimer = 0; orbModal.style.display = 'none'; overScreen.style.display = 'none';
+                dashTimer = 0; lastDashTime = 0;
+                blackHole = { x: worldW * 0.7, y: worldH * 0.3, r: 75, hp: 10000, maxHp: 10000, dead: false };
+                if (bgMusic && usingBossTrack && audioSrc) {
+                    let wasPlaying = !bgMusic.paused;
+                    bgMusic.pause(); bgMusic.src = audioSrc; usingBossTrack = false; bgMusic.currentTime = 0;
+                    if (wasPlaying) bgMusic.play().catch(() => {});
+                }
                 floatingTexts = []; lasers = []; particles = []; boxes = []; redBoxes = []; hearts = []; orbs = [];
                 
                 meteor = { 
@@ -709,7 +747,7 @@ iframe { height: calc(100vh - 95px) !important; width: 100% !important; border: 
                 };
 
                 player = { 
-                    x: Math.random() * worldW, y: Math.random() * worldH, r: 18, color: '#FFFFFF', name: "__PLAYER_NICKNAME__", speed: 3.5, dead: false,
+                    x: Math.random() * worldW, y: Math.random() * worldH, r: 18, color: '#FFFFFF', name: playerName, speed: 3.5, dead: false,
                     hp: 200, maxHp: 200, shields: 0, hasInvulnCharge: false, invulnTimer: 0, fireTimer: 0, speedBoostTimer: 0,
                     laserRange: 1.0, laserDamage: 1.0, multiLevel: 1, crossLevel: 0, continuousLaserTimer: 0
                 };
@@ -719,11 +757,27 @@ iframe { height: calc(100vh - 95px) !important; width: 100% !important; border: 
                 for(let i=0; i<35; i++) spawnHeart();
                 
                 spawnBox(); spawnBox(); spawnRedBox(); spawnOrb();
-                loop();
             }
 
             function spawnBot() { bots.push({ x: Math.random() * worldW, y: Math.random() * worldH, r: Math.random() * 20 + 10, color: randomColor(), name: randomName(), vx: (Math.random() - 0.5) * 4, vy: (Math.random() - 0.5) * 4, hp: 200, maxHp: 200, lastShootTime: 0, dead: false, lastBurnTime: 0 }); }
             function spawnFood() { foods.push({ x: Math.random() * worldW, y: Math.random() * worldH, r: 3.5, color: randomColor() }); }
+
+            // Al eliminar un enemigo suelta la mitad de su masa en bolitas que salen disparadas
+            function dropMass(victim) {
+                let total = victim.r * 0.5;
+                let count = Math.max(5, Math.min(24, Math.round(victim.r / 3)));
+                let value = total / count;
+                for (let i = 0; i < count; i++) {
+                    let ang = Math.random() * Math.PI * 2;
+                    let spd = 3 + Math.random() * 6;
+                    foods.push({
+                        x: victim.x + Math.cos(ang) * victim.r * 0.4, y: victim.y + Math.sin(ang) * victim.r * 0.4,
+                        vx: Math.cos(ang) * spd, vy: Math.sin(ang) * spd,
+                        r: 4 + Math.min(6, value * 2.5), color: victim.color || randomColor(),
+                        value: value, dropped: true, life: 1800, delay: 12
+                    });
+                }
+            }
 
             function takeDamage(target, amount) {
                 if(target === player && player.invulnTimer > 0) return;
@@ -736,8 +790,9 @@ iframe { height: calc(100vh - 95px) !important; width: 100% !important; border: 
                 floatingTexts.push({ x: target.x, y: target.y - target.r - 10, text: `-${Math.ceil(realDamage)}`, color: "#FF3333", life: 30, size: 24 });
 
                 if(target === player && player.hp <= 0 && !player.dead) { player.hp = 0; player.dead = true; handlePlayerDeath(); } 
-                else if(target !== player && target.hp <= 0) { 
+                else if(target !== player && target.hp <= 0 && !target.dead) { 
                     target.dead = true; 
+                    dropMass(target);
                     floatingTexts.push({ x: target.x, y: target.y, text: "¡DESTRUIDO!", icon: "burst", color: "#FF3333", life: 40, size: 22 }); 
                 }
             }
@@ -926,7 +981,7 @@ iframe { height: calc(100vh - 95px) !important; width: 100% !important; border: 
                             playSfx("bh_death", 2.5); 
                             meteor.isBoss = true; cinematicTimer = 180;
                             if (bgMusic && sfxData["luna_musica"] && sfxData["luna_musica"].length > 0) {
-                                bgMusic.pause(); bgMusic.src = sfxData["luna_musica"][0]; bgMusic.currentTime = 0; bgMusic.play().catch(e => console.log(e));
+                                bgMusic.pause(); bgMusic.src = sfxData["luna_musica"][0]; usingBossTrack = true; bgMusic.currentTime = 0; bgMusic.play().catch(e => console.log(e));
                             }
                             floatingTexts.push({ x: meteor.x, y: meteor.y - 120, text: "LA LUNA DESPIERTA", icon: "warning", iconBoth: true, color: "#FF4500", life: 180, size: 40 });
                         } 
@@ -938,7 +993,7 @@ iframe { height: calc(100vh - 95px) !important; width: 100% !important; border: 
                         if(meteor.hp <= 0 && !meteor.dead) {
                             meteor.dead = true; playSfx("bh_death", 2.5); 
                             floatingTexts.push({ x: meteor.x, y: meteor.y, text: "VICTORIA GALÁCTICA", icon: "star", iconBoth: true, color: "#FFD700", life: 300, size: 50 });
-                            if (bgMusic && audioSrc) { bgMusic.pause(); bgMusic.src = audioSrc; bgMusic.currentTime = 0; bgMusic.play().catch(e => console.log(e)); }
+                            if (bgMusic && audioSrc) { bgMusic.pause(); bgMusic.src = audioSrc; usingBossTrack = false; bgMusic.currentTime = 0; bgMusic.play().catch(e => console.log(e)); }
                         }
                     }
 
@@ -990,7 +1045,7 @@ iframe { height: calc(100vh - 95px) !important; width: 100% !important; border: 
                                 playSfx("bh_death", 2.5);
                                 meteor.isBoss = true; cinematicTimer = 180;
                                 if (bgMusic && sfxData["luna_musica"] && sfxData["luna_musica"].length > 0) {
-                                    bgMusic.pause(); bgMusic.src = sfxData["luna_musica"][0]; bgMusic.currentTime = 0; bgMusic.play().catch(e => console.log(e));
+                                    bgMusic.pause(); bgMusic.src = sfxData["luna_musica"][0]; usingBossTrack = true; bgMusic.currentTime = 0; bgMusic.play().catch(e => console.log(e));
                                 }
                             } 
                             else { 
@@ -1002,8 +1057,20 @@ iframe { height: calc(100vh - 95px) !important; width: 100% !important; border: 
 
                 for(let i = foods.length - 1; i >= 0; i--) {
                     let f = foods[i];
+                    if (f.dropped) {
+                        f.x += f.vx; f.y += f.vy; f.vx *= 0.92; f.vy *= 0.92;
+                        f.x = Math.max(f.r, Math.min(worldW - f.r, f.x)); f.y = Math.max(f.r, Math.min(worldH - f.r, f.y));
+                        f.life--; if (f.delay > 0) f.delay--;
+                        if (f.life <= 0) { foods.splice(i, 1); continue; }
+                        if (f.delay > 0) continue;
+                    }
                     for(let e of allStars) {
-                        if(Math.hypot(e.x - f.x, e.y - f.y) < e.r) { e.r += 0.08; if(e === player) { playSfx("food"); player.hp += 0.2; if(player.hp > player.maxHp) player.maxHp = player.hp; } foods.splice(i, 1); spawnFood(); break; }
+                        if(Math.hypot(e.x - f.x, e.y - f.y) < e.r) {
+                            let gain = f.dropped ? f.value : 0.08;
+                            e.r += gain;
+                            if(e === player) { playSfx("food", f.dropped ? 0.5 : 1.0); player.hp += f.dropped ? gain * 2.5 : 0.2; if(player.hp > player.maxHp) player.maxHp = player.hp; }
+                            foods.splice(i, 1); if (!f.dropped) spawnFood(); break;
+                        }
                     }
                 }
 
@@ -1300,7 +1367,19 @@ iframe { height: calc(100vh - 95px) !important; width: 100% !important; border: 
                     }
                 });
 
-                foods.forEach(f => { ctx.beginPath(); ctx.arc(f.x, f.y, f.r, 0, Math.PI * 2); ctx.fillStyle = f.color; ctx.fill(); });
+                foods.forEach(f => {
+                    if (f.dropped) {
+                        if (f.life < 120 && Math.floor(f.life / 8) % 2 === 0) return;
+                        ctx.save();
+                        ctx.shadowColor = f.color; ctx.shadowBlur = 10;
+                        ctx.beginPath(); ctx.arc(f.x, f.y, f.r, 0, Math.PI * 2); ctx.fillStyle = f.color; ctx.fill();
+                        ctx.shadowBlur = 0; ctx.lineWidth = 1.5; ctx.strokeStyle = "rgba(255,255,255,0.7)"; ctx.stroke();
+                        ctx.beginPath(); ctx.arc(f.x - f.r * 0.3, f.y - f.r * 0.3, f.r * 0.25, 0, Math.PI * 2); ctx.fillStyle = "rgba(255,255,255,0.6)"; ctx.fill();
+                        ctx.restore();
+                    } else {
+                        ctx.beginPath(); ctx.arc(f.x, f.y, f.r, 0, Math.PI * 2); ctx.fillStyle = f.color; ctx.fill();
+                    }
+                });
 
                 let allStars = [player, ...bots].filter(s => !s.dead); allStars.sort((a, b) => a.r - b.r); 
 
@@ -1352,15 +1431,94 @@ iframe { height: calc(100vh - 95px) !important; width: 100% !important; border: 
                 ctx.restore();
             }
 
-            function loop() { if(!isPaused) update(); draw(); requestAnimationFrame(loop); }
-            init();
+            // === MENÚ PRINCIPAL ===
+            const mainMenu = document.getElementById("main-menu");
+            const menuName = document.getElementById("menu-name");
+            const namePanel = document.getElementById("name-panel");
+            const nameInput = document.getElementById("name-input");
+            const audioControls = document.getElementById("audio-controls");
+            const lbPanel = document.getElementById("leaderboard-panel");
+            menuName.innerText = playerName;
+
+            function startGame() {
+                settingsModal.style.display = 'none'; namePanel.style.display = 'none';
+                mainMenu.style.display = 'none';
+                audioControls.style.display = 'flex'; lbPanel.style.display = 'block';
+                init();
+                gameState = 'playing';
+            }
+            function goToMenu() {
+                gameState = 'menu'; isPaused = false;
+                overScreen.style.display = 'none'; orbModal.style.display = 'none'; settingsModal.style.display = 'none';
+                audioControls.style.display = 'none'; lbPanel.style.display = 'none';
+                mainMenu.style.display = 'flex';
+            }
+            function saveName() {
+                let n = nameInput.value.trim().slice(0, 12);
+                playerName = n || "TÚ";
+                menuName.innerText = playerName;
+                try { localStorage.setItem('starz_name', playerName); } catch (e) {}
+                namePanel.style.display = 'none';
+            }
+
+            document.getElementById("btn-play").addEventListener('click', startGame);
+            document.getElementById("btn-sound").addEventListener('click', () => { settingsModal.style.display = 'block'; });
+            document.getElementById("btn-name").addEventListener('click', () => {
+                let open = namePanel.style.display === 'flex';
+                namePanel.style.display = open ? 'none' : 'flex';
+                if (!open) { nameInput.value = playerName === "TÚ" ? "" : playerName; nameInput.focus(); }
+            });
+            document.getElementById("name-ok").addEventListener('click', saveName);
+            nameInput.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter') saveName(); });
+            document.getElementById("home-btn").addEventListener('mousedown', (e) => e.stopPropagation());
+            document.getElementById("home-btn").addEventListener('click', goToMenu);
+
+            // Fondo animado del menú: estrellas de colores flotando por el espacio
+            let menuT = 0;
+            let menuStars = [];
+            for (let i = 0; i < 14; i++) {
+                menuStars.push({ x: Math.random(), y: Math.random(), r: 10 + Math.random() * 34, color: randomColor(),
+                    vx: (Math.random() - 0.5) * 0.0006, vy: (Math.random() - 0.5) * 0.0006, rot: Math.random() * 6, vr: (Math.random() - 0.5) * 0.01 });
+            }
+            function drawMenu() {
+                menuT++;
+                ctx.fillStyle = "#06060E"; ctx.fillRect(0, 0, canvas.width, canvas.height);
+                let ox = menuT * 0.35, oy = menuT * 0.12;
+                ctx.fillStyle = "rgba(255, 255, 255, 0.4)";
+                bgStarsLayer1.forEach(s => { let px = (s.x - ox * 0.3) % canvas.width; if (px < 0) px += canvas.width; let py = (s.y - oy * 0.3) % canvas.height; if (py < 0) py += canvas.height; ctx.beginPath(); ctx.arc(px, py, s.r, 0, Math.PI * 2); ctx.fill(); });
+                ctx.fillStyle = "rgba(180, 200, 255, 0.7)";
+                bgStarsLayer2.forEach(s => { let px = (s.x - ox) % canvas.width; if (px < 0) px += canvas.width; let py = (s.y - oy) % canvas.height; if (py < 0) py += canvas.height; ctx.beginPath(); ctx.arc(px, py, s.r, 0, Math.PI * 2); ctx.fill(); });
+
+                // Agujero negro decorativo en una esquina
+                let bhx = canvas.width * 0.82, bhy = canvas.height * 0.78, bhr = Math.min(canvas.width, canvas.height) * 0.09;
+                let g = ctx.createRadialGradient(bhx, bhy, bhr * 0.4, bhx, bhy, bhr * 1.8);
+                g.addColorStop(0, "#000"); g.addColorStop(0.45, "rgba(138, 43, 226, 0.8)"); g.addColorStop(1, "rgba(255, 0, 128, 0)");
+                ctx.beginPath(); ctx.arc(bhx, bhy, bhr * 1.8, 0, Math.PI * 2); ctx.fillStyle = g; ctx.fill();
+                ctx.beginPath(); ctx.arc(bhx, bhy, bhr, 0, Math.PI * 2); ctx.fillStyle = "#05000A"; ctx.fill();
+
+                menuStars.forEach(s => {
+                    s.x += s.vx; s.y += s.vy; s.rot += s.vr;
+                    if (s.x < -0.05) s.x = 1.05; if (s.x > 1.05) s.x = -0.05; if (s.y < -0.05) s.y = 1.05; if (s.y > 1.05) s.y = -0.05;
+                    let fill = s.r > 30 ? `hsl(${(menuT * 2 + s.r * 6) % 360}, 90%, 60%)` : s.color;
+                    starPath(ctx, s.x * canvas.width, s.y * canvas.height, 5, s.r, s.r * 0.5, s.rot);
+                    ctx.globalAlpha = 0.85; ctx.fillStyle = fill; ctx.fill();
+                    ctx.lineWidth = 2; ctx.strokeStyle = "rgba(0,0,0,0.3)"; ctx.stroke(); ctx.globalAlpha = 1;
+                });
+            }
+
+            function mainLoop() {
+                if (gameState === 'menu') { drawMenu(); }
+                else { if(!isPaused) update(); draw(); }
+                requestAnimationFrame(mainLoop);
+            }
+            goToMenu();
+            mainLoop();
         </script>
     </body>
     </html>
     """
-    
-    codigo_juego_listo = codigo_juego_template.replace("__PLAYER_NICKNAME__", st.session_state.nickname)
-    codigo_juego_listo = codigo_juego_listo.replace("__AUDIO_SRC__", audio_src)
-    codigo_juego_listo = codigo_juego_listo.replace("__SFX_DATA__", sfx_json)
-    
-    components.html(codigo_juego_listo, height=850, scrolling=False)
+
+codigo_juego_listo = codigo_juego_template.replace("__AUDIO_SRC__", audio_src)
+codigo_juego_listo = codigo_juego_listo.replace("__SFX_DATA__", sfx_json)
+
+components.html(codigo_juego_listo, height=850, scrolling=False)
