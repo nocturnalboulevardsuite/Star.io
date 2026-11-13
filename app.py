@@ -774,7 +774,7 @@ codigo_juego_template = """
             function handlePlayerDeath() {
                 playerLives--;
                 isGameOver = true;
-                playSfx("death", 0.3);
+                playEndSfx(playerLives <= 0);
                 overScreen.style.display = 'block';
                 if(playerLives > 0) { overSkull.style.display = 'none'; overTitle.innerText = "te moriste stupid"; overMsg.innerText = `DALE CLICK PARA REAPARECER (${playerLives} VIDAS RESTANTES)`; overMsg.style.color = "#00FFFF"; } 
                 else { overSkull.style.display = 'block'; overTitle.innerText = "FIN DE LA PARTIDA"; overMsg.innerText = "SIN VIDAS - DALE CLICK PARA VOLVER AL MENÚ"; overMsg.style.color = "#FF3333"; }
@@ -1463,16 +1463,186 @@ codigo_juego_template = """
                 charSelect.style.display = 'flex';
             }
 
+            // ======================================================
+            // === SONIDO DE MUERTE ("END") Y MÚSICA DE VICTORIA ===
+            // Todo se sintetiza en el navegador: composición original, sin copyright.
+            // ======================================================
+            const midiHz = m => 440 * Math.pow(2, (m - 69) / 12);
+
+            function makeReverb(ac, seconds, decay) {
+                const len = Math.ceil(ac.sampleRate * seconds), buf = ac.createBuffer(2, len, ac.sampleRate);
+                for (let ch = 0; ch < 2; ch++) { const d = buf.getChannelData(ch); for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, decay); }
+                const c = ac.createConvolver(); c.buffer = buf; return c;
+            }
+
+            // final = true cuando ya no quedan vidas (fin de la partida)
+            function playEndSfx(final) {
+                if (!isUserInteracted || sfxVolume === 0) return;
+                try {
+                    const ac = getAudioCtx(), t = ac.currentTime;
+                    const out = ac.createGain(); out.gain.value = Math.min(1, sfxVolume * 1.2);
+                    const comp = ac.createDynamicsCompressor(); comp.threshold.value = -12; comp.ratio.value = 5;
+                    const rev = makeReverb(ac, final ? 3.5 : 2, 2.5), wet = ac.createGain(); wet.gain.value = 0.35;
+                    out.connect(comp); comp.connect(ac.destination); out.connect(rev); rev.connect(wet); wet.connect(comp);
+
+                    // Golpe grave de impacto
+                    const boom = ac.createOscillator(); boom.type = 'sine';
+                    boom.frequency.setValueAtTime(110, t); boom.frequency.exponentialRampToValueAtTime(28, t + 0.9);
+                    const bg = ac.createGain(); bg.gain.setValueAtTime(0.9, t); bg.gain.exponentialRampToValueAtTime(0.0001, t + 1.1);
+                    boom.connect(bg); bg.connect(out); boom.start(t); boom.stop(t + 1.2);
+
+                    // Notas descendentes tipo "game over" (sierras filtradas, sonido de sintetizador retro)
+                    const notes = final ? [69, 65, 62, 57, 50] : [67, 63, 60];
+                    const step = final ? 0.32 : 0.22;
+                    notes.forEach((m, i) => {
+                        const st = t + 0.12 + i * step, last = i === notes.length - 1, dur = last ? (final ? 2.4 : 0.9) : step * 1.1;
+                        [0, 7].forEach(det => {
+                            const o = ac.createOscillator(); o.type = 'sawtooth'; o.frequency.value = midiHz(m); o.detune.value = det;
+                            if (last) o.frequency.exponentialRampToValueAtTime(midiHz(m) * 0.94, st + dur);   // la última nota se "cae"
+                            const f = ac.createBiquadFilter(); f.type = 'lowpass'; f.frequency.setValueAtTime(2200, st); f.frequency.exponentialRampToValueAtTime(400, st + dur);
+                            const g = ac.createGain(); g.gain.setValueAtTime(0.0001, st); g.gain.exponentialRampToValueAtTime(0.16, st + 0.02); g.gain.setValueAtTime(0.16, st + dur * 0.6); g.gain.exponentialRampToValueAtTime(0.0001, st + dur);
+                            o.connect(f); f.connect(g); g.connect(out); o.start(st); o.stop(st + dur + 0.05);
+                        });
+                        // octava grave para darle peso
+                        const sub = ac.createOscillator(); sub.type = 'triangle'; sub.frequency.value = midiHz(m - 24);
+                        const sg = ac.createGain(); sg.gain.setValueAtTime(0.0001, st); sg.gain.exponentialRampToValueAtTime(0.25, st + 0.02); sg.gain.exponentialRampToValueAtTime(0.0001, st + dur);
+                        sub.connect(sg); sg.connect(out); sub.start(st); sub.stop(st + dur + 0.05);
+                    });
+
+                    if (final) {
+                        // Acorde menor oscuro que queda sonando al final
+                        const ct = t + 0.12 + notes.length * step;
+                        [38, 45, 50, 53].forEach(m => {
+                            const o = ac.createOscillator(); o.type = 'sawtooth'; o.frequency.value = midiHz(m);
+                            const f = ac.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 700;
+                            const g = ac.createGain(); g.gain.setValueAtTime(0.0001, ct); g.gain.exponentialRampToValueAtTime(0.09, ct + 0.3); g.gain.exponentialRampToValueAtTime(0.0001, ct + 3);
+                            o.connect(f); f.connect(g); g.connect(out); o.start(ct); o.stop(ct + 3.1);
+                        });
+                    }
+                } catch (e) { console.log("Sonido de muerte no disponible", e); }
+            }
+
+            // --- Música épica de victoria (al vencer al jefe del último nivel) ---
+            let victoryMusicNode = null, victoryMusicTimeout = null;
+
+            function stopVictoryMusic(resumeBg) {
+                if (victoryMusicTimeout) { clearTimeout(victoryMusicTimeout); victoryMusicTimeout = null; }
+                if (victoryMusicNode) {
+                    const ac = getAudioCtx(), node = victoryMusicNode; victoryMusicNode = null;
+                    node.gain.cancelScheduledValues(ac.currentTime);
+                    node.gain.setValueAtTime(node.gain.value, ac.currentTime);
+                    node.gain.linearRampToValueAtTime(0, ac.currentTime + 0.6);
+                    setTimeout(() => { try { node.disconnect(); } catch (e) {} }, 800);
+                }
+                if (resumeBg && bgMusic && bgMusic.paused && musicVolume > 0 && isUserInteracted) bgMusic.play().catch(() => {});
+            }
+
+            function playVictoryMusic() {
+                stopVictoryMusic(false);
+                if (!isUserInteracted) return;
+                const vol = musicVolume > 0 ? musicVolume : 0;
+                if (vol === 0) return;
+                try {
+                    if (bgMusic) bgMusic.pause();
+                    const ac = getAudioCtx(), t0 = ac.currentTime + 0.15;
+                    const beat = 60 / 108;                      // 108 BPM
+                    const bar = beat * 4;
+
+                    const master = ac.createGain(); master.gain.value = Math.min(1, vol * 1.6);
+                    const comp = ac.createDynamicsCompressor(); comp.threshold.value = -16; comp.ratio.value = 4;
+                    const rev = makeReverb(ac, 3, 2.2), wet = ac.createGain(); wet.gain.value = 0.3;
+                    master.connect(comp); comp.connect(ac.destination); master.connect(rev); rev.connect(wet); wet.connect(comp);
+                    victoryMusicNode = master;
+
+                    // Instrumentos
+                    const brass = (m, st, dur, vel) => {
+                        const g = ac.createGain(), f = ac.createBiquadFilter(); f.type = 'lowpass'; f.Q.value = 1;
+                        f.frequency.setValueAtTime(500, st); f.frequency.linearRampToValueAtTime(2600, st + 0.12); f.frequency.linearRampToValueAtTime(1500, st + dur);
+                        g.gain.setValueAtTime(0.0001, st); g.gain.exponentialRampToValueAtTime(vel, st + 0.07); g.gain.setValueAtTime(vel * 0.85, st + Math.max(0.08, dur - 0.12)); g.gain.exponentialRampToValueAtTime(0.0001, st + dur + 0.15);
+                        f.connect(g); g.connect(master);
+                        [-6, 6].forEach(det => { const o = ac.createOscillator(); o.type = 'sawtooth'; o.frequency.value = midiHz(m); o.detune.value = det; o.connect(f); o.start(st); o.stop(st + dur + 0.2); });
+                    };
+                    const pad = (m, st, dur, vel) => {
+                        const g = ac.createGain(), f = ac.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 1200;
+                        g.gain.setValueAtTime(0.0001, st); g.gain.exponentialRampToValueAtTime(vel, st + 0.35); g.gain.setValueAtTime(vel, st + dur - 0.2); g.gain.exponentialRampToValueAtTime(0.0001, st + dur + 0.3);
+                        f.connect(g); g.connect(master);
+                        [-10, 0, 10].forEach(det => { const o = ac.createOscillator(); o.type = 'sawtooth'; o.frequency.value = midiHz(m); o.detune.value = det; o.connect(f); o.start(st); o.stop(st + dur + 0.35); });
+                    };
+                    const pluck = (m, st, vel) => {
+                        const o = ac.createOscillator(); o.type = 'sawtooth'; o.frequency.value = midiHz(m);
+                        const f = ac.createBiquadFilter(); f.type = 'lowpass'; f.frequency.setValueAtTime(2000, st); f.frequency.exponentialRampToValueAtTime(300, st + beat * 0.45);
+                        const g = ac.createGain(); g.gain.setValueAtTime(vel, st); g.gain.exponentialRampToValueAtTime(0.0001, st + beat * 0.45);
+                        o.connect(f); f.connect(g); g.connect(master); o.start(st); o.stop(st + beat * 0.5);
+                    };
+                    const timpani = (m, st, vel) => {
+                        const o = ac.createOscillator(); o.type = 'sine';
+                        o.frequency.setValueAtTime(midiHz(m) * 1.5, st); o.frequency.exponentialRampToValueAtTime(midiHz(m), st + 0.08);
+                        const g = ac.createGain(); g.gain.setValueAtTime(vel, st); g.gain.exponentialRampToValueAtTime(0.0001, st + 1.2);
+                        o.connect(g); g.connect(master); o.start(st); o.stop(st + 1.3);
+                    };
+                    const noiseBuf = (() => { const len = ac.sampleRate * 3, b = ac.createBuffer(1, len, ac.sampleRate), d = b.getChannelData(0); for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1; return b; })();
+                    const cymbal = (st, vel) => {
+                        const n = ac.createBufferSource(); n.buffer = noiseBuf;
+                        const f = ac.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = 5000;
+                        const g = ac.createGain(); g.gain.setValueAtTime(vel, st); g.gain.exponentialRampToValueAtTime(0.0001, st + 2.8);
+                        n.connect(f); f.connect(g); g.connect(master); n.start(st); n.stop(st + 2.9);
+                    };
+
+                    // Armonía: Re menor heroico que termina en Re mayor
+                    const chords = [
+                        [50, 53, 57], [46, 50, 53], [53, 57, 60], [48, 52, 55],   // Dm  Bb  F  C
+                        [50, 53, 57], [46, 50, 53], [48, 52, 55], [45, 49, 52],   // Dm  Bb  C  A
+                        [50, 54, 57], [46, 50, 53], [48, 52, 55], [50, 54, 57]    // D   Bb  C  D  (final triunfal)
+                    ];
+                    // Melodía de trompetas: [nota MIDI, duración en tiempos]
+                    const melody = [
+                        [[69, 2], [74, 1], [72, 1]], [[70, 2], [69, 1], [67, 1]], [[65, 1.5], [67, 0.5], [69, 2]], [[67, 3], [64, 1]],
+                        [[69, 1], [74, 1], [77, 1], [76, 1]], [[74, 2], [72, 1], [70, 1]], [[72, 2], [76, 2]], [[73, 4]],
+                        [[74, 2], [78, 2]], [[77, 1], [74, 1], [70, 2]], [[72, 1], [76, 1], [79, 2]], [[78, 2], [81, 2]]
+                    ];
+
+                    chords.forEach((ch, b) => {
+                        const bt = t0 + b * bar, climax = b >= 8;
+                        ch.forEach(m => pad(m, bt, bar, climax ? 0.05 : 0.04));
+                        ch.forEach(m => brass(m + 12, bt, bar * 0.95, climax ? 0.035 : 0.02));
+                        // ostinato de cuerdas en corcheas
+                        for (let k = 0; k < 8; k++) pluck(k % 2 === 0 ? ch[0] - 12 : ch[0] - 5, bt + k * beat / 2, climax ? 0.13 : 0.1);
+                        // bajo
+                        brass(ch[0] - 24, bt, bar * 0.95, 0.07);
+                        // timbales
+                        timpani(ch[0] - 24, bt, 0.9);
+                        timpani(ch[0] - 17, bt + beat * 2, 0.5);
+                        if (b === 7) for (let k = 0; k < 8; k++) timpani(45 - 24, bt + beat * 2 + k * beat / 4, 0.25 + k * 0.08);   // redoble antes del clímax
+                        // melodía
+                        let mt = bt;
+                        melody[b].forEach(([m, d]) => { brass(m, mt, d * beat * 0.95, climax ? 0.11 : 0.09); brass(m - 12, mt, d * beat * 0.95, 0.04); mt += d * beat; });
+                    });
+                    cymbal(t0 + 8 * bar, 0.25);
+
+                    // Acorde final largo en Re mayor
+                    const ft = t0 + chords.length * bar;
+                    [38, 50, 54, 57, 62, 66, 69, 74].forEach(m => brass(m, ft, beat * 6, m > 60 ? 0.06 : 0.05));
+                    timpani(26, ft, 1.0); cymbal(ft, 0.3);
+                    for (let k = 0; k < 12; k++) timpani(26, ft + beat * 2 + k * beat / 4, 0.2 + k * 0.03);
+                    timpani(26, ft + beat * 5, 1.0);
+
+                    const totalMs = (ft + beat * 7 - ac.currentTime) * 1000;
+                    victoryMusicTimeout = setTimeout(() => { victoryMusicTimeout = null; stopVictoryMusic(true); }, totalMs);
+                } catch (e) { console.log("Música de victoria no disponible", e); }
+            }
+
             // === PANTALLA DE VICTORIA ===
             const victoryModal = document.getElementById('victory-modal');
             function onBossDefeated() {
                 if (freeMode) return;
+                if (levelIndex >= LEVELS.length - 1) setTimeout(playVictoryMusic, 120);   // último jefe: ¡ganaste el juego!
                 victoryTimer = 150;   // 2,5 s para ver la explosión antes del menú
             }
             function showVictory() {
                 isPaused = true; isFiring = false; keysDown.clear();
                 let hasNext = levelIndex < LEVELS.length - 1;
-                document.getElementById('victory-sub').innerText = `NIVEL ${levelIndex + 1}: ${String(LV.nombre).toUpperCase()}` + (hasNext ? '' : ' · ÚLTIMO NIVEL');
+                document.querySelector('#victory-modal h2').innerText = hasNext ? '¡NIVEL COMPLETADO!' : '¡GANASTE EL JUEGO!';
+                document.getElementById('victory-sub').innerText = `NIVEL ${levelIndex + 1}: ${String(LV.nombre).toUpperCase()}` + (hasNext ? '' : ' · VENCISTE A TODOS LOS JEFES');
                 const nextBtn = document.getElementById('vic-next');
                 nextBtn.disabled = !hasNext;
                 nextBtn.innerText = hasNext ? `SIGUIENTE: ${String(LEVELS[levelIndex + 1].nombre).toUpperCase()}` : 'NO HAY MÁS NIVELES (AÚN)';
@@ -1480,10 +1650,10 @@ codigo_juego_template = """
             }
             document.getElementById('vic-next').addEventListener('click', () => {
                 if (levelIndex >= LEVELS.length - 1) return;
-                levelIndex++; victoryModal.style.display = 'none'; init(); gameState = 'playing';
+                levelIndex++; victoryModal.style.display = 'none'; stopVictoryMusic(true); init(); gameState = 'playing';
             });
             document.getElementById('vic-repeat').addEventListener('click', () => {
-                victoryModal.style.display = 'none'; init(); gameState = 'playing';
+                victoryModal.style.display = 'none'; stopVictoryMusic(true); init(); gameState = 'playing';
             });
             document.getElementById('vic-free').addEventListener('click', () => {
                 freeMode = true; victoryModal.style.display = 'none'; isPaused = false;
@@ -2386,7 +2556,7 @@ codigo_juego_template = """
                 gameState = 'playing';
             }
             function goToMenu() {
-                gameState = 'menu'; isPaused = false; isFiring = false; keysDown.clear();
+                gameState = 'menu'; isPaused = false; isFiring = false; keysDown.clear(); stopVictoryMusic(false);
                 overScreen.style.display = 'none'; orbModal.style.display = 'none'; settingsModal.style.display = 'none'; victoryModal.style.display = 'none';
                 audioControls.style.display = 'none'; lbPanel.style.display = 'none';
                 mainMenu.style.display = 'flex';
