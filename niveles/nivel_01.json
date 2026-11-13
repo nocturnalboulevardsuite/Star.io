@@ -1,15 +1,40 @@
 {
   "nombre": "Vía Láctea",
-  "descripcion": "El nivel original. Agujero negro y Luna Sangrienta.",
-  "mundo": { "ancho": 3200, "alto": 3200, "color_fondo": "#06060E", "color_borde": "#FF3366" },
-  "bots": { "cantidad": 28, "vida": 200, "velocidad": 1.0, "espera_disparo_ms": 2500, "potencia_disparo": 1.0 },
+  "descripcion": "La Luna Sangrienta. Gánale en Normal para desbloquear Difícil, y en Difícil para desbloquear Nightmare.",
+  "mundo": {
+    "ancho": 3200,
+    "alto": 3200,
+    "color_fondo": "#06060E",
+    "color_borde": "#FF3366"
+  },
+  "bots": {
+    "cantidad": 28,
+    "vida": 200,
+    "velocidad": 1.0,
+    "espera_disparo_ms": 2500,
+    "potencia_disparo": 1.0
+  },
   "comida": 600,
+  "musica_victoria": "espacial",
   "orbes_max": 3,
-  "agujero_negro": { "vida": 10000, "radio": 75, "pos_x": 0.7, "pos_y": 0.3, "crecimiento": 0.012, "fuerza_atraccion": 2.8 },
+  "agujero_negro": {
+    "vida": 10000,
+    "radio": 75,
+    "pos_x": 0.7,
+    "pos_y": 0.3,
+    "crecimiento": 0.012,
+    "fuerza_atraccion": 2.8
+  },
   "jefe": {
-    "nombre": "LUNA SANGRIENTA", "nombre_fase2": "LUNA CÍCLOPE",
-    "vida": 15000, "velocidad": 1.2, "velocidad_fase2": 0.45,
-    "color": "#FF6600", "color_fase2": "#FF0033",
-    "potencia_balas": 1.5, "espera_laser_frames": 1800, "potencia_laser": 5
+    "nombre": "LUNA SANGRIENTA",
+    "nombre_fase2": "LUNA CÍCLOPE",
+    "vida": 15000,
+    "velocidad": 1.2,
+    "velocidad_fase2": 0.45,
+    "color": "#FF6600",
+    "color_fase2": "#FF0033",
+    "potencia_balas": 1.5,
+    "espera_laser_frames": 1800,
+    "potencia_laser": 5
   }
 }
