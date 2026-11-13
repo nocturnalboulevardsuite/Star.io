@@ -215,6 +215,8 @@ codigo_juego_template = """
                 <div style="display:flex; gap:20px; justify-content:center;">
                     <button id="orb-btn1" class="orb-btn"></button>
                     <button id="orb-btn2" class="orb-btn"></button>
+                    <button id="orb-btn3" class="orb-btn" style="display:none;"></button>
+                    <button id="orb-btn4" class="orb-btn" style="display:none;"></button>
                 </div>
             </div>
 
@@ -257,6 +259,10 @@ codigo_juego_template = """
                     <span><i class="key">CLICK DER</i> Dash</span>
                     <span><i class="key">ESPACIO</i> Modo fantasma</span>
                     <span><i class="key">R</i> Láser abismal (al matar el agujero negro)</span>
+                    <span><i class="key">X</i> Súper cañón</span>
+                    <span><i class="key">F</i> Empuje</span>
+                    <span><i class="key">Q</i> Piel de Rhino</span>
+                    <span><i class="key">E</i> Escudo reflector</span>
                     <span><i class="key">WASD</i> Moverse</span>
                     <span><i class="key">MOUSE</i> Apuntar</span>
                 </div>
@@ -359,6 +365,22 @@ codigo_juego_template = """
                 '<line x1="24" y1="44" x2="24" y2="9" marker-end="url(#mk-multi)"/>' +
                 '<line x1="24" y1="44" x2="10" y2="13" marker-end="url(#mk-multi)"/>' +
                 '<line x1="24" y1="44" x2="38" y2="13" marker-end="url(#mk-multi)"/></svg>';
+            const ICON_CANNON = '<svg viewBox="0 0 48 48" width="52" height="52">' +
+                '<circle cx="31" cy="24" r="12" fill="#FF8C00" stroke="#FFD27A" stroke-width="2"/>' +
+                '<circle cx="27" cy="20" r="4" fill="#FFE2B0" opacity="0.8"/>' +
+                '<path d="M4 18 L16 21 M4 30 L16 27 M2 24 L16 24" stroke="#FFB347" stroke-width="3" stroke-linecap="round"/></svg>';
+            const ICON_PUSH = '<svg viewBox="0 0 48 48" width="52" height="52" fill="rgba(51,255,102,0.25)" stroke="#33FF66" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round">' +
+                '<path d="M14 40 L14 22 Q14 19 17 19 Q20 19 20 22 L20 12 Q20 9 23 9 Q26 9 26 12 L26 10 Q26 7 29 7 Q32 7 32 10 L32 13 Q32 10 35 10 Q38 10 38 13 L38 30 Q38 40 28 42 L20 42 Q16 42 14 40 Z"/>' +
+                '<path d="M14 26 Q8 22 7 27 Q8 31 14 34" /></svg>';
+            const ICON_RHINO = '<svg viewBox="0 0 48 48" width="52" height="52">' +
+                '<path d="M24 4 L40 10 L40 24 Q40 36 24 44 Q8 36 8 24 L8 10 Z" fill="#8A8F9C" stroke="#E0E3EA" stroke-width="2.5" stroke-linejoin="round"/>' +
+                '<path d="M24 4 L24 44 M8 18 L40 18 M10 30 L38 30" stroke="#5A5F6B" stroke-width="2"/>' +
+                '<path d="M20 22 Q24 10 30 8 Q27 16 28 24 Z" fill="#FFD700" stroke="#B8860B" stroke-width="1.5" stroke-linejoin="round"/></svg>';
+            const ICON_REFLECT = '<svg viewBox="0 0 48 48" width="52" height="52" fill="none" stroke-linecap="round" stroke-linejoin="round">' +
+                '<circle cx="24" cy="24" r="17" stroke="#00FFFF" stroke-width="3" stroke-dasharray="6 4"/>' +
+                '<circle cx="24" cy="24" r="10" fill="rgba(0,255,255,0.2)" stroke="#00FFFF" stroke-width="1.5"/>' +
+                '<path d="M4 6 L17 17 L6 26" stroke="#FFFFFF" stroke-width="2.5"/>' +
+                '<path d="M6 26 L3 21 M6 26 L11 27" stroke="#FFFFFF" stroke-width="2.5"/></svg>';
             const ICON_CROSS = '<svg viewBox="0 0 48 48" width="52" height="52" fill="none" stroke="#CC33FF" stroke-width="3" stroke-linecap="round">' +
                 '<defs><marker id="mk-cross" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="4" markerHeight="4" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#E199FF" stroke="none"/></marker></defs>' +
                 '<line x1="24" y1="24" x2="24" y2="6" marker-end="url(#mk-cross)"/>' +
@@ -564,6 +586,8 @@ codigo_juego_template = """
             const orbTitle = document.getElementById("orb-title");
             const btn1 = document.getElementById("orb-btn1");
             const btn2 = document.getElementById("orb-btn2");
+            const btn3 = document.getElementById("orb-btn3");
+            const btn4 = document.getElementById("orb-btn4");
 
             window.addEventListener('contextmenu', (e) => e.preventDefault());
 
@@ -652,6 +676,10 @@ codigo_juego_template = """
                     else { triggerInvulnerability(); }
                 }
                 if(e.code === 'KeyR' && !e.repeat) triggerAbyssLaser();
+                if(e.code === 'KeyX' && !e.repeat) useAbility('cannon');
+                if(e.code === 'KeyF' && !e.repeat) useAbility('push');
+                if(e.code === 'KeyQ' && !e.repeat) useAbility('rhino');
+                if(e.code === 'KeyE' && !e.repeat) useAbility('reflect');
             });
 
             function handlePlayerDeath() {
@@ -671,6 +699,7 @@ codigo_juego_template = """
                 player.multiLevel = 1; player.crossLevel = 0; player.continuousLaserTimer = 0;
                 isGameOver = false; overScreen.style.display = 'none';
                 
+                resetAbilities();
                 applyRissosMode();
                 playSfx("respawn");
                 floatingTexts.push({ x: player.x, y: player.y - 30, text: `¡REAPARECISTE! (${playerLives} vidas)`, icon: "star", color: "#33FF66", life: 50, size: 18 });
@@ -847,6 +876,357 @@ codigo_juego_template = """
                 ctx.restore();
             }
 
+            // ======================================================
+            // === HABILIDADES DE ORBES (niveles 1 a 10) ===
+            //  X  Súper cañón   (orbe naranja)
+            //  F  Empuje        (orbe naranja)
+            //  Q  Piel de Rhino (orbe celeste)
+            //  E  Escudo reflector (orbe celeste)
+            // ======================================================
+            let cannonShots = [];
+            let pushHands = [];
+
+            // Estadísticas según nivel (L = 1..10). Todo mejora al subir de nivel.
+            const AB = {
+                cannon: {
+                    key: 'X', name: 'CAÑÓN', color: '#FF8C00',
+                    cooldown: L => (10 - 0.5 * (L - 1)) * 60,      // 10 s -> 5,5 s
+                    damagePct: L => 0.50 + 0.05 * (L - 1),         // 50% -> 95% de la vida del objetivo
+                    massCost: L => 0.50 - 0.02 * (L - 1),          // 50% -> 32% de tu masa
+                    radius: L => 28 + 3 * L,
+                    life: L => 100 + 10 * L
+                },
+                push: {
+                    key: 'F', name: 'EMPUJE', color: '#33FF66',
+                    cooldown: L => (8 - 0.4 * (L - 1)) * 60,       // 8 s -> 4,4 s
+                    distance: L => 250 * (1 + 0.1 * (L - 1)),      // "5 metros" = 250 px -> 475 px
+                    reach: L => 300 + 20 * L,                      // hasta dónde llega la mano
+                    damage: L => 8 * L
+                },
+                rhino: {
+                    key: 'Q', name: 'RHINO', color: '#C0C4CE',
+                    cooldown: L => (20 - 0.5 * (L - 1)) * 60,      // 20 s -> 15,5 s
+                    duration: L => (5 + 0.3 * (L - 1)) * 60        // 5 s -> 7,7 s
+                },
+                reflect: {
+                    key: 'E', name: 'REFLEJO', color: '#00FFFF',
+                    cooldown: L => (15 - 0.5 * (L - 1)) * 60,      // 15 s -> 10,5 s
+                    duration: L => (3 + 0.3 * (L - 1)) * 60,       // 3 s -> 5,7 s
+                    reflectMult: L => 1 + 0.1 * L                  // las balas devueltas pegan más
+                }
+            };
+            const AB_ORDER = ['cannon', 'push', 'rhino', 'reflect'];
+
+            function resetAbilities() {
+                player.cannonLvl = 0; player.pushLvl = 0; player.rhinoLvl = 0; player.reflectLvl = 0;
+                player.abCd = { cannon: 0, push: 0, rhino: 0, reflect: 0 };
+                player.rhinoTimer = 0; player.reflectTimer = 0; player.reflectFlash = 0;
+            }
+
+            function getAudioCtx() {
+                if (!beamAudioCtx) beamAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                if (beamAudioCtx.state === 'suspended') beamAudioCtx.resume();
+                return beamAudioCtx;
+            }
+
+            // Sonido sintetizado corto: tipo 'boom' (cañón), 'whoosh' (empuje), 'metal' (rhino), 'shield' (reflector), 'ping' (rebote)
+            function playAbilitySfx(kind) {
+                if (!isUserInteracted || sfxVolume === 0) return;
+                try {
+                    const ac = getAudioCtx(), t = ac.currentTime;
+                    const out = ac.createGain(); out.gain.value = Math.min(1, sfxVolume); out.connect(ac.destination);
+                    const env = (g, a, peak, d) => { g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(peak, t + a); g.gain.exponentialRampToValueAtTime(0.0001, t + a + d); };
+                    const noise = (dur) => {
+                        const len = Math.ceil(ac.sampleRate * dur), b = ac.createBuffer(1, len, ac.sampleRate), d = b.getChannelData(0);
+                        for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+                        const src = ac.createBufferSource(); src.buffer = b; return src;
+                    };
+                    if (kind === 'boom') {
+                        const o = ac.createOscillator(); o.type = 'sine'; o.frequency.setValueAtTime(140, t); o.frequency.exponentialRampToValueAtTime(30, t + 0.6);
+                        const g = ac.createGain(); env(g, 0.01, 1.0, 0.7); o.connect(g); g.connect(out); o.start(t); o.stop(t + 0.8);
+                        const ws = ac.createWaveShaper(); ws.curve = makeDistortion(200);
+                        const n = noise(0.6), f = ac.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 700;
+                        const gn = ac.createGain(); env(gn, 0.005, 0.6, 0.5); n.connect(f); f.connect(ws); ws.connect(gn); gn.connect(out); n.start(t);
+                    } else if (kind === 'whoosh') {
+                        const n = noise(0.6), f = ac.createBiquadFilter(); f.type = 'bandpass'; f.Q.value = 1.5;
+                        f.frequency.setValueAtTime(300, t); f.frequency.exponentialRampToValueAtTime(2500, t + 0.35);
+                        const g = ac.createGain(); env(g, 0.05, 0.8, 0.45); n.connect(f); f.connect(g); g.connect(out); n.start(t);
+                        const o = ac.createOscillator(); o.type = 'triangle'; o.frequency.setValueAtTime(220, t); o.frequency.exponentialRampToValueAtTime(660, t + 0.3);
+                        const go = ac.createGain(); env(go, 0.03, 0.25, 0.35); o.connect(go); go.connect(out); o.start(t); o.stop(t + 0.45);
+                    } else if (kind === 'metal') {
+                        [180, 271, 397].forEach(fq => {
+                            const o = ac.createOscillator(); o.type = 'square'; o.frequency.value = fq;
+                            const g = ac.createGain(); env(g, 0.005, 0.18, 0.6); o.connect(g); g.connect(out); o.start(t); o.stop(t + 0.7);
+                        });
+                        const o2 = ac.createOscillator(); o2.type = 'sine'; o2.frequency.setValueAtTime(90, t); o2.frequency.exponentialRampToValueAtTime(45, t + 0.4);
+                        const g2 = ac.createGain(); env(g2, 0.005, 0.7, 0.4); o2.connect(g2); g2.connect(out); o2.start(t); o2.stop(t + 0.5);
+                    } else if (kind === 'shield') {
+                        const o = ac.createOscillator(); o.type = 'sine'; o.frequency.setValueAtTime(400, t); o.frequency.exponentialRampToValueAtTime(1200, t + 0.25);
+                        const g = ac.createGain(); env(g, 0.02, 0.35, 0.4); o.connect(g); g.connect(out); o.start(t); o.stop(t + 0.5);
+                    } else if (kind === 'ping') {
+                        const o = ac.createOscillator(); o.type = 'triangle'; o.frequency.setValueAtTime(1400, t); o.frequency.exponentialRampToValueAtTime(900, t + 0.08);
+                        const g = ac.createGain(); env(g, 0.003, 0.12, 0.1); o.connect(g); g.connect(out); o.start(t); o.stop(t + 0.15);
+                    }
+                } catch (e) { console.log("SFX habilidad no disponible", e); }
+            }
+
+            // Daño directo (sin reducción por tamaño) para estrellas enemigas
+            function hurtStar(t, amount, color) {
+                if (!t || t.dead || t === player) return;
+                t.hp -= amount;
+                floatingTexts.push({ x: t.x, y: t.y - t.r - 10, text: `-${Math.ceil(amount)}`, color: color || "#FF8C00", life: 35, size: 26 });
+                if (t.hp <= 0) { t.dead = true; dropMass(t); floatingTexts.push({ x: t.x, y: t.y, text: "¡DESTRUIDO!", icon: "burst", color: "#FF3333", life: 40, size: 22 }); }
+            }
+            function damageMeteor(amount, color) {
+                if (!meteor.isBoss || meteor.dead) return;
+                meteor.hp -= amount;
+                floatingTexts.push({ x: meteor.x + (Math.random() - 0.5) * 80, y: meteor.y - meteor.r - 20, text: `-${Math.ceil(amount)}`, color: color || "#FF8C00", life: 40, size: 30 });
+                if (meteor.hp <= 0 && !meteor.dead) {
+                    meteor.dead = true; playSfx("bh_death", 2.5);
+                    floatingTexts.push({ x: meteor.x, y: meteor.y, text: "VICTORIA GALÁCTICA", icon: "star", iconBoth: true, color: "#FFD700", life: 300, size: 50 });
+                    if (bgMusic && audioSrc) { bgMusic.pause(); bgMusic.src = audioSrc; usingBossTrack = false; bgMusic.currentTime = 0; bgMusic.play().catch(e => console.log(e)); }
+                }
+            }
+            function damageBlackHole(amount, color) {
+                if (blackHole.dead) return;
+                blackHole.hp -= amount;
+                floatingTexts.push({ x: blackHole.x + (Math.random() - 0.5) * 60, y: blackHole.y - blackHole.r - 20, text: `-${Math.ceil(amount)}`, color: color || "#FF8C00", life: 40, size: 30 });
+                if (blackHole.hp <= 0 && !blackHole.dead) {
+                    blackHole.dead = true; unlockAbyssLaser();
+                    playSfx("bh_death", 2.5);
+                    meteor.isBoss = true; cinematicTimer = 180;
+                    if (bgMusic && sfxData["luna_musica"] && sfxData["luna_musica"].length > 0) {
+                        bgMusic.pause(); bgMusic.src = sfxData["luna_musica"][0]; usingBossTrack = true; bgMusic.currentTime = 0; bgMusic.play().catch(e => console.log(e));
+                    }
+                    floatingTexts.push({ x: meteor.x, y: meteor.y - 120, text: "LA LUNA DESPIERTA", icon: "warning", iconBoth: true, color: "#FF4500", life: 180, size: 40 });
+                }
+            }
+
+            function useAbility(id) {
+                if (gameState !== 'playing' || isPaused || !player || player.dead || cinematicTimer > 0) return;
+                let L = player[id + 'Lvl'] || 0;
+                if (L <= 0) return;
+                if (player.abCd[id] > 0) {
+                    floatingTexts.push({ x: player.x, y: player.y - player.r - 25, text: `${AB[id].name}: ${Math.ceil(player.abCd[id] / 60)}s`, color: "#888", life: 30, size: 14 });
+                    return;
+                }
+                let ang = aimAngle();
+
+                if (id === 'cannon') {
+                    if (player.r < 20 && !player.rissos) {
+                        floatingTexts.push({ x: player.x, y: player.y - player.r - 25, text: "MUY PEQUEÑO PARA EL CAÑÓN", color: "#FF8C00", life: 40, size: 14 });
+                        return;
+                    }
+                    if (!player.rissos) player.r = Math.max(10, player.r * (1 - AB.cannon.massCost(L)));
+                    let rad = AB.cannon.radius(L), sp = 11;
+                    cannonShots.push({ x: player.x + Math.cos(ang) * (player.r + rad), y: player.y + Math.sin(ang) * (player.r + rad),
+                        vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp, r: rad, life: AB.cannon.life(L), pct: AB.cannon.damagePct(L), hitSet: new Set() });
+                    // retroceso
+                    player.x -= Math.cos(ang) * 25; player.y -= Math.sin(ang) * 25;
+                    for (let k = 0; k < 25; k++) particles.push({ x: player.x, y: player.y, vx: Math.cos(ang + (Math.random() - 0.5)) * Math.random() * 8, vy: Math.sin(ang + (Math.random() - 0.5)) * Math.random() * 8, color: Math.random() > 0.5 ? "#FF8C00" : "#FFD27A", life: 25 });
+                    playAbilitySfx('boom');
+                    floatingTexts.push({ x: player.x, y: player.y - player.r - 30, text: "¡SÚPER CAÑÓN!", color: "#FF8C00", life: 45, size: 22 });
+                }
+                else if (id === 'push') {
+                    let reach = AB.push.reach(L), dist = AB.push.distance(L), cone = 0.65;
+                    pushHands.push({ angle: ang, t: 0, dur: 28, reach: reach });
+                    const tryPush = (obj, mult, radius) => {
+                        let dx = obj.x - player.x, dy = obj.y - player.y, d = Math.hypot(dx, dy);
+                        if (d - radius > reach) return false;
+                        let diff = Math.atan2(dy, dx) - ang;
+                        diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+                        if (Math.abs(diff) > cone && d > player.r + radius) return false;
+                        let a = d > 0 ? Math.atan2(dy, dx) : ang;
+                        let v = (dist * mult) / 10;  // con fricción 0.9, recorre ~ 10 veces la velocidad inicial
+                        obj.kbx = Math.cos(a) * v; obj.kby = Math.sin(a) * v;
+                        for (let k = 0; k < 10; k++) particles.push({ x: obj.x, y: obj.y, vx: Math.cos(a) * Math.random() * 6, vy: Math.sin(a) * Math.random() * 6, color: "#33FF66", life: 20 });
+                        return true;
+                    };
+                    bots.forEach(b => { if (!b.dead && tryPush(b, 1, b.r)) hurtStar(b, AB.push.damage(L), "#33FF66"); });
+                    if (!blackHole.dead && tryPush(blackHole, 1, blackHole.r)) floatingTexts.push({ x: blackHole.x, y: blackHole.y - blackHole.r - 30, text: "¡EMPUJADO!", color: "#33FF66", life: 40, size: 20 });
+                    if (meteor.isBoss && !meteor.dead && tryPush(meteor, 0.5, meteor.r)) damageMeteor(AB.push.damage(L) * 3, "#33FF66");
+                    // también aparta las balas enemigas
+                    lasers.forEach(l => {
+                        if (l.owner === player) return;
+                        let dx = l.x - player.x, dy = l.y - player.y, d = Math.hypot(dx, dy);
+                        let diff = Math.atan2(Math.sin(Math.atan2(dy, dx) - ang), Math.cos(Math.atan2(dy, dx) - ang));
+                        if (d < reach && Math.abs(diff) < cone) { let sp = Math.hypot(l.vx, l.vy); l.vx = Math.cos(ang) * sp; l.vy = Math.sin(ang) * sp; l.owner = player; l.color = "#33FF66"; }
+                    });
+                    playAbilitySfx('whoosh');
+                }
+                else if (id === 'rhino') {
+                    player.rhinoTimer = AB.rhino.duration(L);
+                    playAbilitySfx('metal');
+                    floatingTexts.push({ x: player.x, y: player.y - player.r - 30, text: "¡PIEL DE RHINO!", icon: "shield", iconBoth: true, color: "#C0C4CE", life: 50, size: 22 });
+                }
+                else if (id === 'reflect') {
+                    player.reflectTimer = AB.reflect.duration(L);
+                    playAbilitySfx('shield');
+                    floatingTexts.push({ x: player.x, y: player.y - player.r - 30, text: "¡ESCUDO REFLECTOR!", color: "#00FFFF", life: 50, size: 22 });
+                }
+                player.abCd[id] = AB[id].cooldown(L);
+            }
+
+            // Devuelve una bala enemiga hacia donde vino
+            function reflectLaser(l) {
+                let L = player.reflectLvl || 1;
+                let sp = Math.hypot(l.vx, l.vy) * 1.3;
+                let a = Math.atan2(l.vy, l.vx) + Math.PI + (Math.random() - 0.5) * 0.3;
+                l.vx = Math.cos(a) * sp; l.vy = Math.sin(a) * sp;
+                l.owner = player; l.color = "#00FFFF"; l.life = Math.max(l.life, 80);
+                l.damageMult = (l.damageMult || 1) * AB.reflect.reflectMult(L);
+                l.x += l.vx * 2; l.y += l.vy * 2;
+                player.reflectFlash = 8;
+                for (let k = 0; k < 6; k++) particles.push({ x: l.x, y: l.y, vx: (Math.random() - 0.5) * 5, vy: (Math.random() - 0.5) * 5, color: "#00FFFF", life: 14 });
+                if (Math.random() < 0.5) playAbilitySfx('ping');
+            }
+
+            function applyKnockback(o) {
+                if (!o || (!o.kbx && !o.kby)) return;
+                o.x += o.kbx; o.y += o.kby; o.kbx *= 0.9; o.kby *= 0.9;
+                if (Math.abs(o.kbx) < 0.05 && Math.abs(o.kby) < 0.05) { o.kbx = 0; o.kby = 0; }
+                o.x = Math.max(o.r, Math.min(worldW - o.r, o.x)); o.y = Math.max(o.r, Math.min(worldH - o.r, o.y));
+            }
+
+            function updateAbilities() {
+                if (!player.abCd) resetAbilities();
+                AB_ORDER.forEach(id => { if (player.abCd[id] > 0) player.abCd[id]--; });
+                if (player.rhinoTimer > 0) player.rhinoTimer--;
+                if (player.reflectTimer > 0) player.reflectTimer--;
+                if (player.reflectFlash > 0) player.reflectFlash--;
+
+                bots.forEach(applyKnockback);
+                if (!blackHole.dead) applyKnockback(blackHole);
+                if (meteor.isBoss && !meteor.dead) applyKnockback(meteor);
+
+                for (let i = pushHands.length - 1; i >= 0; i--) { pushHands[i].t++; if (pushHands[i].t >= pushHands[i].dur) pushHands.splice(i, 1); }
+
+                for (let i = cannonShots.length - 1; i >= 0; i--) {
+                    let c = cannonShots[i]; c.x += c.vx; c.y += c.vy; c.life--; let done = false;
+                    if (Math.random() < 0.8) particles.push({ x: c.x - c.vx * 2 + (Math.random() - 0.5) * c.r, y: c.y - c.vy * 2 + (Math.random() - 0.5) * c.r, vx: -c.vx * 0.2, vy: -c.vy * 0.2, color: Math.random() > 0.5 ? "#FF8C00" : "#FFD27A", life: 18 });
+                    // borra balas enemigas que toca
+                    for (let j = lasers.length - 1; j >= 0; j--) { let l = lasers[j]; if (l.owner !== player && Math.hypot(l.x - c.x, l.y - c.y) < c.r) lasers.splice(j, 1); }
+                    // atraviesa estrellas: % de su vida máxima
+                    bots.forEach(b => {
+                        if (b.dead || c.hitSet.has(b)) return;
+                        if (Math.hypot(b.x - c.x, b.y - c.y) < b.r + c.r) { c.hitSet.add(b); hurtStar(b, b.maxHp * c.pct, "#FF8C00"); }
+                    });
+                    // jefes: se detiene y hace 1/5 del porcentaje
+                    if (!blackHole.dead && Math.hypot(blackHole.x - c.x, blackHole.y - c.y) < blackHole.r + c.r) { damageBlackHole(blackHole.maxHp * c.pct * 0.2); done = true; }
+                    if (!done && meteor.isBoss && !meteor.dead && Math.hypot(meteor.x - c.x, meteor.y - c.y) < meteor.r + c.r) { damageMeteor(meteor.maxHp * c.pct * 0.2); done = true; }
+                    if (c.x < -c.r || c.y < -c.r || c.x > worldW + c.r || c.y > worldH + c.r) c.life = 0;
+                    if (done || c.life <= 0) {
+                        for (let k = 0; k < 30; k++) particles.push({ x: c.x, y: c.y, vx: (Math.random() - 0.5) * 12, vy: (Math.random() - 0.5) * 12, color: Math.random() > 0.5 ? "#FF8C00" : "#FFFFFF", life: 25 });
+                        if (done) playAbilitySfx('boom');
+                        cannonShots.splice(i, 1);
+                    }
+                }
+            }
+
+            // Mano verde estilo Linterna Verde (dedos apuntando hacia +x)
+            function drawGreenHand(x, y, angle, size, alpha) {
+                ctx.save(); ctx.translate(x, y); ctx.rotate(angle); ctx.globalAlpha = alpha;
+                ctx.lineCap = "round"; ctx.lineJoin = "round";
+                const fingers = [[-0.24, 0.30], [-0.08, 0.40], [0.08, 0.38], [0.23, 0.28]];
+                const shape = (w, color) => {
+                    ctx.strokeStyle = color; ctx.lineWidth = w;
+                    ctx.beginPath(); ctx.rect(-size * 0.5, -size * 0.28, size * 0.5, size * 0.56); ctx.stroke();
+                    fingers.forEach(f => { ctx.beginPath(); ctx.moveTo(0, f[0] * size); ctx.lineTo(f[1] * size, f[0] * size); ctx.stroke(); });
+                    ctx.beginPath(); ctx.moveTo(-size * 0.3, -size * 0.3); ctx.lineTo(-size * 0.05, -size * 0.5); ctx.stroke();
+                };
+                ctx.shadowColor = "#33FF66"; ctx.shadowBlur = 30;
+                shape(size * 0.17, "#33FF66");
+                ctx.shadowBlur = 0;
+                shape(size * 0.11, "rgba(170, 255, 190, 0.85)");
+                ctx.fillStyle = "rgba(51, 255, 102, 0.35)"; ctx.fillRect(-size * 0.5, -size * 0.28, size * 0.5, size * 0.56);
+                // muñeca y anillo
+                ctx.strokeStyle = "#33FF66"; ctx.lineWidth = size * 0.06;
+                ctx.beginPath(); ctx.moveTo(-size * 0.62, -size * 0.2); ctx.lineTo(-size * 0.62, size * 0.2); ctx.stroke();
+                ctx.restore();
+            }
+
+            function drawAbilitiesWorld() {
+                // Balas del cañón
+                cannonShots.forEach(c => {
+                    ctx.save();
+                    let g = ctx.createRadialGradient(c.x - c.r * 0.3, c.y - c.r * 0.3, c.r * 0.1, c.x, c.y, c.r);
+                    g.addColorStop(0, "#FFFFFF"); g.addColorStop(0.35, "#FFD27A"); g.addColorStop(0.8, "#FF8C00"); g.addColorStop(1, "rgba(255,80,0,0.6)");
+                    ctx.shadowColor = "#FF8C00"; ctx.shadowBlur = 40; ctx.fillStyle = g;
+                    ctx.beginPath(); ctx.arc(c.x, c.y, c.r, 0, Math.PI * 2); ctx.fill();
+                    ctx.restore();
+                });
+                if (player.dead) return;
+                // Manos de empuje
+                pushHands.forEach(h => {
+                    let p = h.t / h.dur, ease = 1 - Math.pow(1 - Math.min(1, p * 1.6), 3);
+                    let d = player.r + ease * h.reach * 0.75;
+                    let size = 60 + player.r * 1.2 + ease * 40;
+                    let alpha = p < 0.7 ? 1 : 1 - (p - 0.7) / 0.3;
+                    // estela de energía desde el jugador
+                    ctx.save(); ctx.globalAlpha = alpha * 0.5; ctx.strokeStyle = "#33FF66"; ctx.lineWidth = size * 0.25; ctx.lineCap = "round";
+                    ctx.beginPath(); ctx.moveTo(player.x, player.y); ctx.lineTo(player.x + Math.cos(h.angle) * (d - size * 0.6), player.y + Math.sin(h.angle) * (d - size * 0.6)); ctx.stroke(); ctx.restore();
+                    drawGreenHand(player.x + Math.cos(h.angle) * d, player.y + Math.sin(h.angle) * d, h.angle, size, alpha);
+                });
+            }
+
+            // Se dibuja encima de la estrella del jugador
+            function drawPlayerShields() {
+                if (player.dead) return;
+                if (player.rhinoTimer > 0) {
+                    ctx.save(); ctx.translate(player.x, player.y); ctx.rotate(Date.now() / 900);
+                    let R = player.r * 1.35 + 6, blink = player.rhinoTimer < 60 && Math.floor(player.rhinoTimer / 6) % 2 === 0;
+                    ctx.globalAlpha = blink ? 0.35 : 1;
+                    ctx.beginPath();
+                    for (let i = 0; i < 6; i++) { let a = (Math.PI / 3) * i; ctx.lineTo(Math.cos(a) * R, Math.sin(a) * R); }
+                    ctx.closePath(); ctx.fillStyle = "rgba(150, 155, 170, 0.35)"; ctx.fill();
+                    ctx.strokeStyle = "#E0E3EA"; ctx.lineWidth = Math.max(3, player.r * 0.12); ctx.shadowColor = "#FFD700"; ctx.shadowBlur = 15; ctx.stroke();
+                    ctx.shadowBlur = 0; ctx.strokeStyle = "rgba(255, 215, 0, 0.8)"; ctx.lineWidth = 2;
+                    for (let i = 0; i < 6; i++) { let a = (Math.PI / 3) * i; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(Math.cos(a) * R, Math.sin(a) * R); ctx.stroke(); }
+                    ctx.restore();
+                }
+                if (player.reflectTimer > 0) {
+                    ctx.save(); ctx.translate(player.x, player.y);
+                    let R = player.r * 1.7 + 10, blink = player.reflectTimer < 60 && Math.floor(player.reflectTimer / 6) % 2 === 0;
+                    ctx.globalAlpha = blink ? 0.3 : 1;
+                    ctx.fillStyle = player.reflectFlash > 0 ? "rgba(0, 255, 255, 0.3)" : "rgba(0, 255, 255, 0.08)";
+                    ctx.beginPath(); ctx.arc(0, 0, R, 0, Math.PI * 2); ctx.fill();
+                    ctx.rotate(-Date.now() / 400); ctx.setLineDash([14, 10]);
+                    ctx.strokeStyle = "#00FFFF"; ctx.lineWidth = 3 + (player.reflectFlash > 0 ? 3 : 0); ctx.shadowColor = "#00FFFF"; ctx.shadowBlur = 20;
+                    ctx.beginPath(); ctx.arc(0, 0, R, 0, Math.PI * 2); ctx.stroke();
+                    ctx.restore();
+                }
+            }
+
+            // Barra de habilidades abajo al centro
+            function drawAbilityBar() {
+                if (!player.abCd) return;
+                let owned = AB_ORDER.filter(id => (player[id + 'Lvl'] || 0) > 0);
+                if (owned.length === 0) return;
+                const S = 62, gap = 10, total = owned.length * S + (owned.length - 1) * gap;
+                let x0 = (canvas.width - total) / 2, y0 = canvas.height - S - 14;
+                ctx.save();
+                owned.forEach((id, i) => {
+                    let x = x0 + i * (S + gap), a = AB[id], L = player[id + 'Lvl'], cd = player.abCd[id];
+                    let active = (id === 'rhino' && player.rhinoTimer > 0) || (id === 'reflect' && player.reflectTimer > 0);
+                    ctx.fillStyle = "rgba(10, 10, 20, 0.85)"; ctx.fillRect(x, y0, S, S);
+                    if (cd > 0 && !active) {
+                        let frac = cd / a.cooldown(L);
+                        ctx.fillStyle = "rgba(0, 0, 0, 0.55)"; ctx.fillRect(x, y0 + S * (1 - frac), S, S * frac);
+                    }
+                    ctx.strokeStyle = active ? "#FFFFFF" : (cd > 0 ? "#444" : a.color); ctx.lineWidth = active ? 3 : 2;
+                    if (!active && cd <= 0) { ctx.shadowColor = a.color; ctx.shadowBlur = 10; }
+                    ctx.strokeRect(x, y0, S, S); ctx.shadowBlur = 0;
+                    ctx.textAlign = "left"; ctx.font = "bold 13px sans-serif"; ctx.fillStyle = "#FFFFFF"; ctx.fillText(a.key, x + 5, y0 + 15);
+                    ctx.textAlign = "right"; ctx.font = "bold 10px sans-serif"; ctx.fillStyle = "#FFD700"; ctx.fillText(L >= 10 ? "MÁX" : "Nv" + L, x + S - 4, y0 + 14);
+                    ctx.textAlign = "center"; ctx.font = "bold 10px sans-serif"; ctx.fillStyle = a.color; ctx.fillText(a.name, x + S / 2, y0 + S - 7);
+                    ctx.font = "bold 16px sans-serif"; ctx.fillStyle = "#FFFFFF";
+                    let mid = active ? ((id === 'rhino' ? player.rhinoTimer : player.reflectTimer) / 60).toFixed(1) + "s" : (cd > 0 ? Math.ceil(cd / 60) + "s" : "LISTO");
+                    if (mid === "LISTO") { ctx.font = "bold 12px sans-serif"; ctx.fillStyle = a.color; }
+                    ctx.fillText(mid, x + S / 2, y0 + S / 2 + 6);
+                });
+                ctx.restore();
+            }
+
             // Nombre secreto: RISSOS empieza con todo al máximo
             function isRissos() { return (playerName || "").trim().toUpperCase() === "RISSOS"; }
             function applyRissosMode() {
@@ -855,6 +1235,7 @@ codigo_juego_template = """
                 player.speed = 5.5; player.hasInvulnCharge = true;
                 player.laserRange = 3.0; player.laserDamage = 5.0;
                 player.multiLevel = 10; player.crossLevel = 10;
+                player.cannonLvl = 10; player.pushLvl = 10; player.rhinoLvl = 10; player.reflectLvl = 10;
                 player.rissos = true;
                 floatingTexts.push({ x: player.x, y: player.y - 80, text: "MODO RISSOS: TODO AL MÁXIMO", icon: "star", iconBoth: true, color: "#FFD700", life: 120, size: 26 });
             }
@@ -924,7 +1305,8 @@ codigo_juego_template = """
             function spawnBox() { boxes.push({ x: Math.random() * (worldW - 100) + 50, y: Math.random() * (worldH - 100) + 50, r: 16 }); }
             function spawnRedBox() { redBoxes.push({ x: Math.random() * (worldW - 100) + 50, y: Math.random() * (worldH - 100) + 50, r: 18 }); }
             function spawnHeart() { hearts.push({ x: Math.random() * (worldW - 100) + 50, y: Math.random() * (worldH - 100) + 50, r: 10 }); }
-            function spawnOrb() { orbs.push({ x: Math.random() * (worldW - 100) + 50, y: Math.random() * (worldH - 100) + 50, r: 14, type: Math.random() < 0.5 ? 'celeste' : 'morado' }); }
+            function spawnOrb() { orbs.push({ x: Math.random() * (worldW - 100) + 50, y: Math.random() * (worldH - 100) + 50, r: 14, type: ['celeste', 'morado', 'naranja'][Math.floor(Math.random() * 3)] }); }
+            function orbColor(type) { return type === 'celeste' ? '#00FFFF' : (type === 'naranja' ? '#FF8C00' : '#CC33FF'); }
 
             let playerLives = 5; let player, bots, foods;
             const maxBots = 28; const maxFoods = 600;
@@ -959,6 +1341,7 @@ codigo_juego_template = """
                 for(let i=0; i<35; i++) spawnHeart();
                 
                 spawnBox(); spawnBox(); spawnRedBox(); spawnOrb();
+                resetAbilities(); cannonShots = []; pushHands = [];
                 applyRissosMode();
             }
 
@@ -984,6 +1367,10 @@ codigo_juego_template = """
 
             function takeDamage(target, amount) {
                 if(target === player && player.invulnTimer > 0) return;
+                if(target === player && player.rhinoTimer > 0) {
+                    if (Math.random() < 0.15) floatingTexts.push({ x: player.x, y: player.y - player.r - 20, text: "BLINDADO", icon: "shield", color: "#C0C4CE", life: 30, size: 16 });
+                    return;
+                }
                 if(target === player && player.shields > 0) {
                     player.shields--; floatingTexts.push({ x: player.x, y: player.y - player.r - 20, text: "¡ESCUDO ABSORBIÓ DAÑO!", icon: "shield", color: "#C0C0C0", life: 40, size: 16 });
                     return;
@@ -1011,29 +1398,46 @@ codigo_juego_template = """
                     player.crossLevel = Math.min(10, player.crossLevel + 1); 
                     floatingTexts.push({ x: player.x, y: player.y - 40, text: `CRUZ Nv.${player.crossLevel}`, color: "#CC33FF", life: 60, size: 20 });
                 }
+                const ABIL_NAMES = { cannon: ['SÚPER CAÑÓN', '#FF8C00'], push: ['EMPUJE', '#33FF66'], rhino: ['PIEL DE RHINO', '#C0C4CE'], reflect: ['ESCUDO REFLECTOR', '#00FFFF'] };
+                if (ABIL_NAMES[type]) {
+                    let key = type + 'Lvl';
+                    player[key] = Math.min(10, (player[key] || 0) + 1);
+                    floatingTexts.push({ x: player.x, y: player.y - 40, text: `${ABIL_NAMES[type][0]} Nv.${player[key]}`, color: ABIL_NAMES[type][1], life: 70, size: 20 });
+                }
                 orbModal.style.display = 'none'; isPaused = false;
             }
 
+            function lvlTag(lvl) {
+                let next = Math.min(10, (lvl || 0) + 1);
+                let txt = (lvl || 0) >= 10 ? 'NIVEL MÁX' : 'Nv. ' + next;
+                return '<span style="color:#FFD700;font-size:14px;display:block;">' + txt + '</span>';
+            }
+            function setOrbBtn(btn, color, html, fn) {
+                btn.style.display = 'flex'; btn.style.borderColor = color; btn.innerHTML = html; btn.onclick = fn;
+            }
+
             function showOrbMenu(type) {
-                isPaused = true; orbModal.style.display = 'block'; orbModal.style.borderColor = type === 'celeste' ? '#00FFFF' : '#CC33FF';
-                btn1.onclick = null; btn2.onclick = null;
+                isPaused = true; isFiring = false; keysDown.clear();
+                orbModal.style.display = 'block'; orbModal.style.borderColor = orbColor(type);
+                [btn1, btn2, btn3, btn4].forEach(b => { b.onclick = null; b.style.display = 'none'; });
 
                 if(type === 'celeste') {
+                    // Celeste: alcance/daño + habilidades de resistencia
                     orbTitle.style.color = '#00FFFF'; orbTitle.innerHTML = svgOrb('#00FFFF', 'orb-grad-c') + "<span>ORBE CELESTE</span>";
-                    btn1.style.borderColor = '#00FFFF'; btn1.innerHTML = ICON_RANGE + "<span>MAYOR DISTANCIA</span>"; btn1.onclick = () => applyUpgrade('range');
-                    btn2.style.borderColor = '#00FFFF'; btn2.innerHTML = ICON_DAMAGE + "<span>MAYOR DAÑO</span>"; btn2.onclick = () => applyUpgrade('damage');
+                    setOrbBtn(btn1, '#00FFFF', ICON_RANGE + "<span>MAYOR DISTANCIA</span>", () => applyUpgrade('range'));
+                    setOrbBtn(btn2, '#00FFFF', ICON_DAMAGE + "<span>MAYOR DAÑO</span>", () => applyUpgrade('damage'));
+                    setOrbBtn(btn3, '#C0C4CE', ICON_RHINO + "<span>PIEL DE RHINO</span><span style='font-size:11px;color:#aaa'>[Q]</span>" + lvlTag(player.rhinoLvl), () => applyUpgrade('rhino'));
+                    setOrbBtn(btn4, '#00FFFF', ICON_REFLECT + "<span>ESCUDO REFLECTOR</span><span style='font-size:11px;color:#aaa'>[E]</span>" + lvlTag(player.reflectLvl), () => applyUpgrade('reflect'));
+                } else if(type === 'naranja') {
+                    orbTitle.style.color = '#FF8C00'; orbTitle.innerHTML = svgOrb('#FF8C00', 'orb-grad-n') + "<span>ORBE NARANJA</span>";
+                    setOrbBtn(btn1, '#FF8C00', ICON_CANNON + "<span>SÚPER CAÑÓN</span><span style='font-size:11px;color:#aaa'>[X]</span>" + lvlTag(player.cannonLvl), () => applyUpgrade('cannon'));
+                    setOrbBtn(btn2, '#33FF66', ICON_PUSH + "<span>EMPUJE</span><span style='font-size:11px;color:#aaa'>[F]</span>" + lvlTag(player.pushLvl), () => applyUpgrade('push'));
                 } else {
                     orbTitle.style.color = '#CC33FF'; orbTitle.innerHTML = svgOrb('#CC33FF', 'orb-grad-m') + "<span>ORBE MORADO</span>";
                     let nextMulti = Math.min(10, player.multiLevel + 1);
                     let nextCross = Math.min(10, player.crossLevel + 1);
-                    
-                    btn1.style.borderColor = '#CC33FF'; 
-                    btn1.innerHTML = `${ICON_MULTI}<span>DISPARO MÚLTIPLE</span><span style="color:#FFD700;font-size:14px;display:block;">Nv. ${nextMulti}</span>`; 
-                    btn1.onclick = () => applyUpgrade('multi');
-                    
-                    btn2.style.borderColor = '#CC33FF'; 
-                    btn2.innerHTML = `${ICON_CROSS}<span>DISPARO EN CRUZ</span><span style="color:#FFD700;font-size:14px;display:block;">Nv. ${nextCross}</span>`; 
-                    btn2.onclick = () => applyUpgrade('cross');
+                    setOrbBtn(btn1, '#CC33FF', `${ICON_MULTI}<span>DISPARO MÚLTIPLE</span><span style="color:#FFD700;font-size:14px;display:block;">Nv. ${nextMulti}</span>`, () => applyUpgrade('multi'));
+                    setOrbBtn(btn2, '#CC33FF', `${ICON_CROSS}<span>DISPARO EN CRUZ</span><span style="color:#FFD700;font-size:14px;display:block;">Nv. ${nextCross}</span>`, () => applyUpgrade('cross'));
                 }
             }
 
@@ -1117,7 +1521,7 @@ codigo_juego_template = """
                 if(!blackHole.dead) { 
                     blackHole.r += 0.012; blackHole.hp = Math.min(blackHole.maxHp, blackHole.hp + 0.02);
                     let pullRadius = blackHole.r * 5.5; let dPlayer = Math.hypot(blackHole.x - player.x, blackHole.y - player.y);
-                    if(!player.dead && dPlayer < pullRadius && dPlayer > 0) {
+                    if(!player.dead && !(player.rhinoTimer > 0) && dPlayer < pullRadius && dPlayer > 0) {
                         let pullForce = (1 - dPlayer / pullRadius) * 2.8;
                         player.x += ((blackHole.x - player.x) / dPlayer) * pullForce; player.y += ((blackHole.y - player.y) / dPlayer) * pullForce;
                         if(Math.random() < 0.25) particles.push({ x: player.x, y: player.y, vx: ((blackHole.x - player.x) / dPlayer) * 3, vy: ((blackHole.y - player.y) / dPlayer) * 3, color: "#8A2BE2", life: 12 });
@@ -1149,6 +1553,7 @@ codigo_juego_template = """
                 }
 
                 updateAbyssLaser();
+                updateAbilities();
 
                 bots.forEach(bot => {
                     let botSpeed = 3 * Math.max(0.35, 20 / (bot.r + 5));
@@ -1212,6 +1617,7 @@ codigo_juego_template = """
                         for(let s of allStars) {
                             if(s.dead || s === l.owner) continue;
                             if(Math.hypot(l.x - s.x, l.y - s.y) < (s.r + (l.r||5))) {
+                                if (s === player && player.reflectTimer > 0) { reflectLaser(l); break; }
                                 hit = true; takeDamage(s, dmg);
                                 for(let k=0; k<4; k++) particles.push({ x: l.x, y: l.y, vx: (Math.random() - 0.5)*4, vy: (Math.random() - 0.5)*4, color: l.color, life: 15 });
                                 break;
@@ -1260,7 +1666,8 @@ codigo_juego_template = """
                                 }
                             } 
                             else { 
-                                if(s === player && !player.dead) { player.hp = 0; player.dead = true; handlePlayerDeath(); } else if(s !== player) { s.dead = true; } 
+                                if(s === player && player.rhinoTimer > 0) { /* blindado: el agujero no te traga */ }
+                                else if(s === player && !player.dead) { player.hp = 0; player.dead = true; handlePlayerDeath(); } else if(s !== player) { s.dead = true; } 
                             }
                         }
                     });
@@ -1291,7 +1698,7 @@ codigo_juego_template = """
                         if(d < e1.r + e2.r) { if(e1 === player && player.fireTimer > 0 && (now - (e2.lastBurnTime || 0) > 500)) { takeDamage(e2, 40); e2.lastBurnTime = now; } else if (e2 === player && player.fireTimer > 0 && (now - (e1.lastBurnTime || 0) > 500)) { takeDamage(e1, 40); e1.lastBurnTime = now; } }
                         let bigger = e1.r > e2.r ? e1 : e2; let smaller = e1.r > e2.r ? e2 : e1;
                         if(d < bigger.r * 0.75 && bigger.r > smaller.r * 1.15) {
-                            if(smaller === player && player.invulnTimer > 0) continue;
+                            if(smaller === player && (player.invulnTimer > 0 || player.rhinoTimer > 0)) continue;
                             bigger.r += smaller.r * 0.35;
                             if(bigger === player) { player.hp += 35; if(player.hp > player.maxHp) player.maxHp = player.hp; } else { bigger.hp = Math.min(bigger.maxHp, bigger.hp + 35); }
                             if(smaller === player && !player.dead) { smaller.hp = 0; smaller.dead = true; handlePlayerDeath(); } else { smaller.dead = true; }
@@ -1563,7 +1970,7 @@ codigo_juego_template = """
                 boxes.forEach(b => { ctx.save(); ctx.translate(b.x, b.y); ctx.fillStyle = "#FFD700"; ctx.strokeStyle = "#FF8C00"; ctx.lineWidth = 3; ctx.fillRect(-b.r, -b.r, b.r*2, b.r*2); ctx.strokeRect(-b.r, -b.r, b.r*2, b.r*2); ctx.fillStyle = "#000"; ctx.font = "bold 16px sans-serif"; ctx.textAlign = "center"; ctx.fillText("?", 0, 5); ctx.restore(); });
                 redBoxes.forEach(rb => { ctx.save(); ctx.translate(rb.x, rb.y); ctx.fillStyle = "#FF0000"; ctx.strokeStyle = "#8B0000"; ctx.lineWidth = 3; ctx.fillRect(-rb.r, -rb.r, rb.r*2, rb.r*2); ctx.strokeRect(-rb.r, -rb.r, rb.r*2, rb.r*2); drawIcon(ctx, 'fire', 0, 0, rb.r * 1.4); ctx.restore(); });
 
-                orbs.forEach(o => { ctx.save(); ctx.translate(o.x, o.y); ctx.beginPath(); ctx.arc(0, 0, o.r, 0, Math.PI * 2); ctx.fillStyle = o.type === 'celeste' ? '#00FFFF' : '#CC33FF'; ctx.fill(); ctx.strokeStyle = "white"; ctx.lineWidth = 2; ctx.stroke(); ctx.globalAlpha = 0.5; ctx.beginPath(); ctx.arc(0, 0, o.r + Math.sin(Date.now() / 150)*4, 0, Math.PI * 2); ctx.strokeStyle = o.type === 'celeste' ? '#00FFFF' : '#CC33FF'; ctx.lineWidth = 2; ctx.stroke(); ctx.restore(); });
+                orbs.forEach(o => { ctx.save(); ctx.translate(o.x, o.y); ctx.beginPath(); ctx.arc(0, 0, o.r, 0, Math.PI * 2); ctx.fillStyle = orbColor(o.type); ctx.fill(); ctx.strokeStyle = "white"; ctx.lineWidth = 2; ctx.stroke(); ctx.globalAlpha = 0.5; ctx.beginPath(); ctx.arc(0, 0, o.r + Math.sin(Date.now() / 150)*4, 0, Math.PI * 2); ctx.strokeStyle = orbColor(o.type); ctx.lineWidth = 2; ctx.stroke(); ctx.restore(); });
                 hearts.forEach(h => { drawIcon(ctx, 'heart', h.x, h.y, 20); });
                 ctx.textBaseline = "middle";
                 particles.forEach(p => { ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, Math.PI * 2); ctx.fillStyle = p.color; ctx.fill(); });
@@ -1595,6 +2002,7 @@ codigo_juego_template = """
                 let allStars = [player, ...bots].filter(s => !s.dead); allStars.sort((a, b) => a.r - b.r); 
 
                 drawAbyssLaser();
+                drawAbilitiesWorld();
 
                 allStars.forEach(s => {
                     let isInvuln = (s === player && player.invulnTimer > 0), isFire = (s === player && player.fireTimer > 0);
@@ -1612,6 +2020,8 @@ codigo_juego_template = """
                     ctx.fillStyle = "white"; ctx.font = "bold 12px sans-serif"; ctx.textAlign = "center"; ctx.fillText(s.name, s.x, s.y + s.r + 15);
                     if (s.r >= LARGE_THRESHOLD) { let nw = ctx.measureText(s.name).width; drawIcon(ctx, 'crown', s.x + nw / 2 + 12, s.y + s.r + 14, 16); }
                 });
+
+                drawPlayerShields();
 
                 floatingTexts.forEach(ft => {
                     let fs = ft.size || 14;
@@ -1643,6 +2053,7 @@ codigo_juego_template = """
                 if(abyssUnlocked) { buffSeg('vortex', abyssTimer > 0 ? `LÁSER ABISMAL: ${(abyssTimer/60).toFixed(1)}s` : (abyssCooldown > 0 ? `LÁSER ABISMAL: ${Math.ceil(abyssCooldown/60)}s` : "[R] LÁSER ABISMAL LISTO")); }
                 if(player.continuousLaserTimer > 0) { buffSeg('dot', `LÁSER CONTINUO: ${(player.continuousLaserTimer/60).toFixed(1)}s`); }
                 ctx.restore();
+                drawAbilityBar();
             }
 
             // === MENÚ PRINCIPAL ===
