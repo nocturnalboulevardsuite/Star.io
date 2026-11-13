@@ -91,7 +91,8 @@ def cargar_fases():
             ruta_js = os.path.join(ruta, "fase.js")
             if os.path.exists(ruta_js):
                 with open(ruta_js, "r", encoding="utf-8") as f:
-                    scripts.append(f"// ---- {nombre}/fase.js ----\n" + f.read())
+                    # el ID de la fase es el nombre de su carpeta (fase2, fase_2, desierto... da igual)
+                    scripts.append(f"// ---- {nombre}/fase.js ----\nwindow.__FASE_ID__ = {json.dumps(nombre)};\n" + f.read())
                 info["jugable"] = True
             fases.append(info)
     return fases, "\n".join(scripts)
@@ -2111,8 +2112,11 @@ codigo_juego_template = """
             function isFaseBeaten(id) { return !!(progress['FASE:' + id] && progress['FASE:' + id].completada); }
             function isFaseUnlocked(k) {
                 if (isRissos()) return true;
-                if (k === 0) return beatenAny(0);                    // la primera fase se abre al ganar el nivel 1
-                return isFaseBeaten(FASES_DATA[k - 1].id);          // las demás, al completar la anterior
+                // solo cuentan las fases jugables (las carpetas sin fase.js no bloquean a las demás)
+                const jugables = FASES_DATA.filter(f => f.jugable);
+                const pos = jugables.indexOf(FASES_DATA[k]);
+                if (pos <= 0) return beatenAny(0);                   // la primera fase jugable se abre al ganar el nivel 1
+                return isFaseBeaten(jugables[pos - 1].id);           // las demás, al completar la anterior
             }
             function startFase(id) {
                 const fa = FASES_DATA.find(f => f.id === id), reg = window.FASES_REG && window.FASES_REG[id];
@@ -2125,6 +2129,7 @@ codigo_juego_template = """
                 currentFase = reg; gameState = 'fase';
                 reg.start(fa.config, {
                     canvas, ctx, drawIcon, playSfx, playAbilitySfx, playEndSfx, playVictoryMusic, stopVictoryMusic, isRissos,
+                    getAudioCtx, sfxVol: () => sfxVolume, interacted: () => isUserInteracted,
                     active: () => gameState === 'fase' && currentFase === reg,
                     onWin: (faseId) => {
                         const key = 'FASE:' + faseId; progress[key] = progress[key] || {}; progress[key].completada = true;
