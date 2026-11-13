@@ -44,6 +44,31 @@ for cat, rutas in rutas_sfx.items():
 
 sfx_json = json.dumps(sfx_data)
 
+# ==========================================
+# NIVELES (carpeta niveles/ con un .json por nivel)
+# ==========================================
+def cargar_niveles():
+    base = os.path.dirname(os.path.abspath(__file__))
+    carpeta = os.path.join(base, "niveles")
+    if not os.path.isdir(carpeta):
+        carpeta = "niveles"
+    niveles = []
+    if os.path.isdir(carpeta):
+        for nombre in sorted(os.listdir(carpeta)):          # se ordenan por nombre: nivel_01, nivel_02...
+            if not nombre.lower().endswith(".json"):
+                continue
+            try:
+                with open(os.path.join(carpeta, nombre), "r", encoding="utf-8") as f:
+                    datos = json.load(f)
+                datos["archivo"] = nombre
+                niveles.append(datos)
+            except Exception as e:
+                st.warning(f"No se pudo leer el nivel {nombre}: {e}")
+    return niveles
+
+# Si no hay carpeta niveles/, el juego usa el nivel por defecto (igual al original)
+niveles_json = json.dumps(cargar_niveles(), ensure_ascii=False).replace("</", "<\\/")
+
 # El juego ocupa toda la pantalla del navegador y la página nunca hace scroll
 st.markdown("""
 <style>
@@ -71,6 +96,13 @@ codigo_juego_template = """
             #gameover { display: none; position: absolute; color: white; top: 40%; left: 50%; transform: translateX(-50%); text-align: center; font-size: 24px; text-shadow: 2px 2px 10px #000; pointer-events: none; z-index: 5; width: 100%; }
             
             /* Modal de orbes */
+            #victory-modal { display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 20; background: rgba(8, 8, 22, 0.96); padding: 30px 36px; border-radius: 14px; border: 3px solid #FFD700; text-align: center; font-family: 'Orbitron', 'Segoe UI', sans-serif; box-shadow: 0 0 40px rgba(255, 215, 0, 0.35); min-width: 420px; }
+            #victory-modal h2 { color: #FFD700; margin: 0 0 6px; letter-spacing: 3px; }
+            #victory-modal p { color: #9adfe6; margin: 0 0 20px; font-size: 13px; letter-spacing: 1px; }
+            .vic-btns { display: flex; flex-direction: column; gap: 12px; }
+            .vic-btn { padding: 14px 18px; font-family: inherit; font-size: 16px; font-weight: 700; letter-spacing: 2px; border-radius: 10px; cursor: pointer; border: 2px solid; background: #0d1424; transition: transform 0.12s; }
+            .vic-btn:hover:not(:disabled) { transform: scale(1.04); }
+            .vic-btn:disabled { opacity: 0.4; cursor: not-allowed; }
             #orb-modal { display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(10, 10, 25, 0.95); padding: 30px; border-radius: 12px; border: 3px solid white; text-align: center; z-index: 10; }
             .orb-btn { width: 160px; height: 160px; background: #151525; color: white; border: 2px solid #555; border-radius: 10px; font-size: 16px; font-weight: bold; cursor: pointer; transition: 0.2s; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; line-height: 1.4; }
             .orb-btn:hover { background: #2a2a40; transform: scale(1.05); }
@@ -221,6 +253,16 @@ codigo_juego_template = """
                 </svg>
                 <h2 id="gameover-title">¡Te moriste Stupid!</h2>
                 <p id="gameover-msg" style="font-size: 22px; color: #00FFFF; font-weight: bold; margin-top: 10px;">DALE CLICK AL JUEGO PARA REAPARECER</p>
+            </div>
+
+            <div id="victory-modal">
+                <h2>¡NIVEL COMPLETADO!</h2>
+                <p id="victory-sub"></p>
+                <div class="vic-btns">
+                    <button class="vic-btn" id="vic-next" style="color:#06060E;background:#FFD700;border-color:#FFFFFF;">SIGUIENTE NIVEL</button>
+                    <button class="vic-btn" id="vic-repeat" style="color:#00FFFF;border-color:#00b8c4;">REPETIR NIVEL</button>
+                    <button class="vic-btn" id="vic-free" style="color:#33FF66;border-color:#33FF66;">MODO LIBRE</button>
+                </div>
             </div>
 
             <div id="orb-modal">
@@ -619,8 +661,34 @@ codigo_juego_template = """
                 if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'PageUp', 'PageDown', 'Home', 'End'].includes(e.code)) e.preventDefault();
             });
 
-            const worldW = 3200;
-            const worldH = 3200;
+            // ======================================================
+            // === NIVELES ===  (se cargan desde la carpeta niveles/ del repo)
+            // ======================================================
+            const LEVELS_RAW = __LEVELS_DATA__;
+            const DEFAULT_LEVEL = {
+                nombre: "Vía Láctea", descripcion: "",
+                mundo: { ancho: 3200, alto: 3200, color_fondo: "#06060E", color_borde: "#FF3366" },
+                bots: { cantidad: 28, vida: 200, velocidad: 1.0, espera_disparo_ms: 2500, potencia_disparo: 1.0 },
+                comida: 600, orbes_max: 3,
+                agujero_negro: { vida: 10000, radio: 75, pos_x: 0.7, pos_y: 0.3, crecimiento: 0.012, fuerza_atraccion: 2.8 },
+                jefe: { nombre: "LUNA SANGRIENTA", nombre_fase2: "LUNA CÍCLOPE", vida: 15000, velocidad: 1.2, velocidad_fase2: 0.45,
+                        color: "#FF6600", color_fase2: "#FF0033", potencia_balas: 1.5, espera_laser_frames: 1800, potencia_laser: 5 }
+            };
+            function mergeLevel(raw) {
+                const out = {};
+                Object.keys(DEFAULT_LEVEL).forEach(k => {
+                    const d = DEFAULT_LEVEL[k], v = raw ? raw[k] : undefined;
+                    out[k] = (d && typeof d === 'object') ? Object.assign({}, d, (v && typeof v === 'object') ? v : {}) : (v !== undefined ? v : d);
+                });
+                return out;
+            }
+            const LEVELS = (Array.isArray(LEVELS_RAW) && LEVELS_RAW.length > 0 ? LEVELS_RAW : [{}]).map(mergeLevel);
+            let levelIndex = 0;
+            let LV = LEVELS[0];
+            let freeMode = false, victoryTimer = 0;
+
+            let worldW = LV.mundo.ancho;
+            let worldH = LV.mundo.alto;
             const LARGE_THRESHOLD = 50; 
             
             let camX = 0, camY = 0, zoom = 1;
@@ -878,7 +946,7 @@ codigo_juego_template = """
                         floatingTexts.push({ x: meteor.x + (Math.random() - 0.5) * 80, y: meteor.y - meteor.r - 20, text: `-${Math.ceil(ABYSS_DMG_BOSS * dmg)}`, color: "#B266FF", life: 30, size: 26 });
                         if (meteor.hp <= 0 && !meteor.dead) {
                             meteor.dead = true; playSfx("bh_death", 2.5);
-                            floatingTexts.push({ x: meteor.x, y: meteor.y, text: "VICTORIA GALÁCTICA", icon: "star", iconBoth: true, color: "#FFD700", life: 300, size: 50 });
+                            floatingTexts.push({ x: meteor.x, y: meteor.y, text: "VICTORIA GALÁCTICA", icon: "star", iconBoth: true, color: "#FFD700", life: 300, size: 50 }); onBossDefeated();
                             if (bgMusic && audioSrc) { bgMusic.pause(); bgMusic.src = audioSrc; usingBossTrack = false; bgMusic.currentTime = 0; bgMusic.play().catch(e => console.log(e)); }
                         }
                     }
@@ -1012,7 +1080,7 @@ codigo_juego_template = """
                 floatingTexts.push({ x: meteor.x + (Math.random() - 0.5) * 80, y: meteor.y - meteor.r - 20, text: `-${Math.ceil(amount)}`, color: color || "#FF8C00", life: 40, size: 30 });
                 if (meteor.hp <= 0 && !meteor.dead) {
                     meteor.dead = true; playSfx("bh_death", 2.5);
-                    floatingTexts.push({ x: meteor.x, y: meteor.y, text: "VICTORIA GALÁCTICA", icon: "star", iconBoth: true, color: "#FFD700", life: 300, size: 50 });
+                    floatingTexts.push({ x: meteor.x, y: meteor.y, text: "VICTORIA GALÁCTICA", icon: "star", iconBoth: true, color: "#FFD700", life: 300, size: 50 }); onBossDefeated();
                     if (bgMusic && audioSrc) { bgMusic.pause(); bgMusic.src = audioSrc; usingBossTrack = false; bgMusic.currentTime = 0; bgMusic.play().catch(e => console.log(e)); }
                 }
             }
@@ -1288,7 +1356,7 @@ codigo_juego_template = """
                 },
                 nightmare: {
                     name: 'NIGHTMARE STAR', color: '#FF0040', stats: [0, 6, 6],
-                    perk: 'Velocidad luz. Mata lo que toca. 1 vida y un solo golpe te mata. Agujero negro: 2 toques. Luna roja: 4 toques.'
+                    perk: 'Velocidad luz. Mata lo que toca. 1 vida y un solo golpe te mata. Agujero negro: 2 toques. Luna roja: 3 toques.'
                 }
             };
             let selectedCharacter = 'normal';
@@ -1350,7 +1418,7 @@ codigo_juego_template = """
                     if (!blackHole.dead) bounceFrom(blackHole);
                 }
                 if (!meteor.dead && Math.hypot(meteor.x - player.x, meteor.y - player.y) < player.r + meteor.r * 0.85) {
-                    if (meteor.isBoss && player.nmCd <= 0 && cinematicTimer <= 0) touchBoss(meteor, 4, damageMeteor, "TOQUE");
+                    if (meteor.isBoss && player.nmCd <= 0 && cinematicTimer <= 0) touchBoss(meteor, 3, damageMeteor, "TOQUE");
                     if (!meteor.dead) bounceFrom(meteor);
                 }
             }
@@ -1383,7 +1451,7 @@ codigo_juego_template = """
                         '</div>' +
                         '<div class="char-perk">' + c.perk + '</div>';
                     card.addEventListener('click', () => {
-                        selectedCharacter = id;
+                        selectedCharacter = id; levelIndex = 0;
                         charSelect.style.display = 'none';
                         startGame();
                     });
@@ -1394,6 +1462,33 @@ codigo_juego_template = """
                 buildCharCards();
                 charSelect.style.display = 'flex';
             }
+
+            // === PANTALLA DE VICTORIA ===
+            const victoryModal = document.getElementById('victory-modal');
+            function onBossDefeated() {
+                if (freeMode) return;
+                victoryTimer = 150;   // 2,5 s para ver la explosión antes del menú
+            }
+            function showVictory() {
+                isPaused = true; isFiring = false; keysDown.clear();
+                let hasNext = levelIndex < LEVELS.length - 1;
+                document.getElementById('victory-sub').innerText = `NIVEL ${levelIndex + 1}: ${String(LV.nombre).toUpperCase()}` + (hasNext ? '' : ' · ÚLTIMO NIVEL');
+                const nextBtn = document.getElementById('vic-next');
+                nextBtn.disabled = !hasNext;
+                nextBtn.innerText = hasNext ? `SIGUIENTE: ${String(LEVELS[levelIndex + 1].nombre).toUpperCase()}` : 'NO HAY MÁS NIVELES (AÚN)';
+                victoryModal.style.display = 'block';
+            }
+            document.getElementById('vic-next').addEventListener('click', () => {
+                if (levelIndex >= LEVELS.length - 1) return;
+                levelIndex++; victoryModal.style.display = 'none'; init(); gameState = 'playing';
+            });
+            document.getElementById('vic-repeat').addEventListener('click', () => {
+                victoryModal.style.display = 'none'; init(); gameState = 'playing';
+            });
+            document.getElementById('vic-free').addEventListener('click', () => {
+                freeMode = true; victoryModal.style.display = 'none'; isPaused = false;
+                floatingTexts.push({ x: player.x, y: player.y - 60, text: "MODO LIBRE", color: "#33FF66", life: 90, size: 26 });
+            });
 
             // Nombre secreto: RISSOS empieza con todo al máximo
             function isRissos() { return (playerName || "").trim().toUpperCase() === "RISSOS"; }
@@ -1477,13 +1572,17 @@ codigo_juego_template = """
             function orbColor(type) { return type === 'celeste' ? '#00FFFF' : (type === 'naranja' ? '#FF8C00' : '#CC33FF'); }
 
             let playerLives = 5; let player, bots, foods;
-            const maxBots = 28; const maxFoods = 600;
+            let maxBots = 28; let maxFoods = 600;
 
             function init() {
+                LV = LEVELS[Math.min(levelIndex, LEVELS.length - 1)];
+                worldW = LV.mundo.ancho; worldH = LV.mundo.alto;
+                maxBots = LV.bots.cantidad; maxFoods = LV.comida;
+                freeMode = false; victoryTimer = 0; victoryModal.style.display = 'none';
                 isGameOver = false; isPaused = false; playerLives = 5; cinematicTimer = 0; orbModal.style.display = 'none'; overScreen.style.display = 'none';
                 dashTimer = 0; lastDashTime = 0;
                 abyssUnlocked = false; abyssTimer = 0; abyssCooldown = 0;
-                blackHole = { x: worldW * 0.7, y: worldH * 0.3, r: 75, hp: 10000, maxHp: 10000, dead: false };
+                blackHole = { x: worldW * LV.agujero_negro.pos_x, y: worldH * LV.agujero_negro.pos_y, r: LV.agujero_negro.radio, hp: LV.agujero_negro.vida, maxHp: LV.agujero_negro.vida, dead: false };
                 if (bgMusic && usingBossTrack && audioSrc) {
                     let wasPlaying = !bgMusic.paused;
                     bgMusic.pause(); bgMusic.src = audioSrc; usingBossTrack = false; bgMusic.currentTime = 0;
@@ -1493,7 +1592,7 @@ codigo_juego_template = """
                 
                 meteor = { 
                     orbitAngle: 0, orbitRadius: 450, x: worldW / 2, y: worldH / 2, r: 100, angle: 0, 
-                    hp: 15000, maxHp: 15000, isBoss: false, isPhase2: false, phase2MusicStarted: false, 
+                    hp: LV.jefe.vida, maxHp: LV.jefe.vida, isBoss: false, isPhase2: false, phase2MusicStarted: false, 
                     dead: false, shootAngle: 0, laserTimer: 0, laserChargeTimer: 0, laserSweepTimer: 0, laserAngle: 0,
                     craters: [ {x: -35, y: -25, r: 20}, {x: 35, y: -35, r: 16}, {x: 10, y: 30, r: 25}, {x: -40, y: 25, r: 14}, {x: 0, y: 0, r: 18} ] 
                 };
@@ -1511,10 +1610,11 @@ codigo_juego_template = """
                 spawnBox(); spawnBox(); spawnRedBox(); spawnOrb();
                 resetAbilities(); cannonShots = []; pushHands = [];
                 applyCharacter(true);
+                floatingTexts.push({ x: player.x, y: player.y - 120, text: `NIVEL ${levelIndex + 1}: ${String(LV.nombre).toUpperCase()}`, icon: "star", iconBoth: true, color: "#FFD700", life: 180, size: 30 });
                 applyRissosMode();
             }
 
-            function spawnBot() { bots.push({ x: Math.random() * worldW, y: Math.random() * worldH, r: Math.random() * 20 + 10, color: randomColor(), name: randomName(), vx: (Math.random() - 0.5) * 4, vy: (Math.random() - 0.5) * 4, hp: 200, maxHp: 200, lastShootTime: 0, dead: false, lastBurnTime: 0 }); }
+            function spawnBot() { bots.push({ x: Math.random() * worldW, y: Math.random() * worldH, r: Math.random() * 20 + 10, color: randomColor(), name: randomName(), vx: (Math.random() - 0.5) * 4, vy: (Math.random() - 0.5) * 4, hp: LV.bots.vida, maxHp: LV.bots.vida, lastShootTime: 0, dead: false, lastBurnTime: 0 }); }
             function spawnFood() { foods.push({ x: Math.random() * worldW, y: Math.random() * worldH, r: 3.5, color: randomColor() }); }
 
             // Al eliminar un enemigo suelta la mitad de su masa en bolitas que salen disparadas
@@ -1622,9 +1722,10 @@ codigo_juego_template = """
             }
 
             function update() {
+                if (victoryTimer > 0) { victoryTimer--; if (victoryTimer === 0 && !isGameOver) showVictory(); }
                 if(Math.random() < 0.003 && boxes.length < 5) spawnBox();
                 if(Math.random() < 0.0015 && redBoxes.length < 2) spawnRedBox();
-                if(Math.random() < 0.002 && orbs.length < 3) spawnOrb();
+                if(Math.random() < 0.002 && orbs.length < LV.orbes_max) spawnOrb();
 
                 if (!player.dead && player.continuousLaserTimer > 0) {
                     player.continuousLaserTimer--;
@@ -1647,11 +1748,11 @@ codigo_juego_template = """
                 } else if (!meteor.dead && cinematicTimer <= 0) {
                     if (meteor.hp <= meteor.maxHp * 0.5 && !meteor.isPhase2) {
                         meteor.isPhase2 = true;
-                        floatingTexts.push({ x: meteor.x, y: meteor.y - 140, text: "FASE 2: LUNA CÍCLOPE ACTIVADA", icon: "eye", iconBoth: true, color: "#FF0000", life: 180, size: 36 });
+                        floatingTexts.push({ x: meteor.x, y: meteor.y - 140, text: `FASE 2: ${LV.jefe.nombre_fase2} ACTIVADA`, icon: "eye", iconBoth: true, color: "#FF0000", life: 180, size: 36 });
                     }
                     if (meteor.isPhase2 && !meteor.phase2MusicStarted) { meteor.phase2MusicStarted = true; }
 
-                    let bossSpeed = meteor.isPhase2 ? 0.45 : 1.2;
+                    let bossSpeed = meteor.isPhase2 ? LV.jefe.velocidad_fase2 : LV.jefe.velocidad;
                     if (!player.dead) {
                         let dx = player.x - meteor.x; let dy = player.y - meteor.y; let dist = Math.hypot(dx, dy);
                         if (dist > 0) { meteor.x += (dx/dist) * bossSpeed; meteor.y += (dy/dist) * bossSpeed; }
@@ -1659,12 +1760,12 @@ codigo_juego_template = """
 
                     meteor.shootAngle += 0.22;
                     if (Date.now() % 4 === 0) {
-                        lasers.push({ x: meteor.x, y: meteor.y, vx: Math.cos(meteor.shootAngle) * 5, vy: Math.sin(meteor.shootAngle) * 5, life: 160, owner: meteor, color: "#FFA500", damageMult: 1.5, r: 9, isStar: true });
+                        lasers.push({ x: meteor.x, y: meteor.y, vx: Math.cos(meteor.shootAngle) * 5, vy: Math.sin(meteor.shootAngle) * 5, life: 160, owner: meteor, color: "#FFA500", damageMult: LV.jefe.potencia_balas, r: 9, isStar: true });
                     }
 
                     if (meteor.isPhase2) {
                         meteor.laserTimer++;
-                        if (meteor.laserTimer >= 1800 && meteor.laserChargeTimer <= 0 && meteor.laserSweepTimer <= 0) {
+                        if (meteor.laserTimer >= LV.jefe.espera_laser_frames && meteor.laserChargeTimer <= 0 && meteor.laserSweepTimer <= 0) {
                             meteor.laserChargeTimer = 60; 
                             let angleToPlayer = Math.atan2(player.y - meteor.y, player.x - meteor.x);
                             meteor.laserAngle = angleToPlayer - 0.7; 
@@ -1684,7 +1785,7 @@ codigo_juego_template = """
                                 if (proj > 0) { 
                                     let distSq = (vx * vx + vy * vy) - (proj * proj);
                                     let beamRadius = 35; 
-                                    if (distSq < (beamRadius + player.r) * (beamRadius + player.r)) { takeDamage(player, 5); }
+                                    if (distSq < (beamRadius + player.r) * (beamRadius + player.r)) { takeDamage(player, LV.jefe.potencia_laser); }
                                 }
                             }
                         }
@@ -1693,10 +1794,10 @@ codigo_juego_template = """
                 meteor.angle += 0.003;
 
                 if(!blackHole.dead) { 
-                    blackHole.r += 0.012; blackHole.hp = Math.min(blackHole.maxHp, blackHole.hp + 0.02);
+                    blackHole.r += LV.agujero_negro.crecimiento; blackHole.hp = Math.min(blackHole.maxHp, blackHole.hp + 0.02);
                     let pullRadius = blackHole.r * 5.5; let dPlayer = Math.hypot(blackHole.x - player.x, blackHole.y - player.y);
                     if(!player.dead && !(player.rhinoTimer > 0) && dPlayer < pullRadius && dPlayer > 0) {
-                        let pullForce = (1 - dPlayer / pullRadius) * 2.8;
+                        let pullForce = (1 - dPlayer / pullRadius) * LV.agujero_negro.fuerza_atraccion;
                         player.x += ((blackHole.x - player.x) / dPlayer) * pullForce; player.y += ((blackHole.y - player.y) / dPlayer) * pullForce;
                         if(Math.random() < 0.25) particles.push({ x: player.x, y: player.y, vx: ((blackHole.x - player.x) / dPlayer) * 3, vy: ((blackHole.y - player.y) / dPlayer) * 3, color: "#8A2BE2", life: 12 });
                     }
@@ -1745,12 +1846,12 @@ codigo_juego_template = """
                 updateNightmare();
 
                 bots.forEach(bot => {
-                    let botSpeed = 3 * Math.max(0.35, 20 / (bot.r + 5));
+                    let botSpeed = 3 * LV.bots.velocidad * Math.max(0.35, 20 / (bot.r + 5));
                     if(Math.random() < 0.02) { bot.vx = (Math.random() - 0.5) * 4; bot.vy = (Math.random() - 0.5) * 4; }
                     bot.x += bot.vx * (botSpeed / 2); bot.y += bot.vy * (botSpeed / 2);
                     bot.x = Math.max(bot.r, Math.min(worldW - bot.r, bot.x)); bot.y = Math.max(bot.r, Math.min(worldH - bot.r, bot.y));
 
-                    if (now - (bot.lastShootTime || 0) > 2500 && Math.random() < 0.03 && bot.r > 12) {
+                    if (now - (bot.lastShootTime || 0) > LV.bots.espera_disparo_ms && Math.random() < 0.03 && bot.r > 12) {
                         let target = (!blackHole.dead && Math.hypot(blackHole.x - bot.x, blackHole.y - bot.y) < 600) ? blackHole : 
                                      (meteor.isBoss && !meteor.dead && Math.hypot(meteor.x - bot.x, meteor.y - bot.y) < 600) ? meteor :
                                      (!player.dead && Math.hypot(player.x - bot.x, player.y - bot.y) < 550) ? player : 
@@ -1758,7 +1859,7 @@ codigo_juego_template = """
 
                         if(target) {
                             let dx = target.x - bot.x, dy = target.y - bot.y, dist = Math.hypot(dx, dy);
-                            if(dist > 0) { lasers.push({ x: bot.x, y: bot.y, vx: (dx / dist) * 13, vy: (dy / dist) * 13, life: 65, owner: bot, color: "#FF6633", damageMult: 1, isStar: false }); bot.lastShootTime = now; bot.r = Math.max(8, bot.r - 0.3); }
+                            if(dist > 0) { lasers.push({ x: bot.x, y: bot.y, vx: (dx / dist) * 13, vy: (dy / dist) * 13, life: 65, owner: bot, color: "#FF6633", damageMult: LV.bots.potencia_disparo, isStar: false }); bot.lastShootTime = now; bot.r = Math.max(8, bot.r - 0.3); }
                         }
                     }
                 });
@@ -1797,7 +1898,7 @@ codigo_juego_template = """
                         meteor.hp -= dmg; hit = true;
                         if(meteor.hp <= 0 && !meteor.dead) {
                             meteor.dead = true; playSfx("bh_death", 2.5); 
-                            floatingTexts.push({ x: meteor.x, y: meteor.y, text: "VICTORIA GALÁCTICA", icon: "star", iconBoth: true, color: "#FFD700", life: 300, size: 50 });
+                            floatingTexts.push({ x: meteor.x, y: meteor.y, text: "VICTORIA GALÁCTICA", icon: "star", iconBoth: true, color: "#FFD700", life: 300, size: 50 }); onBossDefeated();
                             if (bgMusic && audioSrc) { bgMusic.pause(); bgMusic.src = audioSrc; usingBossTrack = false; bgMusic.currentTime = 0; bgMusic.play().catch(e => console.log(e)); }
                         }
                     }
@@ -2100,7 +2201,7 @@ codigo_juego_template = """
             }
 
             function draw() {
-                ctx.fillStyle = "#06060E"; ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = LV.mundo.color_fondo; ctx.fillRect(0, 0, canvas.width, canvas.height);
                 ctx.fillStyle = "rgba(255, 255, 255, 0.4)"; bgStarsLayer1.forEach(s => { let px = (s.x - camX * 0.08) % canvas.width; if (px < 0) px += canvas.width; let py = (s.y - camY * 0.08) % canvas.height; if (py < 0) py += canvas.height; ctx.beginPath(); ctx.arc(px, py, s.r, 0, Math.PI * 2); ctx.fill(); });
                 ctx.fillStyle = "rgba(180, 200, 255, 0.7)"; bgStarsLayer2.forEach(s => { let px = (s.x - camX * 0.2) % canvas.width; if (px < 0) px += canvas.width; let py = (s.y - camY * 0.2) % canvas.height; if (py < 0) py += canvas.height; ctx.beginPath(); ctx.arc(px, py, s.r, 0, Math.PI * 2); ctx.fill(); });
 
@@ -2109,7 +2210,7 @@ codigo_juego_template = """
                 if(cinematicTimer > 0) { shakeX = (Math.random() - 0.5) * 6; shakeY = (Math.random() - 0.5) * 6; }
 
                 ctx.save(); ctx.translate(canvas.width / 2 + shakeX, canvas.height / 2 + shakeY); ctx.scale(zoom, zoom); ctx.translate(-camX - canvas.width / 2, -camY - canvas.height / 2);
-                ctx.strokeStyle = "#FF3366"; ctx.lineWidth = 6; ctx.strokeRect(0, 0, worldW, worldH);
+                ctx.strokeStyle = LV.mundo.color_borde; ctx.lineWidth = 6; ctx.strokeRect(0, 0, worldW, worldH);
 
                 if (meteor.isBoss && !meteor.dead && meteor.isPhase2) {
                     if (meteor.laserChargeTimer > 0) {
@@ -2126,8 +2227,8 @@ codigo_juego_template = """
 
                 if(!meteor.dead) {
                     ctx.save(); ctx.translate(meteor.x, meteor.y); ctx.rotate(meteor.angle); ctx.beginPath(); ctx.arc(0, 0, meteor.r, 0, Math.PI * 2); 
-                    ctx.fillStyle = meteor.isBoss ? (meteor.isPhase2 ? "#FF0033" : "#FF6600") : "#A9A9A9"; 
-                    if(meteor.isBoss) { ctx.shadowColor = meteor.isPhase2 ? "#FF0000" : "#FF4500"; ctx.shadowBlur = 40; }
+                    ctx.fillStyle = meteor.isBoss ? (meteor.isPhase2 ? LV.jefe.color_fase2 : LV.jefe.color) : "#A9A9A9"; 
+                    if(meteor.isBoss) { ctx.shadowColor = meteor.isPhase2 ? LV.jefe.color_fase2 : LV.jefe.color; ctx.shadowBlur = 40; }
                     ctx.fill(); ctx.shadowBlur = 0;
                     meteor.craters.forEach(c => { ctx.beginPath(); ctx.arc(c.x, c.y, c.r, 0, Math.PI * 2); ctx.fillStyle = meteor.isBoss ? "#990000" : "#696969"; ctx.fill(); }); 
                     ctx.restore();
@@ -2139,7 +2240,7 @@ codigo_juego_template = """
                         ctx.fillStyle = meteor.isPhase2 ? "#FF0000" : "#FF4500"; ctx.fillRect(-barW/2 + 1, -meteor.r - 39, (barW - 2) * bossHpPct, barH - 2); 
                         ctx.strokeStyle = "#FFFFFF"; ctx.lineWidth = 2; ctx.strokeRect(-barW/2, -meteor.r - 40, barW, barH);
                         ctx.fillStyle = "#FFD700"; ctx.font = "bold 16px sans-serif"; ctx.textAlign = "center"; 
-                        let bossLabel = `${meteor.isPhase2 ? 'LUNA CÍCLOPE (FASE 2)' : 'LUNA SANGRIENTA'}: ${Math.ceil(meteor.hp)} / ${meteor.maxHp} HP`;
+                        let bossLabel = `${meteor.isPhase2 ? LV.jefe.nombre_fase2 + ' (FASE 2)' : LV.jefe.nombre}: ${Math.ceil(meteor.hp)} / ${meteor.maxHp} HP`;
                         ctx.fillText(bossLabel, 0, -meteor.r - 48);
                         let blw = ctx.measureText(bossLabel).width; drawIcon(ctx, meteor.isPhase2 ? 'eye' : 'moon', -blw / 2 - 14, -meteor.r - 54, 20);
                         
@@ -2253,6 +2354,9 @@ codigo_juego_template = """
                 if(player.continuousLaserTimer > 0) { buffSeg('dot', `LÁSER CONTINUO: ${(player.continuousLaserTimer/60).toFixed(1)}s`); }
                 ctx.restore();
                 drawAbilityBar();
+                ctx.save(); ctx.textAlign = "center"; ctx.font = "bold 14px sans-serif"; ctx.fillStyle = "#FFD700";
+                ctx.fillText(`NIVEL ${levelIndex + 1}/${LEVELS.length}: ${String(LV.nombre).toUpperCase()}${freeMode ? '  ·  MODO LIBRE' : ''}`, canvas.width / 2, 22);
+                ctx.restore();
             }
 
             // === MENÚ PRINCIPAL ===
@@ -2283,7 +2387,7 @@ codigo_juego_template = """
             }
             function goToMenu() {
                 gameState = 'menu'; isPaused = false; isFiring = false; keysDown.clear();
-                overScreen.style.display = 'none'; orbModal.style.display = 'none'; settingsModal.style.display = 'none';
+                overScreen.style.display = 'none'; orbModal.style.display = 'none'; settingsModal.style.display = 'none'; victoryModal.style.display = 'none';
                 audioControls.style.display = 'none'; lbPanel.style.display = 'none';
                 mainMenu.style.display = 'flex';
             }
@@ -2354,5 +2458,6 @@ codigo_juego_template = """
 
 codigo_juego_listo = codigo_juego_template.replace("__AUDIO_SRC__", audio_src)
 codigo_juego_listo = codigo_juego_listo.replace("__SFX_DATA__", sfx_json)
+codigo_juego_listo = codigo_juego_listo.replace("__LEVELS_DATA__", niveles_json)
 
 components.html(codigo_juego_listo, height=850, scrolling=False)
