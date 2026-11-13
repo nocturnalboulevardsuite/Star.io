@@ -677,11 +677,13 @@ codigo_juego_template = """
             }
 
             // === LÁSER ABISMAL ===
-            // Se desbloquea al destruir el agujero negro. Con R dispara un rayo enorme durante 4 s; recarga de 30 s.
-            const ABYSS_DURATION = 240;   // 4 segundos (60 fps)
+            // Se desbloquea al destruir el agujero negro. Con R dispara un rayo enorme durante 2 s; recarga de 30 s.
+            const ABYSS_DURATION = 120;   // 2 segundos (60 fps)
             const ABYSS_COOLDOWN = 1800;  // 30 segundos
             const ABYSS_LENGTH = 1600;    // largo del rayo
             const ABYSS_TICK = 5;         // cada cuántos frames hace daño
+            const ABYSS_DMG_BOTS = 30;    // daño a estrellas por golpe
+            const ABYSS_DMG_BOSS = 60;    // daño a la Luna por golpe
             let abyssUnlocked = false, abyssTimer = 0, abyssCooldown = 0, abyssAngle = 0;
 
             function unlockAbyssLaser() {
@@ -704,8 +706,85 @@ codigo_juego_template = """
                     return;
                 }
                 abyssTimer = ABYSS_DURATION; abyssCooldown = ABYSS_COOLDOWN; abyssAngle = aimAngle();
-                playSfx("bh_death", 1.2);
+                playGodzillaBeam();
                 floatingTexts.push({ x: player.x, y: player.y - player.r - 30, text: "¡LÁSER ABISMAL!", icon: "vortex", iconBoth: true, color: "#B266FF", life: 60, size: 24 });
+            }
+
+            // Sonido del rayo estilo Godzilla: carga + rugido de bajos saturados (sintetizado, no necesita archivo)
+            let beamAudioCtx = null;
+            function makeDistortion(amount) {
+                const n = 2048, curve = new Float32Array(n);
+                for (let i = 0; i < n; i++) { const x = (i * 2) / n - 1; curve[i] = ((3 + amount) * x * 20 * (Math.PI / 180)) / (Math.PI + amount * Math.abs(x)); }
+                return curve;
+            }
+            function playGodzillaBeam() {
+                if (!isUserInteracted || sfxVolume === 0) return;
+                try {
+                    if (!beamAudioCtx) beamAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                    const ac = beamAudioCtx;
+                    if (ac.state === 'suspended') ac.resume();
+                    const t0 = ac.currentTime;
+                    const charge = 0.12;                                 // carga breve antes del rugido
+                    const end = t0 + charge + ABYSS_DURATION / 60;       // dura lo mismo que el rayo
+                    const rel = 0.45;
+
+                    // Salida: compresor para que los bajos saturados no revienten
+                    const comp = ac.createDynamicsCompressor();
+                    comp.threshold.value = -14; comp.ratio.value = 6;
+                    const master = ac.createGain(); master.gain.value = Math.min(1, sfxVolume * 1.1);
+                    comp.connect(master); master.connect(ac.destination);
+
+                    // Saturación fuerte compartida
+                    const drive = ac.createWaveShaper(); drive.curve = makeDistortion(400); drive.oversample = '4x';
+                    const tone = ac.createBiquadFilter(); tone.type = 'lowpass'; tone.frequency.value = 1800;
+                    drive.connect(tone); tone.connect(comp);
+
+                    // 1) Carga: barrido ascendente que zumba
+                    const chOsc = ac.createOscillator(); chOsc.type = 'sawtooth';
+                    chOsc.frequency.setValueAtTime(60, t0); chOsc.frequency.exponentialRampToValueAtTime(420, t0 + charge);
+                    const chG = ac.createGain(); chG.gain.setValueAtTime(0.0001, t0); chG.gain.exponentialRampToValueAtTime(0.35, t0 + charge * 0.9); chG.gain.exponentialRampToValueAtTime(0.0001, t0 + charge + 0.08);
+                    chOsc.connect(chG); chG.connect(drive); chOsc.start(t0); chOsc.stop(t0 + charge + 0.1);
+
+                    // 2) Sub-bajos: dos sierras graves desafinadas con temblor (rugido)
+                    const bassG = ac.createGain();
+                    bassG.gain.setValueAtTime(0.0001, t0 + charge - 0.02);
+                    bassG.gain.exponentialRampToValueAtTime(0.9, t0 + charge + 0.06);
+                    bassG.gain.setValueAtTime(0.9, end - 0.1);
+                    bassG.gain.exponentialRampToValueAtTime(0.0001, end + rel);
+                    const trem = ac.createOscillator(); trem.frequency.value = 17;
+                    const tremDepth = ac.createGain(); tremDepth.gain.value = 0.25;
+                    trem.connect(tremDepth); tremDepth.connect(bassG.gain);
+                    [41, 43.5, 82].forEach((f, i) => {
+                        const o = ac.createOscillator(); o.type = i === 2 ? 'square' : 'sawtooth';
+                        o.frequency.setValueAtTime(f * 1.25, t0 + charge); o.frequency.exponentialRampToValueAtTime(f, t0 + charge + 0.4);
+                        o.frequency.exponentialRampToValueAtTime(f * 0.8, end + rel);
+                        const g = ac.createGain(); g.gain.value = i === 2 ? 0.35 : 0.6;
+                        o.connect(g); g.connect(bassG); o.start(t0 + charge - 0.02); o.stop(end + rel + 0.05);
+                    });
+                    bassG.connect(drive); trem.start(t0); trem.stop(end + rel + 0.05);
+
+                    // 3) Chillido del rayo: tono medio con vibrato, filtrado
+                    const scr = ac.createOscillator(); scr.type = 'sawtooth'; scr.frequency.value = 230;
+                    const vib = ac.createOscillator(); vib.frequency.value = 7; const vibD = ac.createGain(); vibD.gain.value = 12;
+                    vib.connect(vibD); vibD.connect(scr.frequency);
+                    const bp = ac.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 1100; bp.Q.value = 3;
+                    const scrG = ac.createGain();
+                    scrG.gain.setValueAtTime(0.0001, t0 + charge); scrG.gain.exponentialRampToValueAtTime(0.18, t0 + charge + 0.1);
+                    scrG.gain.setValueAtTime(0.18, end - 0.1); scrG.gain.exponentialRampToValueAtTime(0.0001, end + rel * 0.6);
+                    scr.connect(bp); bp.connect(scrG); scrG.connect(drive);
+                    scr.start(t0 + charge); vib.start(t0 + charge); scr.stop(end + rel); vib.stop(end + rel);
+
+                    // 4) Ruido crepitante grave (energía del rayo)
+                    const len = Math.ceil(ac.sampleRate * (end + rel - t0));
+                    const buf = ac.createBuffer(1, len, ac.sampleRate); const d = buf.getChannelData(0);
+                    for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+                    const nz = ac.createBufferSource(); nz.buffer = buf;
+                    const nf = ac.createBiquadFilter(); nf.type = 'lowpass'; nf.frequency.value = 500;
+                    const nG = ac.createGain();
+                    nG.gain.setValueAtTime(0.0001, t0 + charge); nG.gain.exponentialRampToValueAtTime(0.5, t0 + charge + 0.05);
+                    nG.gain.setValueAtTime(0.5, end - 0.1); nG.gain.exponentialRampToValueAtTime(0.0001, end + rel);
+                    nz.connect(nf); nf.connect(nG); nG.connect(drive); nz.start(t0); nz.stop(end + rel);
+                } catch (e) { console.log("Audio del rayo no disponible", e); }
             }
 
             // Distancia de un punto al segmento del rayo
@@ -735,10 +814,10 @@ codigo_juego_template = """
 
                 if (abyssTimer % ABYSS_TICK === 0) {
                     let dmg = player.laserDamage;
-                    bots.forEach(b => { if (!b.dead && distToBeam(b.x, b.y, x1, y1, x2, y2) < w + b.r) takeDamage(b, 70 * dmg); });
+                    bots.forEach(b => { if (!b.dead && distToBeam(b.x, b.y, x1, y1, x2, y2) < w + b.r) takeDamage(b, ABYSS_DMG_BOTS * dmg); });
                     if (meteor.isBoss && !meteor.dead && distToBeam(meteor.x, meteor.y, x1, y1, x2, y2) < w + meteor.r) {
-                        meteor.hp -= 150 * dmg;
-                        floatingTexts.push({ x: meteor.x + (Math.random() - 0.5) * 80, y: meteor.y - meteor.r - 20, text: `-${Math.ceil(150 * dmg)}`, color: "#B266FF", life: 30, size: 26 });
+                        meteor.hp -= ABYSS_DMG_BOSS * dmg;
+                        floatingTexts.push({ x: meteor.x + (Math.random() - 0.5) * 80, y: meteor.y - meteor.r - 20, text: `-${Math.ceil(ABYSS_DMG_BOSS * dmg)}`, color: "#B266FF", life: 30, size: 26 });
                         if (meteor.hp <= 0 && !meteor.dead) {
                             meteor.dead = true; playSfx("bh_death", 2.5);
                             floatingTexts.push({ x: meteor.x, y: meteor.y, text: "VICTORIA GALÁCTICA", icon: "star", iconBoth: true, color: "#FFD700", life: 300, size: 50 });
@@ -746,7 +825,6 @@ codigo_juego_template = """
                         }
                     }
                 }
-                if (abyssTimer % 15 === 0) playSfx("laser", 0.4);
                 // Chispas al final y a lo largo del rayo
                 for (let i = 0; i < 3; i++) {
                     let t = Math.random();
