@@ -136,6 +136,21 @@ codigo_juego_template = """
             .pips { display: flex; gap: 3px; }
             .pip { width: 12px; height: 7px; border-radius: 2px; background: #2a3344; }
             .char-perk { font-size: 10px; line-height: 1.45; color: #ddd; min-height: 58px; font-family: 'Segoe UI', sans-serif; }
+            /* Selección de nivel */
+            #level-select { display: none; position: absolute; inset: 0; z-index: 35; flex-direction: column; align-items: center; justify-content: center; gap: 18px; background: rgba(4, 4, 14, 0.94); font-family: 'Orbitron', 'Segoe UI', sans-serif; overflow-y: auto; padding: 20px 0; }
+            #level-select h2 { color: #FFD700; letter-spacing: 4px; margin: 0; text-shadow: 0 0 14px rgba(255,215,0,0.5); }
+            .lvl-grid { display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; max-width: 1100px; }
+            .lvl-card { width: 250px; padding: 16px; border: 2px solid #333; border-radius: 12px; color: #fff; display: flex; flex-direction: column; gap: 8px; text-align: center; }
+            .lvl-num { font-size: 11px; letter-spacing: 3px; color: #9adfe6; }
+            .lvl-name { font-size: 17px; font-weight: 900; letter-spacing: 2px; }
+            .lvl-boss { font-size: 10px; letter-spacing: 1px; color: #ccc; }
+            .lvl-desc { font-size: 11px; color: #aaa; font-family: 'Segoe UI', sans-serif; line-height: 1.4; }
+            .lvl-diffs { display: flex; flex-direction: column; gap: 7px; margin-top: 6px; }
+            .diff-btn { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 9px; font-family: inherit; font-size: 13px; font-weight: 700; letter-spacing: 2px; background: #0d1424; border: 2px solid; border-radius: 8px; cursor: pointer; transition: transform 0.12s; }
+            .diff-btn:hover:not(:disabled) { transform: scale(1.04); }
+            .diff-btn:disabled { cursor: not-allowed; }
+            #level-back { padding: 10px 26px; font-family: inherit; font-size: 14px; letter-spacing: 3px; color: #00FFFF; background: transparent; border: 2px solid #00b8c4; border-radius: 8px; cursor: pointer; }
+            #victory-sub { white-space: pre-line; }
             #char-back { padding: 10px 26px; font-family: inherit; font-size: 14px; letter-spacing: 3px; color: #00FFFF; background: transparent; border: 2px solid #00b8c4; border-radius: 8px; cursor: pointer; }
             .menu-pilot { text-align: center; color: #9adfe6; font-size: 13px; letter-spacing: 2px; margin-bottom: 4px; }
             .menu-pilot b { color: #FFFFFF; font-size: 16px; }
@@ -258,11 +273,7 @@ codigo_juego_template = """
             <div id="victory-modal">
                 <h2>¡NIVEL COMPLETADO!</h2>
                 <p id="victory-sub"></p>
-                <div class="vic-btns">
-                    <button class="vic-btn" id="vic-next" style="color:#06060E;background:#FFD700;border-color:#FFFFFF;">SIGUIENTE NIVEL</button>
-                    <button class="vic-btn" id="vic-repeat" style="color:#00FFFF;border-color:#00b8c4;">REPETIR NIVEL</button>
-                    <button class="vic-btn" id="vic-free" style="color:#33FF66;border-color:#33FF66;">MODO LIBRE</button>
-                </div>
+                <div class="vic-btns" id="vic-btns"></div>
             </div>
 
             <div id="orb-modal">
@@ -322,6 +333,13 @@ codigo_juego_template = """
                     <span><i class="key">SHIFT</i> Sprint</span>
                     <span><i class="key">MOUSE</i> Apuntar</span>
                 </div>
+            </div>
+
+            <!-- SELECCIÓN DE NIVEL -->
+            <div id="level-select">
+                <h2>ELIGE NIVEL Y DIFICULTAD</h2>
+                <div class="lvl-grid" id="level-grid"></div>
+                <button id="level-back">VOLVER</button>
             </div>
 
             <!-- SELECCIÓN DE PERSONAJE -->
@@ -680,6 +698,8 @@ codigo_juego_template = """
                     const d = DEFAULT_LEVEL[k], v = raw ? raw[k] : undefined;
                     out[k] = (d && typeof d === 'object') ? Object.assign({}, d, (v && typeof v === 'object') ? v : {}) : (v !== undefined ? v : d);
                 });
+                if (raw && raw.archivo) out.archivo = raw.archivo;
+                if (raw && raw.dificultades) out.dificultades = raw.dificultades;
                 return out;
             }
             const LEVELS = (Array.isArray(LEVELS_RAW) && LEVELS_RAW.length > 0 ? LEVELS_RAW : [{}]).map(mergeLevel);
@@ -1451,7 +1471,7 @@ codigo_juego_template = """
                         '</div>' +
                         '<div class="char-perk">' + c.perk + '</div>';
                     card.addEventListener('click', () => {
-                        selectedCharacter = id; levelIndex = 0;
+                        selectedCharacter = id;
                         charSelect.style.display = 'none';
                         startGame();
                     });
@@ -1742,36 +1762,162 @@ codigo_juego_template = """
 
             // === PANTALLA DE VICTORIA ===
             const victoryModal = document.getElementById('victory-modal');
+            const vicBtns = document.getElementById('vic-btns');
+            let lastUnlocks = [];
             function onBossDefeated() {
                 if (freeMode) return;
+                lastUnlocks = markBeaten(levelIndex, difficulty);
                 // "musica_victoria" del nivel: "espacial" (loop), "epica" o "ninguna".
-                // Si no se indica: el último nivel usa la épica y los demás la espacial.
-                let tipo = LV.musica_victoria || (levelIndex >= LEVELS.length - 1 ? 'epica' : 'espacial');
+                // Si no se indica: el último nivel usa la épica y los demás la espacial. En NIGHTMARE siempre suena la épica.
+                let tipo = difficulty === 'nightmare' ? 'epica' : (LV.musica_victoria || (levelIndex >= LEVELS.length - 1 ? 'epica' : 'espacial'));
                 if (tipo === 'epica') setTimeout(playVictoryMusic, 120);
                 else if (tipo === 'espacial') setTimeout(playSpaceVictoryLoop, 120);
                 victoryTimer = 150;   // 2,5 s para ver la explosión antes del menú
             }
+            function startLevel(idx, diff) {
+                levelIndex = idx; difficulty = diff;
+                victoryModal.style.display = 'none'; stopVictoryMusic(true); init(); gameState = 'playing';
+            }
+            function addVicBtn(text, color, filled, fn) {
+                const b = document.createElement('button'); b.className = 'vic-btn'; b.innerText = text;
+                b.style.color = filled ? '#06060E' : color; b.style.borderColor = filled ? '#FFFFFF' : color; if (filled) b.style.background = color;
+                b.addEventListener('click', fn); vicBtns.appendChild(b);
+            }
             function showVictory() {
                 isPaused = true; isFiring = false; keysDown.clear();
-                let hasNext = levelIndex < LEVELS.length - 1;
-                document.querySelector('#victory-modal h2').innerText = hasNext ? '¡NIVEL COMPLETADO!' : '¡GANASTE EL JUEGO!';
-                document.getElementById('victory-sub').innerText = `NIVEL ${levelIndex + 1}: ${String(LV.nombre).toUpperCase()}` + (hasNext ? '' : ' · VENCISTE A TODOS LOS JEFES');
-                const nextBtn = document.getElementById('vic-next');
-                nextBtn.disabled = !hasNext;
-                nextBtn.innerText = hasNext ? `SIGUIENTE: ${String(LEVELS[levelIndex + 1].nombre).toUpperCase()}` : 'NO HAY MÁS NIVELES (AÚN)';
+                const dLabel = DIFFS[difficulty].label;
+                const title = allBeaten() ? '¡COMPLETASTE TODO!' : (difficulty === 'nightmare' ? '¡NIGHTMARE SUPERADO!' : '¡NIVEL COMPLETADO!');
+                document.querySelector('#victory-modal h2').innerText = title;
+                victoryModal.style.borderColor = DIFFS[difficulty].color;
+                let sub = `NIVEL ${levelIndex + 1}: ${String(LEVELS[levelIndex].nombre).toUpperCase()} · ${dLabel}`;
+                if (lastUnlocks.length) sub += `\n¡DESBLOQUEASTE: ${lastUnlocks.join(' · ')}!`;
+                document.getElementById('victory-sub').innerText = sub;
+
+                vicBtns.innerHTML = '';
+                const di = DIFF_ORDER.indexOf(difficulty);
+                if (di < DIFF_ORDER.length - 1) {
+                    const nd = DIFF_ORDER[di + 1];
+                    addVicBtn(`JUGAR EN ${DIFFS[nd].label}`, DIFFS[nd].color, true, () => startLevel(levelIndex, nd));
+                }
+                if (levelIndex < LEVELS.length - 1) {
+                    addVicBtn(`SIGUIENTE: ${String(LEVELS[levelIndex + 1].nombre).toUpperCase()}`, '#FFD700', di === DIFF_ORDER.length - 1, () => startLevel(levelIndex + 1, 'normal'));
+                }
+                addVicBtn('REPETIR NIVEL', '#00FFFF', false, () => startLevel(levelIndex, difficulty));
+                addVicBtn('MODO LIBRE', '#33FF66', false, () => {
+                    freeMode = true; victoryModal.style.display = 'none'; isPaused = false;
+                    floatingTexts.push({ x: player.x, y: player.y - 60, text: "MODO LIBRE", color: "#33FF66", life: 90, size: 26 });
+                });
+                addVicBtn('ELEGIR NIVEL', '#CC33FF', false, () => {
+                    victoryModal.style.display = 'none'; goToMenu(); openLevelSelect();
+                });
                 victoryModal.style.display = 'block';
             }
-            document.getElementById('vic-next').addEventListener('click', () => {
-                if (levelIndex >= LEVELS.length - 1) return;
-                levelIndex++; victoryModal.style.display = 'none'; stopVictoryMusic(true); init(); gameState = 'playing';
-            });
-            document.getElementById('vic-repeat').addEventListener('click', () => {
-                victoryModal.style.display = 'none'; stopVictoryMusic(true); init(); gameState = 'playing';
-            });
-            document.getElementById('vic-free').addEventListener('click', () => {
-                freeMode = true; victoryModal.style.display = 'none'; isPaused = false;
-                floatingTexts.push({ x: player.x, y: player.y - 60, text: "MODO LIBRE", color: "#33FF66", life: 90, size: 26 });
-            });
+
+            // ======================================================
+            // === DIFICULTADES (estilo Geometry Dash) ===
+            // Cada nivel se juega en NORMAL -> DIFÍCIL -> NIGHTMARE.
+            // Ganar en una dificultad desbloquea la siguiente de ESE nivel.
+            // Ganar cualquier dificultad de un nivel desbloquea el siguiente nivel (en normal).
+            // ======================================================
+            const DIFF_ORDER = ['normal', 'dificil', 'nightmare'];
+            const DIFFS = {
+                normal:    { label: 'NORMAL',    color: '#33FF66', mult: {} },
+                dificil:   { label: 'DIFÍCIL',   color: '#FFAA00', mult: {
+                    bots_cantidad: 1.15, bots_vida: 1.5, bots_velocidad: 1.15, bots_espera: 0.75, bots_potencia: 1.4,
+                    agujero_vida: 1.5, agujero_crecimiento: 1.3, agujero_atraccion: 1.15,
+                    jefe_vida: 1.6, jefe_velocidad: 1.25, jefe_potencia_balas: 1.4, jefe_espera_laser: 0.75, jefe_potencia_laser: 1.4 } },
+                nightmare: { label: 'NIGHTMARE', color: '#FF0040', mult: {
+                    bots_cantidad: 1.3, bots_vida: 2.2, bots_velocidad: 1.3, bots_espera: 0.55, bots_potencia: 2.0,
+                    agujero_vida: 2.2, agujero_crecimiento: 1.6, agujero_atraccion: 1.3,
+                    jefe_vida: 2.5, jefe_velocidad: 1.5, jefe_potencia_balas: 2.0, jefe_espera_laser: 0.5, jefe_potencia_laser: 2.0 } }
+            };
+            let difficulty = 'normal';
+
+            // Nivel final = datos del .json con los multiplicadores de la dificultad
+            function buildLevel(idx, diff) {
+                const base = LEVELS[Math.min(idx, LEVELS.length - 1)];
+                const L = JSON.parse(JSON.stringify(base));
+                const custom = (base.dificultades && base.dificultades[diff]) || {};
+                const m = Object.assign({}, DIFFS[diff].mult, custom);
+                const k = (name) => (m[name] !== undefined ? m[name] : 1);
+                L.bots.cantidad = Math.round(L.bots.cantidad * k('bots_cantidad'));
+                L.bots.vida *= k('bots_vida'); L.bots.velocidad *= k('bots_velocidad');
+                L.bots.espera_disparo_ms *= k('bots_espera'); L.bots.potencia_disparo *= k('bots_potencia');
+                L.agujero_negro.vida *= k('agujero_vida'); L.agujero_negro.crecimiento *= k('agujero_crecimiento'); L.agujero_negro.fuerza_atraccion *= k('agujero_atraccion');
+                L.jefe.vida = Math.round(L.jefe.vida * k('jefe_vida'));
+                L.jefe.velocidad *= k('jefe_velocidad'); L.jefe.velocidad_fase2 *= k('jefe_velocidad');
+                L.jefe.potencia_balas *= k('jefe_potencia_balas'); L.jefe.espera_laser_frames *= k('jefe_espera_laser'); L.jefe.potencia_laser *= k('jefe_potencia_laser');
+                if (diff !== 'normal') {
+                    L.mundo.color_borde = DIFFS[diff].color;
+                    L.jefe.nombre += ' [' + DIFFS[diff].label + ']';
+                    L.jefe.nombre_fase2 += ' [' + DIFFS[diff].label + ']';
+                }
+                return L;
+            }
+
+            // --- Progreso guardado en el navegador ---
+            const PROGRESS_KEY = 'starz_progreso_v1';
+            let progress = {};
+            try { progress = JSON.parse(localStorage.getItem(PROGRESS_KEY) || '{}') || {}; } catch (e) { progress = {}; }
+            function levelKey(i) { return (LEVELS[i] && LEVELS[i].archivo) || ('nivel_' + i); }
+            function isBeaten(i, diff) { return !!(progress[levelKey(i)] && progress[levelKey(i)][diff]); }
+            function beatenAny(i) { return DIFF_ORDER.some(d => isBeaten(i, d)); }
+            function isUnlocked(i, diff) {
+                if (isRissos()) return true;   // cheats: todo desbloqueado
+                if (i > 0 && !beatenAny(i - 1)) return false;
+                const di = DIFF_ORDER.indexOf(diff);
+                return di === 0 || isBeaten(i, DIFF_ORDER[di - 1]);
+            }
+            function markBeaten(i, diff) {
+                const before = DIFF_ORDER.map(d => isUnlocked(i, d)), nextBefore = i + 1 < LEVELS.length ? isUnlocked(i + 1, 'normal') : true;
+                const key = levelKey(i); progress[key] = progress[key] || {}; progress[key][diff] = true;
+                try { localStorage.setItem(PROGRESS_KEY, JSON.stringify(progress)); } catch (e) {}
+                const unlocked = [];
+                DIFF_ORDER.forEach((d, j) => { if (!before[j] && isUnlocked(i, d)) unlocked.push(DIFFS[d].label); });
+                if (!nextBefore && isUnlocked(i + 1, 'normal')) unlocked.push('NIVEL ' + (i + 2));
+                return unlocked;
+            }
+            function allBeaten() { return LEVELS.every((_, i) => DIFF_ORDER.every(d => isBeaten(i, d))); }
+
+            // --- Pantalla de selección de nivel ---
+            const levelSelect = document.getElementById('level-select');
+            const levelGrid = document.getElementById('level-grid');
+            const LOCK_SVG = '<svg viewBox="0 0 24 24" width="14" height="14"><rect x="5" y="11" width="14" height="10" rx="2" fill="currentColor"/><path d="M8 11 V8 a4 4 0 0 1 8 0 V11" fill="none" stroke="currentColor" stroke-width="2.4"/></svg>';
+            const CHECK_SVG = '<svg viewBox="0 0 24 24" width="14" height="14"><path d="M4 12.5 L10 18 L20 6" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+            function buildLevelCards() {
+                levelGrid.innerHTML = '';
+                LEVELS.forEach((lv, i) => {
+                    const card = document.createElement('div'); card.className = 'lvl-card';
+                    const open = isUnlocked(i, 'normal');
+                    card.style.borderColor = open ? lv.mundo.color_borde : '#333';
+                    card.style.background = 'linear-gradient(180deg, ' + lv.mundo.color_fondo + ' 0%, #0d1424 100%)';
+                    let html = '<div class="lvl-num">NIVEL ' + (i + 1) + '</div>' +
+                        '<div class="lvl-name" style="color:' + (open ? lv.mundo.color_borde : '#666') + '">' + String(lv.nombre).toUpperCase() + '</div>' +
+                        '<div class="lvl-boss">JEFE: ' + lv.jefe.nombre + '</div>' +
+                        (lv.descripcion ? '<div class="lvl-desc">' + lv.descripcion + '</div>' : '') +
+                        '<div class="lvl-diffs">';
+                    DIFF_ORDER.forEach(d => {
+                        const un = isUnlocked(i, d), done = isBeaten(i, d), c = DIFFS[d].color;
+                        html += '<button class="diff-btn" data-lvl="' + i + '" data-diff="' + d + '" ' + (un ? '' : 'disabled') +
+                            ' style="color:' + (un ? c : '#555') + ';border-color:' + (un ? c : '#333') + (done ? ';background:' + c + '22' : '') + '">' +
+                            (un ? (done ? CHECK_SVG : '') : LOCK_SVG) + '<span>' + DIFFS[d].label + '</span></button>';
+                    });
+                    html += '</div>';
+                    card.innerHTML = html;
+                    levelGrid.appendChild(card);
+                });
+                levelGrid.querySelectorAll('.diff-btn:not([disabled])').forEach(b => b.addEventListener('click', () => {
+                    levelIndex = parseInt(b.dataset.lvl, 10); difficulty = b.dataset.diff;
+                    levelSelect.style.display = 'none';
+                    openCharSelect();
+                }));
+            }
+            function openLevelSelect() {
+                stopVictoryMusic(false);
+                buildLevelCards();
+                charSelect.style.display = 'none';
+                levelSelect.style.display = 'flex';
+            }
 
             // Nombre secreto: RISSOS empieza con todo al máximo
             function isRissos() { return (playerName || "").trim().toUpperCase() === "RISSOS"; }
@@ -1858,7 +2004,7 @@ codigo_juego_template = """
             let maxBots = 28; let maxFoods = 600;
 
             function init() {
-                LV = LEVELS[Math.min(levelIndex, LEVELS.length - 1)];
+                LV = buildLevel(levelIndex, difficulty);
                 worldW = LV.mundo.ancho; worldH = LV.mundo.alto;
                 maxBots = LV.bots.cantidad; maxFoods = LV.comida;
                 freeMode = false; victoryTimer = 0; victoryModal.style.display = 'none';
@@ -1893,7 +2039,7 @@ codigo_juego_template = """
                 spawnBox(); spawnBox(); spawnRedBox(); spawnOrb();
                 resetAbilities(); cannonShots = []; pushHands = [];
                 applyCharacter(true);
-                floatingTexts.push({ x: player.x, y: player.y - 120, text: `NIVEL ${levelIndex + 1}: ${String(LV.nombre).toUpperCase()}`, icon: "star", iconBoth: true, color: "#FFD700", life: 180, size: 30 });
+                floatingTexts.push({ x: player.x, y: player.y - 120, text: `NIVEL ${levelIndex + 1}: ${String(LV.nombre).toUpperCase()} · ${DIFFS[difficulty].label}`, icon: "star", iconBoth: true, color: DIFFS[difficulty].color, life: 180, size: 30 });
                 applyRissosMode();
             }
 
@@ -2485,6 +2631,7 @@ codigo_juego_template = """
 
             function draw() {
                 ctx.fillStyle = LV.mundo.color_fondo; ctx.fillRect(0, 0, canvas.width, canvas.height);
+                if (difficulty === 'nightmare') { ctx.fillStyle = "rgba(255, 0, 40, 0.07)"; ctx.fillRect(0, 0, canvas.width, canvas.height); }
                 ctx.fillStyle = "rgba(255, 255, 255, 0.4)"; bgStarsLayer1.forEach(s => { let px = (s.x - camX * 0.08) % canvas.width; if (px < 0) px += canvas.width; let py = (s.y - camY * 0.08) % canvas.height; if (py < 0) py += canvas.height; ctx.beginPath(); ctx.arc(px, py, s.r, 0, Math.PI * 2); ctx.fill(); });
                 ctx.fillStyle = "rgba(180, 200, 255, 0.7)"; bgStarsLayer2.forEach(s => { let px = (s.x - camX * 0.2) % canvas.width; if (px < 0) px += canvas.width; let py = (s.y - camY * 0.2) % canvas.height; if (py < 0) py += canvas.height; ctx.beginPath(); ctx.arc(px, py, s.r, 0, Math.PI * 2); ctx.fill(); });
 
@@ -2638,7 +2785,9 @@ codigo_juego_template = """
                 ctx.restore();
                 drawAbilityBar();
                 ctx.save(); ctx.textAlign = "center"; ctx.font = "bold 14px sans-serif"; ctx.fillStyle = "#FFD700";
-                ctx.fillText(`NIVEL ${levelIndex + 1}/${LEVELS.length}: ${String(LV.nombre).toUpperCase()}${freeMode ? '  ·  MODO LIBRE' : ''}`, canvas.width / 2, 22);
+                ctx.fillText(`NIVEL ${levelIndex + 1}/${LEVELS.length}: ${String(LV.nombre).toUpperCase()}`, canvas.width / 2, 22);
+                ctx.fillStyle = DIFFS[difficulty].color; ctx.font = "bold 12px sans-serif";
+                ctx.fillText(`${DIFFS[difficulty].label}${freeMode ? '  ·  MODO LIBRE' : ''}`, canvas.width / 2, 40);
                 ctx.restore();
             }
 
@@ -2681,8 +2830,9 @@ codigo_juego_template = """
                 namePanel.style.display = 'none';
             }
 
-            document.getElementById("btn-play").addEventListener('click', openCharSelect);
-            document.getElementById("char-back").addEventListener('click', () => { charSelect.style.display = 'none'; });
+            document.getElementById("btn-play").addEventListener('click', () => openLevelSelect());
+            document.getElementById("level-back").addEventListener('click', () => { levelSelect.style.display = 'none'; });
+            document.getElementById("char-back").addEventListener('click', () => { charSelect.style.display = 'none'; levelSelect.style.display = 'flex'; });
             document.getElementById("btn-sound").addEventListener('click', () => { settingsModal.style.display = 'block'; });
             document.getElementById("btn-name").addEventListener('click', () => {
                 let open = namePanel.style.display === 'flex';
