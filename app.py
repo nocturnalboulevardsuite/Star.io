@@ -66,6 +66,39 @@ def cargar_niveles():
                 st.warning(f"No se pudo leer el nivel {nombre}: {e}")
     return niveles
 
+# ==========================================
+# FASES (carpeta FASES/ con una subcarpeta por fase: fase.js + config.json)
+# ==========================================
+def cargar_fases():
+    base = os.path.dirname(os.path.abspath(__file__))
+    carpeta = os.path.join(base, "FASES")
+    if not os.path.isdir(carpeta):
+        carpeta = "FASES"
+    fases, scripts = [], []
+    if os.path.isdir(carpeta):
+        for nombre in sorted(os.listdir(carpeta)):
+            ruta = os.path.join(carpeta, nombre)
+            if not os.path.isdir(ruta):
+                continue
+            info = {"id": nombre, "config": None, "jugable": False}
+            ruta_cfg = os.path.join(ruta, "config.json")
+            if os.path.exists(ruta_cfg):
+                try:
+                    with open(ruta_cfg, "r", encoding="utf-8") as f:
+                        info["config"] = json.load(f)
+                except Exception as e:
+                    st.warning(f"No se pudo leer {nombre}/config.json: {e}")
+            ruta_js = os.path.join(ruta, "fase.js")
+            if os.path.exists(ruta_js):
+                with open(ruta_js, "r", encoding="utf-8") as f:
+                    scripts.append(f"// ---- {nombre}/fase.js ----\n" + f.read())
+                info["jugable"] = True
+            fases.append(info)
+    return fases, "\n".join(scripts)
+
+fases_info, fases_js = cargar_fases()
+fases_json = json.dumps(fases_info, ensure_ascii=False).replace("</", "<\\/")
+
 # Si no hay carpeta niveles/, el juego usa el nivel por defecto (igual al original)
 niveles_json = json.dumps(cargar_niveles(), ensure_ascii=False).replace("</", "<\\/")
 
@@ -683,6 +716,8 @@ codigo_juego_template = """
             // === NIVELES ===  (se cargan desde la carpeta niveles/ del repo)
             // ======================================================
             const LEVELS_RAW = __LEVELS_DATA__;
+            const FASES_DATA = __FASES_DATA__;   // carpetas de FASES/ (fase.js se carga en el script de abajo)
+            let currentFase = null;
             const DEFAULT_LEVEL = {
                 nombre: "Vía Láctea", descripcion: "",
                 mundo: { ancho: 3200, alto: 3200, color_fondo: "#06060E", color_borde: "#FF3366" },
@@ -2043,11 +2078,60 @@ codigo_juego_template = """
                     card.innerHTML = html;
                     levelGrid.appendChild(card);
                 });
-                levelGrid.querySelectorAll('.diff-btn:not([disabled])').forEach(b => b.addEventListener('click', () => {
+                // --- Fases (carpeta FASES/) ---
+                FASES_DATA.forEach((fa, k) => {
+                    const reg = window.FASES_REG && window.FASES_REG[fa.id];
+                    const playable = fa.jugable && reg;
+                    const open = playable && isFaseUnlocked(k);
+                    const done = isFaseBeaten(fa.id);
+                    const name = (fa.config && fa.config.nombre) ? String(fa.config.nombre).toUpperCase() : 'PRÓXIMAMENTE';
+                    const num = fa.id.replace(/[^0-9]/g, '') || (k + 2);
+                    const card = document.createElement('div'); card.className = 'lvl-card';
+                    card.style.borderColor = open ? '#E8B934' : '#333';
+                    card.style.background = 'linear-gradient(180deg, #5a3510 0%, #0d1424 100%)';
+                    let why = !playable ? 'En construcción' : (open ? '' : (k === 0 ? 'Gana el nivel 1 para desbloquear' : 'Completa la fase anterior'));
+                    card.innerHTML = '<div class="lvl-num">FASE ' + num + '</div>' +
+                        '<div class="lvl-name" style="color:' + (open ? '#F5C542' : '#666') + '">' + name + '</div>' +
+                        (fa.config && fa.config.jefe ? '<div class="lvl-boss">JEFE: ' + fa.config.jefe.nombre + '</div>' : '') +
+                        (why ? '<div class="lvl-desc">' + why + '</div>' : '') +
+                        '<div class="lvl-diffs"><button class="diff-btn fase-btn" data-fase="' + fa.id + '" ' + (open ? '' : 'disabled') +
+                        ' style="color:' + (open ? '#F5C542' : '#555') + ';border-color:' + (open ? '#F5C542' : '#333') + (done ? ';background:#F5C54222' : '') + '">' +
+                        (open ? (done ? CHECK_SVG : '') : LOCK_SVG) + '<span>' + (playable ? 'JUGAR' : 'PRÓXIMAMENTE') + '</span></button></div>';
+                    levelGrid.appendChild(card);
+                });
+                levelGrid.querySelectorAll('.fase-btn:not([disabled])').forEach(b => b.addEventListener('click', () => startFase(b.dataset.fase)));
+
+                levelGrid.querySelectorAll('.diff-btn:not([disabled]):not(.fase-btn)').forEach(b => b.addEventListener('click', () => {
                     levelIndex = parseInt(b.dataset.lvl, 10); difficulty = b.dataset.diff;
                     levelSelect.style.display = 'none';
                     openCharSelect();
                 }));
+            }
+            // --- Fases: desbloqueo, inicio y salida ---
+            function isFaseBeaten(id) { return !!(progress['FASE:' + id] && progress['FASE:' + id].completada); }
+            function isFaseUnlocked(k) {
+                if (isRissos()) return true;
+                if (k === 0) return beatenAny(0);                    // la primera fase se abre al ganar el nivel 1
+                return isFaseBeaten(FASES_DATA[k - 1].id);          // las demás, al completar la anterior
+            }
+            function startFase(id) {
+                const fa = FASES_DATA.find(f => f.id === id), reg = window.FASES_REG && window.FASES_REG[id];
+                if (!fa || !reg) return;
+                levelSelect.style.display = 'none'; charSelect.style.display = 'none';
+                mainMenu.style.display = 'none'; settingsModal.style.display = 'none'; namePanel.style.display = 'none';
+                audioControls.style.display = 'flex'; lbPanel.style.display = 'none';
+                victoryModal.style.display = 'none'; overScreen.style.display = 'none'; orbModal.style.display = 'none';
+                stopVictoryMusic(true);
+                currentFase = reg; gameState = 'fase';
+                reg.start(fa.config, {
+                    canvas, ctx, drawIcon, playSfx, playAbilitySfx, playEndSfx, playVictoryMusic, stopVictoryMusic, isRissos,
+                    active: () => gameState === 'fase' && currentFase === reg,
+                    onWin: (faseId) => {
+                        const key = 'FASE:' + faseId; progress[key] = progress[key] || {}; progress[key].completada = true;
+                        try { localStorage.setItem(PROGRESS_KEY, JSON.stringify(progress)); } catch (e) {}
+                    },
+                    onExit: () => { goToMenu(); openLevelSelect(); }
+                });
             }
             function openLevelSelect() {
                 stopVictoryMusic(false);
@@ -2967,6 +3051,8 @@ codigo_juego_template = """
                 gameState = 'playing';
             }
             function goToMenu() {
+                if (currentFase && currentFase.stop) currentFase.stop();
+                currentFase = null;
                 gameState = 'menu'; isPaused = false; isFiring = false; keysDown.clear(); stopVictoryMusic(false);
                 overScreen.style.display = 'none'; orbModal.style.display = 'none'; settingsModal.style.display = 'none'; victoryModal.style.display = 'none';
                 audioControls.style.display = 'none'; lbPanel.style.display = 'none';
@@ -3028,11 +3114,15 @@ codigo_juego_template = """
 
             function mainLoop() {
                 if (gameState === 'menu') { drawMenu(); }
+                else if (gameState === 'fase') { if (currentFase) { currentFase.update(); currentFase.draw(); } }
                 else { if(!isPaused) update(); draw(); }
                 requestAnimationFrame(mainLoop);
             }
             goToMenu();
             mainLoop();
+        </script>
+        <script>
+__FASES_JS__
         </script>
     </body>
     </html>
@@ -3041,5 +3131,7 @@ codigo_juego_template = """
 codigo_juego_listo = codigo_juego_template.replace("__AUDIO_SRC__", audio_src)
 codigo_juego_listo = codigo_juego_listo.replace("__SFX_DATA__", sfx_json)
 codigo_juego_listo = codigo_juego_listo.replace("__LEVELS_DATA__", niveles_json)
+codigo_juego_listo = codigo_juego_listo.replace("__FASES_DATA__", fases_json)
+codigo_juego_listo = codigo_juego_listo.replace("__FASES_JS__", fases_js)   # al final, para no tocar el código de las fases
 
 components.html(codigo_juego_listo, height=850, scrolling=False)
