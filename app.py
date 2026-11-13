@@ -308,7 +308,8 @@ codigo_juego_template = """
             let gameState = 'menu';   // 'menu' o 'playing'
 
             let playerName = "TÚ";
-            try { let saved = localStorage.getItem('starz_name'); if (saved) playerName = saved; } catch (e) {}
+            // Siempre se parte como jugador nuevo (no se recuerda el nombre anterior)
+            try { localStorage.removeItem('starz_name'); } catch (e) {}
             
             let musicVolume = 0.3;
             let sfxVolume = 0.5;
@@ -1472,7 +1473,17 @@ codigo_juego_template = """
             const nameInput = document.getElementById("name-input");
             const audioControls = document.getElementById("audio-controls");
             const lbPanel = document.getElementById("leaderboard-panel");
-            menuName.innerText = playerName;
+            // Muestra el nombre en el menú y avisa si los cheats de RISSOS están activos
+            function updateMenuName() {
+                if (isRissos()) {
+                    menuName.innerHTML = playerName + ' <span style="color:#FFD700;font-size:0.8em;">(CHEATS ACTIVADOS)</span>';
+                    menuName.style.color = '#FFD700';
+                } else {
+                    menuName.innerText = playerName;
+                    menuName.style.color = '';
+                }
+            }
+            updateMenuName();
 
             function startGame() {
                 settingsModal.style.display = 'none'; namePanel.style.display = 'none';
@@ -1490,8 +1501,7 @@ codigo_juego_template = """
             function saveName() {
                 let n = nameInput.value.trim().slice(0, 12);
                 playerName = n || "TÚ";
-                menuName.innerText = playerName;
-                try { localStorage.setItem('starz_name', playerName); } catch (e) {}
+                updateMenuName();
                 namePanel.style.display = 'none';
             }
 
