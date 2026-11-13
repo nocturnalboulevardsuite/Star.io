@@ -256,6 +256,7 @@ codigo_juego_template = """
                     <span><i class="key">MANTÉN CLICK IZQ</i> Disparar</span>
                     <span><i class="key">CLICK DER</i> Dash</span>
                     <span><i class="key">ESPACIO</i> Modo fantasma</span>
+                    <span><i class="key">R</i> Láser abismal (al matar el agujero negro)</span>
                     <span><i class="key">WASD</i> Moverse</span>
                     <span><i class="key">MOUSE</i> Apuntar</span>
                 </div>
@@ -650,6 +651,7 @@ codigo_juego_template = """
                     if(player.dead) { if(playerLives > 0) respawnPlayer(); } 
                     else { triggerInvulnerability(); }
                 }
+                if(e.code === 'KeyR' && !e.repeat) triggerAbyssLaser();
             });
 
             function handlePlayerDeath() {
@@ -672,6 +674,99 @@ codigo_juego_template = """
                 applyRissosMode();
                 playSfx("respawn");
                 floatingTexts.push({ x: player.x, y: player.y - 30, text: `¡REAPARECISTE! (${playerLives} vidas)`, icon: "star", color: "#33FF66", life: 50, size: 18 });
+            }
+
+            // === LÁSER ABISMAL ===
+            // Se desbloquea al destruir el agujero negro. Con R dispara un rayo enorme durante 4 s; recarga de 30 s.
+            const ABYSS_DURATION = 240;   // 4 segundos (60 fps)
+            const ABYSS_COOLDOWN = 1800;  // 30 segundos
+            const ABYSS_LENGTH = 1600;    // largo del rayo
+            const ABYSS_TICK = 5;         // cada cuántos frames hace daño
+            let abyssUnlocked = false, abyssTimer = 0, abyssCooldown = 0, abyssAngle = 0;
+
+            function unlockAbyssLaser() {
+                if (abyssUnlocked) return;
+                abyssUnlocked = true; abyssCooldown = 0;
+                floatingTexts.push({ x: player.x, y: player.y - player.r - 60, text: "¡LÁSER ABISMAL DESBLOQUEADO! [R]", icon: "vortex", iconBoth: true, color: "#B266FF", life: 200, size: 26 });
+            }
+
+            function aimAngle() {
+                let targetX = (screenMouseX - canvas.width / 2) / zoom + camX + canvas.width / 2;
+                let targetY = (screenMouseY - canvas.height / 2) / zoom + camY + canvas.height / 2;
+                return Math.atan2(targetY - player.y, targetX - player.x);
+            }
+
+            function triggerAbyssLaser() {
+                if (gameState !== 'playing' || isPaused || !player || player.dead) return;
+                if (!abyssUnlocked || abyssTimer > 0) return;
+                if (abyssCooldown > 0) {
+                    floatingTexts.push({ x: player.x, y: player.y - player.r - 25, text: `RECARGANDO ${Math.ceil(abyssCooldown / 60)}s`, color: "#888", life: 30, size: 14 });
+                    return;
+                }
+                abyssTimer = ABYSS_DURATION; abyssCooldown = ABYSS_COOLDOWN; abyssAngle = aimAngle();
+                playSfx("bh_death", 1.2);
+                floatingTexts.push({ x: player.x, y: player.y - player.r - 30, text: "¡LÁSER ABISMAL!", icon: "vortex", iconBoth: true, color: "#B266FF", life: 60, size: 24 });
+            }
+
+            // Distancia de un punto al segmento del rayo
+            function distToBeam(px, py, x1, y1, x2, y2) {
+                let vx = x2 - x1, vy = y2 - y1, len2 = vx * vx + vy * vy;
+                let t = len2 > 0 ? Math.max(0, Math.min(1, ((px - x1) * vx + (py - y1) * vy) / len2)) : 0;
+                return Math.hypot(px - (x1 + vx * t), py - (y1 + vy * t));
+            }
+
+            function beamWidth() { return 40 + player.r * 0.6; }
+
+            function updateAbyssLaser() {
+                if (abyssCooldown > 0 && abyssTimer <= 0) abyssCooldown--;
+                if (abyssTimer <= 0) return;
+                if (player.dead) { abyssTimer = 0; return; }
+                abyssTimer--;
+                abyssAngle = aimAngle(); // el rayo sigue al mouse
+                let x1 = player.x, y1 = player.y;
+                let x2 = x1 + Math.cos(abyssAngle) * ABYSS_LENGTH, y2 = y1 + Math.sin(abyssAngle) * ABYSS_LENGTH;
+                let w = beamWidth() / 2;
+
+                // El rayo borra los disparos enemigos que toca
+                for (let i = lasers.length - 1; i >= 0; i--) {
+                    let l = lasers[i];
+                    if (l.owner !== player && distToBeam(l.x, l.y, x1, y1, x2, y2) < w) lasers.splice(i, 1);
+                }
+
+                if (abyssTimer % ABYSS_TICK === 0) {
+                    let dmg = player.laserDamage;
+                    bots.forEach(b => { if (!b.dead && distToBeam(b.x, b.y, x1, y1, x2, y2) < w + b.r) takeDamage(b, 70 * dmg); });
+                    if (meteor.isBoss && !meteor.dead && distToBeam(meteor.x, meteor.y, x1, y1, x2, y2) < w + meteor.r) {
+                        meteor.hp -= 150 * dmg;
+                        floatingTexts.push({ x: meteor.x + (Math.random() - 0.5) * 80, y: meteor.y - meteor.r - 20, text: `-${Math.ceil(150 * dmg)}`, color: "#B266FF", life: 30, size: 26 });
+                        if (meteor.hp <= 0 && !meteor.dead) {
+                            meteor.dead = true; playSfx("bh_death", 2.5);
+                            floatingTexts.push({ x: meteor.x, y: meteor.y, text: "VICTORIA GALÁCTICA", icon: "star", iconBoth: true, color: "#FFD700", life: 300, size: 50 });
+                            if (bgMusic && audioSrc) { bgMusic.pause(); bgMusic.src = audioSrc; usingBossTrack = false; bgMusic.currentTime = 0; bgMusic.play().catch(e => console.log(e)); }
+                        }
+                    }
+                }
+                if (abyssTimer % 15 === 0) playSfx("laser", 0.4);
+                // Chispas al final y a lo largo del rayo
+                for (let i = 0; i < 3; i++) {
+                    let t = Math.random();
+                    particles.push({ x: x1 + (x2 - x1) * t, y: y1 + (y2 - y1) * t, vx: (Math.random() - 0.5) * 4, vy: (Math.random() - 0.5) * 4, color: Math.random() > 0.5 ? "#B266FF" : "#FFFFFF", life: 15 });
+                }
+            }
+
+            function drawAbyssLaser() {
+                if (abyssTimer <= 0 || player.dead) return;
+                let x1 = player.x, y1 = player.y;
+                let x2 = x1 + Math.cos(abyssAngle) * ABYSS_LENGTH, y2 = y1 + Math.sin(abyssAngle) * ABYSS_LENGTH;
+                let w = beamWidth(), pulse = 1 + Math.sin(Date.now() / 40) * 0.15;
+                let fade = Math.min(1, abyssTimer / 20);
+                ctx.save(); ctx.lineCap = "round"; ctx.globalAlpha = fade;
+                ctx.shadowColor = "#8A2BE2"; ctx.shadowBlur = 40;
+                ctx.strokeStyle = "rgba(138, 43, 226, 0.35)"; ctx.lineWidth = w * 1.8 * pulse; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+                ctx.strokeStyle = "#B266FF"; ctx.lineWidth = w * pulse; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+                ctx.shadowBlur = 0;
+                ctx.strokeStyle = "#FFFFFF"; ctx.lineWidth = w * 0.35 * pulse; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+                ctx.restore();
             }
 
             // Nombre secreto: RISSOS empieza con todo al máximo
@@ -759,6 +854,7 @@ codigo_juego_template = """
             function init() {
                 isGameOver = false; isPaused = false; playerLives = 5; cinematicTimer = 0; orbModal.style.display = 'none'; overScreen.style.display = 'none';
                 dashTimer = 0; lastDashTime = 0;
+                abyssUnlocked = false; abyssTimer = 0; abyssCooldown = 0;
                 blackHole = { x: worldW * 0.7, y: worldH * 0.3, r: 75, hp: 10000, maxHp: 10000, dead: false };
                 if (bgMusic && usingBossTrack && audioSrc) {
                     let wasPlaying = !bgMusic.paused;
@@ -974,6 +1070,8 @@ codigo_juego_template = """
                     player.x = Math.max(player.r, Math.min(worldW - player.r, player.x)); player.y = Math.max(player.r, Math.min(worldH - player.r, player.y));
                 }
 
+                updateAbyssLaser();
+
                 bots.forEach(bot => {
                     let botSpeed = 3 * Math.max(0.35, 20 / (bot.r + 5));
                     if(Math.random() < 0.02) { bot.vx = (Math.random() - 0.5) * 4; bot.vy = (Math.random() - 0.5) * 4; }
@@ -1012,7 +1110,7 @@ codigo_juego_template = """
                     if(!blackHole.dead && Math.hypot(l.x - blackHole.x, l.y - blackHole.y) < blackHole.r) {
                         blackHole.hp -= dmg; blackHole.r = Math.max(25, blackHole.r - 0.25);
                         if(blackHole.hp <= 0 && !blackHole.dead) { 
-                            blackHole.dead = true; 
+                            blackHole.dead = true; unlockAbyssLaser(); 
                             playSfx("bh_death", 2.5); 
                             meteor.isBoss = true; cinematicTimer = 180;
                             if (bgMusic && sfxData["luna_musica"] && sfxData["luna_musica"].length > 0) {
@@ -1076,7 +1174,7 @@ codigo_juego_template = """
                     allStars.forEach(s => {
                         if(Math.hypot(s.x - blackHole.x, s.y - blackHole.y) < s.r + blackHole.r * 0.8) {
                             if(s.r > blackHole.r * 1.25) { 
-                                blackHole.dead = true; s.r += 35; 
+                                blackHole.dead = true; unlockAbyssLaser(); s.r += 35; 
                                 playSfx("bh_death", 2.5);
                                 meteor.isBoss = true; cinematicTimer = 180;
                                 if (bgMusic && sfxData["luna_musica"] && sfxData["luna_musica"].length > 0) {
@@ -1418,6 +1516,8 @@ codigo_juego_template = """
 
                 let allStars = [player, ...bots].filter(s => !s.dead); allStars.sort((a, b) => a.r - b.r); 
 
+                drawAbyssLaser();
+
                 allStars.forEach(s => {
                     let isInvuln = (s === player && player.invulnTimer > 0), isFire = (s === player && player.fireTimer > 0);
                     ctx.save(); ctx.beginPath(); ctx.translate(s.x, s.y); if(isInvuln) ctx.globalAlpha = 0.5;
@@ -1462,6 +1562,7 @@ codigo_juego_template = """
                 ctx.font = "bold 12px sans-serif"; ctx.textAlign = "left";
                 const buffSeg = (icon, text) => { drawIcon(ctx, icon, bx + 8, by - 4, 16); ctx.fillStyle = "#FFD700"; ctx.fillText(text, bx + 20, by); bx += 20 + ctx.measureText(text).width + 18; };
                 if(player.hasInvulnCharge || player.invulnTimer > 0) { buffSeg('ghost', player.invulnTimer > 0 ? `FANTASMA: ${(player.invulnTimer/60).toFixed(1)}s` : "[ESPACIO] FANTASMA LISTO"); }
+                if(abyssUnlocked) { buffSeg('vortex', abyssTimer > 0 ? `LÁSER ABISMAL: ${(abyssTimer/60).toFixed(1)}s` : (abyssCooldown > 0 ? `LÁSER ABISMAL: ${Math.ceil(abyssCooldown/60)}s` : "[R] LÁSER ABISMAL LISTO")); }
                 if(player.continuousLaserTimer > 0) { buffSeg('dot', `LÁSER CONTINUO: ${(player.continuousLaserTimer/60).toFixed(1)}s`); }
                 ctx.restore();
             }
