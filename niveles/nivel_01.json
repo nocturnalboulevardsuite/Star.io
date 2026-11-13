@@ -1,6 +1,6 @@
 {
   "nombre": "Vía Láctea",
-  "descripcion": "La Luna Sangrienta. Gánale en Normal para desbloquear Difícil, y en Difícil para desbloquear Nightmare.",
+  "descripcion": "Normal: Luna Sangrienta. Difícil: Luna Blanca gigante que dispara rayos láser. Nightmare: Luna Gélida celeste con grietas rojas, rayos láser y bombas explosivas.",
   "mundo": {
     "ancho": 3200,
     "alto": 3200,
@@ -36,5 +36,33 @@
     "potencia_balas": 1.5,
     "espera_laser_frames": 1800,
     "potencia_laser": 5
+  },
+  "jefe_dificultad": {
+    "dificil": {
+      "nombre": "LUNA BLANCA",
+      "nombre_fase2": "LUNA BLANCA CÍCLOPE",
+      "color": "#FFFFFF",
+      "color_fase2": "#DDEBFF",
+      "color_crateres": "#B8C2D0",
+      "tamano": 1.7,
+      "rayos": true,
+      "rayos_cantidad": 1,
+      "rayos_espera_frames": 210
+    },
+    "nightmare": {
+      "nombre": "LUNA GÉLIDA",
+      "nombre_fase2": "LUNA GÉLIDA CÍCLOPE",
+      "color": "#4FE3FF",
+      "color_fase2": "#00BFFF",
+      "color_crateres": "#FF0033",
+      "color_detalles": "#FF0033",
+      "tamano": 1.5,
+      "rayos": true,
+      "rayos_cantidad": 3,
+      "rayos_espera_frames": 170,
+      "bombas": true,
+      "bombas_cantidad": 1,
+      "bombas_espera_frames": 220
+    }
   }
 }
