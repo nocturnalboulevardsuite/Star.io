@@ -11,13 +11,22 @@
     "objetos_espera_min": 150,
     "objetos_espera_max": 240
   },
+  "momia_gigante": {
+    "nombre": "MOMIA GIGANTE",
+    "vida": 700,
+    "fase2_en": 0.5,
+    "rollos_espera_min": 100,
+    "rollos_espera_max": 160
+  },
   "momias": {
-    "vida": 30,
+    "vida": 20,
+    "daño_golpe": 2,
+    "daño_espada": 4,
     "velocidad": 1.2,
-    "espera_min": 300,
-    "espera_max": 420,
-    "max": 4,
-    "prob_ankh": 0.2
+    "espera_min": 480,
+    "espera_max": 720,
+    "max": 2,
+    "prob_ankh": 0.25
   },
   "jugador": {
     "vida": 6,
@@ -30,5 +39,17 @@
     "duracion_s": 15,
     "cooldown_s": 60,
     "multiplicador": 2.5
+  },
+  "guardia": {
+    "max": 100,
+    "costo_golpe": 34,
+    "costo_laser": 1.5,
+    "recarga": 0.6
+  },
+  "arena": {
+    "segundos_para_subir": 8,
+    "velocidad_subida": 0.5,
+    "altura_max": 1380,
+    "segundos_para_hundirse": 3
   }
 }
