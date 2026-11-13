@@ -690,7 +690,10 @@ codigo_juego_template = """
                 comida: 600, orbes_max: 3, musica_victoria: "",
                 agujero_negro: { vida: 10000, radio: 75, pos_x: 0.7, pos_y: 0.3, crecimiento: 0.012, fuerza_atraccion: 2.8 },
                 jefe: { nombre: "LUNA SANGRIENTA", nombre_fase2: "LUNA CÍCLOPE", vida: 15000, velocidad: 1.2, velocidad_fase2: 0.45,
-                        color: "#FF6600", color_fase2: "#FF0033", potencia_balas: 1.5, espera_laser_frames: 1800, potencia_laser: 5 }
+                        color: "#FF6600", color_fase2: "#FF0033", potencia_balas: 1.5, espera_laser_frames: 1800, potencia_laser: 5,
+                        color_crateres: "#990000", color_detalles: "", tamano: 1,
+                        rayos: false, rayos_cantidad: 1, rayos_espera_frames: 210,
+                        bombas: false, bombas_cantidad: 1, bombas_espera_frames: 240 }
             };
             function mergeLevel(raw) {
                 const out = {};
@@ -700,6 +703,7 @@ codigo_juego_template = """
                 });
                 if (raw && raw.archivo) out.archivo = raw.archivo;
                 if (raw && raw.dificultades) out.dificultades = raw.dificultades;
+                if (raw && raw.jefe_dificultad) out.jefe_dificultad = raw.jefe_dificultad;
                 return out;
             }
             const LEVELS = (Array.isArray(LEVELS_RAW) && LEVELS_RAW.length > 0 ? LEVELS_RAW : [{}]).map(mergeLevel);
@@ -1760,6 +1764,138 @@ codigo_juego_template = """
                 } catch (e) {}
             }
 
+            // ======================================================
+            // === ATAQUES EXTRA DEL JEFE (según dificultad) ===
+            // rayos: láseres dirigidos con aviso previo
+            // bombas: bombas que caen donde estás y explotan
+            // ======================================================
+            let bossBombs = [];
+            const RAY_CHARGE = 48;   // frames de aviso (línea punteada)
+            const RAY_FIRE = 24;     // frames que dura el rayo
+            const RAY_LEN = 2400;
+            const BOMB_FLIGHT = 55, BOMB_FUSE = 70, BOMB_RADIUS = 170;
+
+            function makeVeins() {
+                // grietas en el espacio del jefe (radio 100 = borde)
+                const veins = [];
+                for (let v = 0; v < 8; v++) {
+                    let a = Math.random() * Math.PI * 2, rr = 20 + Math.random() * 30;
+                    const pts = [[Math.cos(a) * rr, Math.sin(a) * rr]];
+                    for (let k = 0; k < 4; k++) { a += (Math.random() - 0.5) * 0.9; rr = Math.min(96, rr + 14 + Math.random() * 14); pts.push([Math.cos(a) * rr, Math.sin(a) * rr]); }
+                    veins.push(pts);
+                }
+                return veins;
+            }
+
+            function updateBossExtras() {
+                // Bombas en el aire / en el suelo (siguen aunque el jefe muera)
+                for (let i = bossBombs.length - 1; i >= 0; i--) {
+                    const b = bossBombs[i]; b.t++;
+                    if (b.t <= BOMB_FLIGHT) { const p = b.t / BOMB_FLIGHT; b.x = b.sx + (b.tx - b.sx) * p; b.y = b.sy + (b.ty - b.sy) * p; }
+                    if (b.t >= BOMB_FLIGHT + BOMB_FUSE) {
+                        // ¡BOOM!
+                        const dmg = 40 * (LV.jefe.potencia_laser / 5);
+                        if (!player.dead && Math.hypot(player.x - b.x, player.y - b.y) < BOMB_RADIUS + player.r) {
+                            takeDamage(player, dmg);
+                            const a = Math.atan2(player.y - b.y, player.x - b.x); player.kbx = Math.cos(a) * 12; player.kby = Math.sin(a) * 12;
+                        }
+                        bots.forEach(bt => { if (!bt.dead && Math.hypot(bt.x - b.x, bt.y - b.y) < BOMB_RADIUS + bt.r) takeDamage(bt, dmg); });
+                        for (let k = 0; k < 45; k++) { const a = Math.random() * Math.PI * 2, sp = Math.random() * 11; particles.push({ x: b.x, y: b.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, color: ["#FF0033", "#FF8C00", "#FFFFFF", LV.jefe.color][k % 4], life: 30 }); }
+                        playAbilitySfx('boom');
+                        bossBombs.splice(i, 1);
+                    }
+                }
+
+                if (!meteor.isBoss || meteor.dead || cinematicTimer > 0) { if (meteor.dead) meteor.rays = []; return; }
+                const J = LV.jefe;
+
+                // Rayos láser dirigidos
+                if (J.rayos) {
+                    meteor.rays = meteor.rays || [];
+                    meteor.rayTimer = (meteor.rayTimer || 0) + 1;
+                    const wait = meteor.isPhase2 ? J.rayos_espera_frames * 0.7 : J.rayos_espera_frames;
+                    if (meteor.rayTimer >= wait && meteor.rays.length === 0 && !player.dead) {
+                        meteor.rayTimer = 0;
+                        const n = J.rayos_cantidad + (meteor.isPhase2 ? 2 : 0);
+                        const base = Math.atan2(player.y - meteor.y, player.x - meteor.x), spread = 0.32;
+                        for (let i = 0; i < n; i++) meteor.rays.push({ angle: base + (i - (n - 1) / 2) * spread, t: 0 });
+                        playAbilitySfx('shield');
+                    }
+                    for (let i = meteor.rays.length - 1; i >= 0; i--) {
+                        const r = meteor.rays[i]; r.t++;
+                        if (r.t === RAY_CHARGE) playSfx("laser", 0.9);
+                        if (r.t > RAY_CHARGE) {
+                            const x2 = meteor.x + Math.cos(r.angle) * RAY_LEN, y2 = meteor.y + Math.sin(r.angle) * RAY_LEN, w = 26;
+                            const dmg = J.potencia_laser * 0.8;
+                            if (!player.dead && distToBeam(player.x, player.y, meteor.x, meteor.y, x2, y2) < w + player.r) takeDamage(player, dmg);
+                            if (r.t % 6 === 0) bots.forEach(b => { if (!b.dead && distToBeam(b.x, b.y, meteor.x, meteor.y, x2, y2) < w + b.r) takeDamage(b, dmg * 6); });
+                        }
+                        if (r.t >= RAY_CHARGE + RAY_FIRE) meteor.rays.splice(i, 1);
+                    }
+                }
+
+                // Bombas explosivas
+                if (J.bombas) {
+                    meteor.bombTimer = (meteor.bombTimer || 0) + 1;
+                    const wait = meteor.isPhase2 ? J.bombas_espera_frames * 0.6 : J.bombas_espera_frames;
+                    if (meteor.bombTimer >= wait && !player.dead) {
+                        meteor.bombTimer = 0;
+                        const n = J.bombas_cantidad + (meteor.isPhase2 ? 1 : 0);
+                        for (let i = 0; i < n; i++) {
+                            const off = i === 0 ? 0 : 120 + Math.random() * 160, a = Math.random() * Math.PI * 2;
+                            const tx = Math.max(40, Math.min(worldW - 40, player.x + Math.cos(a) * off + player.kbx * 5));
+                            const ty = Math.max(40, Math.min(worldH - 40, player.y + Math.sin(a) * off + player.kby * 5));
+                            bossBombs.push({ sx: meteor.x, sy: meteor.y, tx, ty, x: meteor.x, y: meteor.y, t: 0 });
+                        }
+                        playAbilitySfx('whoosh');
+                    }
+                }
+            }
+
+            function drawBossExtras() {
+                const J = LV.jefe;
+                // Rayos
+                if (meteor.rays && !meteor.dead) meteor.rays.forEach(r => {
+                    const x2 = meteor.x + Math.cos(r.angle) * RAY_LEN, y2 = meteor.y + Math.sin(r.angle) * RAY_LEN;
+                    const glow = J.color_detalles || J.color, core = J.color_detalles ? "#FFFFFF" : "#FFFFFF";
+                    ctx.save(); ctx.lineCap = "round";
+                    if (r.t <= RAY_CHARGE) {
+                        ctx.globalAlpha = 0.35 + 0.45 * (Math.floor(r.t / 5) % 2);
+                        ctx.strokeStyle = glow; ctx.lineWidth = 3; ctx.setLineDash([16, 12]);
+                        ctx.beginPath(); ctx.moveTo(meteor.x, meteor.y); ctx.lineTo(x2, y2); ctx.stroke();
+                    } else {
+                        const fade = Math.min(1, (RAY_CHARGE + RAY_FIRE - r.t) / 8);
+                        ctx.globalAlpha = fade; ctx.shadowColor = glow; ctx.shadowBlur = 30;
+                        ctx.strokeStyle = glow; ctx.globalAlpha = fade * 0.45; ctx.lineWidth = 64;
+                        ctx.beginPath(); ctx.moveTo(meteor.x, meteor.y); ctx.lineTo(x2, y2); ctx.stroke();
+                        ctx.globalAlpha = fade; ctx.lineWidth = 30; ctx.beginPath(); ctx.moveTo(meteor.x, meteor.y); ctx.lineTo(x2, y2); ctx.stroke();
+                        ctx.shadowBlur = 0; ctx.strokeStyle = core; ctx.lineWidth = 10;
+                        ctx.beginPath(); ctx.moveTo(meteor.x, meteor.y); ctx.lineTo(x2, y2); ctx.stroke();
+                    }
+                    ctx.restore();
+                });
+                // Bombas
+                bossBombs.forEach(b => {
+                    ctx.save();
+                    const landed = b.t > BOMB_FLIGHT, fuseP = landed ? (b.t - BOMB_FLIGHT) / BOMB_FUSE : 0;
+                    // zona de peligro
+                    ctx.globalAlpha = landed ? 0.18 + 0.25 * fuseP : 0.12;
+                    ctx.fillStyle = "#FF0033"; ctx.beginPath(); ctx.arc(b.tx, b.ty, BOMB_RADIUS, 0, Math.PI * 2); ctx.fill();
+                    ctx.globalAlpha = 0.8; ctx.strokeStyle = "#FF0033"; ctx.lineWidth = 3; ctx.setLineDash([10, 8]);
+                    ctx.beginPath(); ctx.arc(b.tx, b.ty, BOMB_RADIUS * (landed ? 1 - fuseP * 0.15 : 1), 0, Math.PI * 2); ctx.stroke();
+                    ctx.setLineDash([]); ctx.globalAlpha = 1;
+                    // la bomba (en el aire se ve más grande, como si viniera alta)
+                    const lift = landed ? 0 : Math.sin(Math.PI * b.t / BOMB_FLIGHT);
+                    const R = 22 + lift * 14;
+                    const blink = landed && Math.floor(b.t / Math.max(2, 8 - fuseP * 6)) % 2 === 0;
+                    ctx.shadowColor = "#FF0033"; ctx.shadowBlur = blink ? 30 : 10;
+                    ctx.fillStyle = blink ? "#FF0033" : "#1A1A2A"; ctx.beginPath(); ctx.arc(b.x, b.y - lift * 60, R, 0, Math.PI * 2); ctx.fill();
+                    ctx.shadowBlur = 0; ctx.strokeStyle = J.color; ctx.lineWidth = 3; ctx.stroke();
+                    ctx.fillStyle = "#FFD27A"; ctx.beginPath(); ctx.arc(b.x + R * 0.5, b.y - lift * 60 - R * 0.8, 5 + Math.random() * 3, 0, Math.PI * 2); ctx.fill();
+                    ctx.restore();
+                });
+            }
+
             // === PANTALLA DE VICTORIA ===
             const victoryModal = document.getElementById('victory-modal');
             const vicBtns = document.getElementById('vic-btns');
@@ -1847,6 +1983,7 @@ codigo_juego_template = """
                 L.jefe.vida = Math.round(L.jefe.vida * k('jefe_vida'));
                 L.jefe.velocidad *= k('jefe_velocidad'); L.jefe.velocidad_fase2 *= k('jefe_velocidad');
                 L.jefe.potencia_balas *= k('jefe_potencia_balas'); L.jefe.espera_laser_frames *= k('jefe_espera_laser'); L.jefe.potencia_laser *= k('jefe_potencia_laser');
+                if (base.jefe_dificultad && base.jefe_dificultad[diff]) Object.assign(L.jefe, base.jefe_dificultad[diff]);
                 if (diff !== 'normal') {
                     L.mundo.color_borde = DIFFS[diff].color;
                     L.jefe.nombre += ' [' + DIFFS[diff].label + ']';
@@ -2025,6 +2162,7 @@ codigo_juego_template = """
                     dead: false, shootAngle: 0, laserTimer: 0, laserChargeTimer: 0, laserSweepTimer: 0, laserAngle: 0,
                     craters: [ {x: -35, y: -25, r: 20}, {x: 35, y: -35, r: 16}, {x: 10, y: 30, r: 25}, {x: -40, y: 25, r: 14}, {x: 0, y: 0, r: 18} ] 
                 };
+                meteor.rays = []; meteor.rayTimer = 0; meteor.bombTimer = 0; meteor.veins = makeVeins(); bossBombs = [];
 
                 player = { 
                     x: Math.random() * worldW, y: Math.random() * worldH, r: 18, color: '#FFFFFF', name: playerName, speed: 3.5, dead: false,
@@ -2273,6 +2411,7 @@ codigo_juego_template = """
                 updateAbyssLaser();
                 updateAbilities();
                 updateNightmare();
+                updateBossExtras();
 
                 bots.forEach(bot => {
                     let botSpeed = 3 * LV.bots.velocidad * Math.max(0.35, 20 / (bot.r + 5));
@@ -2295,7 +2434,7 @@ codigo_juego_template = """
 
                 if (cinematicTimer > 0) {
                     cinematicTimer--;
-                    meteor.r += (150 - meteor.r) * 0.03; 
+                    meteor.r += (150 * (LV.jefe.tamano || 1) - meteor.r) * 0.03; 
                     zoom += (0.6 - zoom) * 0.05;
                     camX += (meteor.x - canvas.width / 2 - camX) * 0.06; 
                     camY += (meteor.y - canvas.height / 2 - camY) * 0.06;
@@ -2660,7 +2799,16 @@ codigo_juego_template = """
                     ctx.fillStyle = meteor.isBoss ? (meteor.isPhase2 ? LV.jefe.color_fase2 : LV.jefe.color) : "#A9A9A9"; 
                     if(meteor.isBoss) { ctx.shadowColor = meteor.isPhase2 ? LV.jefe.color_fase2 : LV.jefe.color; ctx.shadowBlur = 40; }
                     ctx.fill(); ctx.shadowBlur = 0;
-                    meteor.craters.forEach(c => { ctx.beginPath(); ctx.arc(c.x, c.y, c.r, 0, Math.PI * 2); ctx.fillStyle = meteor.isBoss ? "#990000" : "#696969"; ctx.fill(); }); 
+                    if (meteor.isBoss) { const sc = meteor.r / 150; ctx.scale(sc * 1.5, sc * 1.5); }
+                    meteor.craters.forEach(c => { ctx.beginPath(); ctx.arc(c.x, c.y, c.r, 0, Math.PI * 2); ctx.fillStyle = meteor.isBoss ? LV.jefe.color_crateres : "#696969"; ctx.fill(); }); 
+                    if (meteor.isBoss && LV.jefe.color_detalles && meteor.veins) {
+                        // grietas brillantes (modo nightmare)
+                        ctx.strokeStyle = LV.jefe.color_detalles; ctx.lineWidth = 3; ctx.lineCap = "round"; ctx.lineJoin = "round";
+                        ctx.shadowColor = LV.jefe.color_detalles; ctx.shadowBlur = 12 + Math.sin(Date.now() / 150) * 8;
+                        meteor.veins.forEach(v => { ctx.beginPath(); v.forEach((pt, k) => k ? ctx.lineTo(pt[0], pt[1]) : ctx.moveTo(pt[0], pt[1])); ctx.stroke(); });
+                        ctx.shadowBlur = 0;
+                        ctx.fillStyle = LV.jefe.color_detalles; ctx.beginPath(); ctx.arc(0, 0, 10 + Math.sin(Date.now() / 120) * 3, 0, Math.PI * 2); ctx.fill();
+                    }
                     ctx.restore();
 
                     if(meteor.isBoss) {
@@ -2722,6 +2870,7 @@ codigo_juego_template = """
                 let allStars = [player, ...bots].filter(s => !s.dead); allStars.sort((a, b) => a.r - b.r); 
 
                 drawAbyssLaser();
+                drawBossExtras();
                 drawAbilitiesWorld();
 
                 allStars.forEach(s => {
