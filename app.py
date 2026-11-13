@@ -669,7 +669,7 @@ codigo_juego_template = """
                 nombre: "Vía Láctea", descripcion: "",
                 mundo: { ancho: 3200, alto: 3200, color_fondo: "#06060E", color_borde: "#FF3366" },
                 bots: { cantidad: 28, vida: 200, velocidad: 1.0, espera_disparo_ms: 2500, potencia_disparo: 1.0 },
-                comida: 600, orbes_max: 3,
+                comida: 600, orbes_max: 3, musica_victoria: "",
                 agujero_negro: { vida: 10000, radio: 75, pos_x: 0.7, pos_y: 0.3, crecimiento: 0.012, fuerza_atraccion: 2.8 },
                 jefe: { nombre: "LUNA SANGRIENTA", nombre_fase2: "LUNA CÍCLOPE", vida: 15000, velocidad: 1.2, velocidad_fase2: 0.45,
                         color: "#FF6600", color_fase2: "#FF0033", potencia_balas: 1.5, espera_laser_frames: 1800, potencia_laser: 5 }
@@ -1526,6 +1526,7 @@ codigo_juego_template = """
             let victoryMusicNode = null, victoryMusicTimeout = null;
 
             function stopVictoryMusic(resumeBg) {
+                stopSpaceLoop();
                 if (victoryMusicTimeout) { clearTimeout(victoryMusicTimeout); victoryMusicTimeout = null; }
                 if (victoryMusicNode) {
                     const ac = getAudioCtx(), node = victoryMusicNode; victoryMusicNode = null;
@@ -1631,11 +1632,123 @@ codigo_juego_template = """
                 } catch (e) { console.log("Música de victoria no disponible", e); }
             }
 
+            // --- Música espacial de victoria en loop (niveles que no son el último) ---
+            let spaceLoop = null;
+            const SPACE_BPM = 84;
+
+            function scheduleSpaceSegment(ac, st, t0) {
+                const beat = 60 / SPACE_BPM, bar = beat * 4;
+                // Dmaj9 · Bm9 · Gmaj7(#11) · Asus4→A, dos vueltas
+                const chords = [
+                    [50, 54, 57, 61, 64], [47, 50, 54, 57, 61], [43, 47, 50, 54, 61], [45, 50, 52, 57, 61],
+                    [50, 54, 57, 61, 64], [47, 50, 54, 57, 61], [43, 47, 50, 54, 61], [45, 49, 52, 57, 64]
+                ];
+                // Campanitas: [nota MIDI, tiempo dentro del compás, duración en tiempos]
+                const bells = [
+                    [[78, 0, 1.5], [81, 1.5, 2.5]], [[78, 0, 2], [74, 2, 2]], [[79, 0, 1.5], [83, 1.5, 2.5]], [[81, 0, 2], [76, 2, 2]],
+                    [[78, 0, 1.5], [81, 1.5, 2.5]], [[83, 0, 2], [81, 2, 2]], [[79, 0, 1], [83, 1, 1], [85, 2, 2]], [[86, 0, 2], [85, 2, 1], [81, 3, 1]]
+                ];
+                const arpOrder = [0, 2, 4, 1, 3, 2, 4, 3];
+
+                chords.forEach((ch, b) => {
+                    const bt = t0 + b * bar;
+                    // Colchón (pad) con filtro que respira
+                    const pf = ac.createBiquadFilter(); pf.type = 'lowpass'; pf.Q.value = 2;
+                    pf.frequency.setValueAtTime(500, bt); pf.frequency.linearRampToValueAtTime(1700, bt + bar * 0.5); pf.frequency.linearRampToValueAtTime(600, bt + bar);
+                    const pg = ac.createGain();
+                    pg.gain.setValueAtTime(0.0001, bt); pg.gain.exponentialRampToValueAtTime(0.022, bt + 0.6); pg.gain.setValueAtTime(0.022, bt + bar - 0.3); pg.gain.exponentialRampToValueAtTime(0.0001, bt + bar + 0.4);
+                    pf.connect(pg); pg.connect(st.wetBus);
+                    ch.forEach(m => [-12, 0, 12].forEach(det => {
+                        const o = ac.createOscillator(); o.type = 'sawtooth'; o.frequency.value = midiHz(m); o.detune.value = det;
+                        o.connect(pf); o.start(bt); o.stop(bt + bar + 0.5);
+                    }));
+                    // Bajo suave
+                    const bo = ac.createOscillator(); bo.type = 'sine'; bo.frequency.value = midiHz(ch[0] - 12);
+                    const bg = ac.createGain(); bg.gain.setValueAtTime(0.0001, bt); bg.gain.exponentialRampToValueAtTime(0.22, bt + 0.15); bg.gain.setValueAtTime(0.22, bt + bar - 0.2); bg.gain.exponentialRampToValueAtTime(0.0001, bt + bar + 0.1);
+                    bo.connect(bg); bg.connect(st.dryBus); bo.start(bt); bo.stop(bt + bar + 0.2);
+                    // Arpegio en corcheas con eco
+                    for (let k = 0; k < 8; k++) {
+                        const at = bt + k * beat / 2, m = ch[arpOrder[k]] + 12;
+                        const o = ac.createOscillator(); o.type = 'triangle'; o.frequency.value = midiHz(m);
+                        const g = ac.createGain(); g.gain.setValueAtTime(0.0001, at); g.gain.exponentialRampToValueAtTime(0.07, at + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, at + beat * 0.9);
+                        o.connect(g); g.connect(st.echoBus); o.start(at); o.stop(at + beat);
+                    }
+                    // Campanitas (melodía)
+                    bells[b].forEach(([m, off, dur]) => {
+                        const at = bt + off * beat;
+                        [1, 2.01].forEach((mult, i) => {
+                            const o = ac.createOscillator(); o.type = 'sine'; o.frequency.value = midiHz(m) * mult;
+                            const g = ac.createGain(); const v = i === 0 ? 0.09 : 0.025;
+                            g.gain.setValueAtTime(0.0001, at); g.gain.exponentialRampToValueAtTime(v, at + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, at + dur * beat + 1.2);
+                            o.connect(g); g.connect(st.echoBus); o.start(at); o.stop(at + dur * beat + 1.3);
+                        });
+                    });
+                });
+                // Brillo de estrellas (ruido muy agudo) al comienzo de cada vuelta
+                const len = Math.ceil(ac.sampleRate * bar), buf = ac.createBuffer(1, len, ac.sampleRate), d = buf.getChannelData(0);
+                for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.sin(Math.PI * i / len);
+                const n = ac.createBufferSource(); n.buffer = buf;
+                const hf = ac.createBiquadFilter(); hf.type = 'highpass'; hf.frequency.value = 7000;
+                const ng = ac.createGain(); ng.gain.value = 0.05;
+                n.connect(hf); hf.connect(ng); ng.connect(st.wetBus); n.start(t0); n.stop(t0 + bar);
+                return chords.length * bar;
+            }
+
+            function playSpaceVictoryLoop() {
+                stopVictoryMusic(false);
+                if (!isUserInteracted || musicVolume === 0) return;
+                try {
+                    if (bgMusic) bgMusic.pause();
+                    const ac = getAudioCtx(), now = ac.currentTime, beat = 60 / SPACE_BPM;
+                    const master = ac.createGain();
+                    master.gain.setValueAtTime(0.0001, now); master.gain.linearRampToValueAtTime(Math.min(1, musicVolume * 1.8), now + 2.5);
+                    const comp = ac.createDynamicsCompressor(); comp.threshold.value = -18; comp.ratio.value = 3;
+                    master.connect(comp); comp.connect(ac.destination);
+                    // Reverb grande (espacio) + eco
+                    const rev = makeReverb(ac, 4.5, 1.8), revG = ac.createGain(); revG.gain.value = 0.55;
+                    rev.connect(revG); revG.connect(master);
+                    const dryBus = ac.createGain(); dryBus.connect(master);
+                    const wetBus = ac.createGain(); wetBus.connect(master); wetBus.connect(rev);
+                    const echoBus = ac.createGain(); echoBus.connect(master); echoBus.connect(rev);
+                    const delay = ac.createDelay(2); delay.delayTime.value = beat * 0.75;
+                    const fb = ac.createGain(); fb.gain.value = 0.4;
+                    const fbF = ac.createBiquadFilter(); fbF.type = 'lowpass'; fbF.frequency.value = 2500;
+                    echoBus.connect(delay); delay.connect(fbF); fbF.connect(fb); fb.connect(delay); fbF.connect(master); fbF.connect(rev);
+
+                    const st = { master, dryBus, wetBus, echoBus, timer: null, next: now + 0.1 };
+                    const schedule = () => {
+                        if (spaceLoop !== st) return;
+                        const len = scheduleSpaceSegment(ac, st, st.next);
+                        st.next += len;
+                        st.timer = setTimeout(schedule, Math.max(100, (st.next - ac.currentTime - 2) * 1000));   // agenda la siguiente vuelta 2 s antes
+                    };
+                    spaceLoop = st;
+                    schedule();
+                } catch (e) { console.log("Música espacial no disponible", e); }
+            }
+
+            function stopSpaceLoop() {
+                if (!spaceLoop) return;
+                const st = spaceLoop; spaceLoop = null;
+                if (st.timer) clearTimeout(st.timer);
+                try {
+                    const ac = getAudioCtx();
+                    st.master.gain.cancelScheduledValues(ac.currentTime);
+                    st.master.gain.setValueAtTime(st.master.gain.value, ac.currentTime);
+                    st.master.gain.linearRampToValueAtTime(0, ac.currentTime + 1);
+                    setTimeout(() => { try { st.master.disconnect(); } catch (e) {} }, 1200);
+                } catch (e) {}
+            }
+
             // === PANTALLA DE VICTORIA ===
             const victoryModal = document.getElementById('victory-modal');
             function onBossDefeated() {
                 if (freeMode) return;
-                if (levelIndex >= LEVELS.length - 1) setTimeout(playVictoryMusic, 120);   // último jefe: ¡ganaste el juego!
+                // "musica_victoria" del nivel: "espacial" (loop), "epica" o "ninguna".
+                // Si no se indica: el último nivel usa la épica y los demás la espacial.
+                let tipo = LV.musica_victoria || (levelIndex >= LEVELS.length - 1 ? 'epica' : 'espacial');
+                if (tipo === 'epica') setTimeout(playVictoryMusic, 120);
+                else if (tipo === 'espacial') setTimeout(playSpaceVictoryLoop, 120);
                 victoryTimer = 150;   // 2,5 s para ver la explosión antes del menú
             }
             function showVictory() {
