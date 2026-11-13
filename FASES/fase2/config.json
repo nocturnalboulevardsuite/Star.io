@@ -1,0 +1,34 @@
+{
+  "nombre": "Desierto del Faraón",
+  "jefe": {
+    "nombre": "FARAÓN",
+    "vida": 900,
+    "fase2_en": 0.5,
+    "laser_espera_min": 180,
+    "laser_espera_max": 300,
+    "laser_aviso": 45,
+    "laser_duracion": 30,
+    "objetos_espera_min": 150,
+    "objetos_espera_max": 240
+  },
+  "momias": {
+    "vida": 30,
+    "velocidad": 1.2,
+    "espera_min": 300,
+    "espera_max": 420,
+    "max": 4,
+    "prob_ankh": 0.2
+  },
+  "jugador": {
+    "vida": 6,
+    "salto_min": 7,
+    "salto_max": 19,
+    "carga_frames": 40,
+    "golpes": [8, 10, 18]
+  },
+  "espada": {
+    "duracion_s": 15,
+    "cooldown_s": 60,
+    "multiplicador": 2.5
+  }
+}
