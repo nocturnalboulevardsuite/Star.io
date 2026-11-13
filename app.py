@@ -92,6 +92,19 @@ codigo_juego_template = """
             .menu-title { margin: 0; font-size: clamp(42px, 7vw, 84px); font-weight: 900; line-height: 1; color: #FFFFFF; letter-spacing: 3px; text-shadow: 0 0 10px #00FFFF, 0 0 30px rgba(0, 255, 255, 0.6), 4px 4px 0 #CC33FF; }
             .menu-sub { margin-top: 8px; font-size: clamp(13px, 1.6vw, 18px); font-weight: 700; color: #FFD700; letter-spacing: 8px; }
             .menu-panel { width: min(360px, 86vw); display: flex; flex-direction: column; gap: 14px; padding: 26px 24px; background: rgba(10, 10, 22, 0.88); border: 2px solid #00FFFF; border-radius: 16px; box-shadow: 0 0 25px rgba(0, 255, 255, 0.3), inset 0 0 25px rgba(0, 255, 255, 0.06); }
+            /* Selección de personaje */
+            #char-select { display: none; position: absolute; inset: 0; z-index: 35; flex-direction: column; align-items: center; justify-content: center; gap: 18px; background: rgba(4, 4, 14, 0.92); font-family: 'Orbitron', 'Segoe UI', sans-serif; }
+            #char-select h2 { color: #00FFFF; letter-spacing: 4px; margin: 0; text-shadow: 0 0 14px rgba(0,255,255,0.6); }
+            .char-grid { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; max-width: 1100px; }
+            .char-card { width: 190px; padding: 14px 12px; background: #0d1424; border: 2px solid #333; border-radius: 12px; color: #fff; cursor: pointer; font-family: inherit; text-align: center; transition: transform 0.12s, box-shadow 0.12s; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+            .char-card:hover, .char-card:focus-visible { transform: translateY(-6px) scale(1.03); outline: none; }
+            .char-name { font-size: 15px; font-weight: 900; letter-spacing: 2px; }
+            .char-stats { width: 100%; font-size: 10px; letter-spacing: 1px; color: #9adfe6; display: flex; flex-direction: column; gap: 4px; }
+            .char-stat { display: flex; justify-content: space-between; align-items: center; gap: 6px; }
+            .pips { display: flex; gap: 3px; }
+            .pip { width: 12px; height: 7px; border-radius: 2px; background: #2a3344; }
+            .char-perk { font-size: 10px; line-height: 1.45; color: #ddd; min-height: 58px; font-family: 'Segoe UI', sans-serif; }
+            #char-back { padding: 10px 26px; font-family: inherit; font-size: 14px; letter-spacing: 3px; color: #00FFFF; background: transparent; border: 2px solid #00b8c4; border-radius: 8px; cursor: pointer; }
             .menu-pilot { text-align: center; color: #9adfe6; font-size: 13px; letter-spacing: 2px; margin-bottom: 4px; }
             .menu-pilot b { color: #FFFFFF; font-size: 16px; }
             .menu-btn { display: flex; align-items: center; gap: 14px; width: 100%; padding: 14px 18px; font-family: inherit; font-size: 19px; font-weight: 700; letter-spacing: 3px; color: #00FFFF; background: #0d1424; border: 2px solid #00b8c4; border-radius: 10px; cursor: pointer; transition: transform 0.12s, background 0.12s, box-shadow 0.12s; }
@@ -264,8 +277,16 @@ codigo_juego_template = """
                     <span><i class="key">Q</i> Piel de Rhino</span>
                     <span><i class="key">E</i> Escudo reflector</span>
                     <span><i class="key">WASD</i> Moverse</span>
+                    <span><i class="key">SHIFT</i> Sprint</span>
                     <span><i class="key">MOUSE</i> Apuntar</span>
                 </div>
+            </div>
+
+            <!-- SELECCIÓN DE PERSONAJE -->
+            <div id="char-select">
+                <h2>ELIGE TU ESTRELLA</h2>
+                <div class="char-grid" id="char-grid"></div>
+                <button id="char-back">VOLVER</button>
             </div>
 
             <!-- Modal de Radio Vintage -->
@@ -650,7 +671,7 @@ codigo_juego_template = """
 
             // Movimiento con WASD (y flechas)
             const keysDown = new Set();
-            const MOVE_KEYS = ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
+            const MOVE_KEYS = ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ShiftLeft', 'ShiftRight'];
             window.addEventListener('keydown', (e) => { if (MOVE_KEYS.includes(e.code)) keysDown.add(e.code); });
             window.addEventListener('keyup', (e) => { keysDown.delete(e.code); });
             window.addEventListener('blur', () => { keysDown.clear(); isFiring = false; });
@@ -700,6 +721,7 @@ codigo_juego_template = """
                 isGameOver = false; overScreen.style.display = 'none';
                 
                 resetAbilities();
+                applyCharacter(false);
                 applyRissosMode();
                 playSfx("respawn");
                 floatingTexts.push({ x: player.x, y: player.y - 30, text: `¡REAPARECISTE! (${playerLives} vidas)`, icon: "star", color: "#33FF66", life: 50, size: 18 });
@@ -735,6 +757,13 @@ codigo_juego_template = """
                     return;
                 }
                 abyssTimer = ABYSS_DURATION; abyssCooldown = ABYSS_COOLDOWN; abyssAngle = aimAngle();
+                if (player.character === 'godzilla' && !player.rissos) {
+                    // Te deja a 10 golpes de morir; si ya estabas más abajo, te cuesta 1 golpe (nunca te mata)
+                    let tenHits = GODZILLA_HIT * 10;
+                    let before = player.hp;
+                    player.hp = before > tenHits ? tenHits : Math.max(1, before - GODZILLA_HIT);
+                    floatingTexts.push({ x: player.x, y: player.y - player.r - 55, text: `-${Math.ceil(before - player.hp)} HP`, color: "#33FF66", life: 50, size: 20 });
+                }
                 playGodzillaBeam();
                 floatingTexts.push({ x: player.x, y: player.y - player.r - 30, text: "¡LÁSER ABISMAL!", icon: "vortex", iconBoth: true, color: "#B266FF", life: 60, size: 24 });
             }
@@ -1019,8 +1048,12 @@ codigo_juego_template = """
                     }
                     if (!player.rissos) player.r = Math.max(10, player.r * (1 - AB.cannon.massCost(L)));
                     let rad = AB.cannon.radius(L), sp = 11;
-                    cannonShots.push({ x: player.x + Math.cos(ang) * (player.r + rad), y: player.y + Math.sin(ang) * (player.r + rad),
-                        vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp, r: rad, life: AB.cannon.life(L), pct: AB.cannon.damagePct(L), hitSet: new Set() });
+                    let offsets = player.doubleCannon ? [-1, 1] : [0];   // Ninja: dos balas paralelas
+                    offsets.forEach(o => {
+                        let ox = -Math.sin(ang) * o * (rad + 4), oy = Math.cos(ang) * o * (rad + 4);
+                        cannonShots.push({ x: player.x + Math.cos(ang) * (player.r + rad) + ox, y: player.y + Math.sin(ang) * (player.r + rad) + oy,
+                            vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp, r: rad, life: AB.cannon.life(L), pct: AB.cannon.damagePct(L), hitSet: new Set() });
+                    });
                     // retroceso
                     player.x -= Math.cos(ang) * 25; player.y -= Math.sin(ang) * 25;
                     for (let k = 0; k < 25; k++) particles.push({ x: player.x, y: player.y, vx: Math.cos(ang + (Math.random() - 0.5)) * Math.random() * 8, vy: Math.sin(ang + (Math.random() - 0.5)) * Math.random() * 8, color: Math.random() > 0.5 ? "#FF8C00" : "#FFD27A", life: 25 });
@@ -1095,7 +1128,7 @@ codigo_juego_template = """
                 if (player.reflectTimer > 0) player.reflectTimer--;
                 if (player.reflectFlash > 0) player.reflectFlash--;
 
-                bots.forEach(applyKnockback);
+                bots.forEach(applyKnockback); applyKnockback(player);
                 if (!blackHole.dead) applyKnockback(blackHole);
                 if (meteor.isBoss && !meteor.dead) applyKnockback(meteor);
 
@@ -1227,12 +1260,147 @@ codigo_juego_template = """
                 ctx.restore();
             }
 
+            // ======================================================
+            // === PERSONAJES Y SPRINT ===
+            // ======================================================
+            const STAMINA_MAX = 100;
+            const STAMINA_DRAIN = 0.8;    // por frame mientras corres (~2 s de sprint)
+            const STAMINA_REGEN = 0.4;    // por frame al descansar (~4 s para llenar)
+            const SPRINT_MULT = 1.6;      // cuánto más rápido vas con SHIFT
+            const GODZILLA_HIT = 22;      // daño de una bala normal (para "10 golpes")
+
+            const CHARACTERS = {
+                normal: {
+                    name: 'NORMAL', color: '#FFFFFF', stats: [3, 3, 3],
+                    perk: 'La estrella estable. Sin ventajas ni desventajas.'
+                },
+                juggernaut: {
+                    name: 'JUGGERNAUT', color: '#FF7A30', stats: [5, 1, 5],
+                    perk: 'Muchísima vida y mucho daño, pero muy lento.'
+                },
+                ninja: {
+                    name: 'NINJA', color: '#B266FF', stats: [1, 5, 3],
+                    perk: 'Súper rápido y con muy poca vida. Empieza con el Súper Cañón DOBLE [X].'
+                },
+                godzilla: {
+                    name: 'MINI GODZILLA', color: '#33FF66', stats: [3, 2, 4],
+                    perk: 'Láser abismal [R] desbloqueado desde el inicio, pero cada uso te deja a 10 golpes de morir.'
+                },
+                nightmare: {
+                    name: 'NIGHTMARE STAR', color: '#FF0040', stats: [0, 6, 6],
+                    perk: 'Velocidad luz. Mata lo que toca. 1 vida y un solo golpe te mata. Agujero negro: 2 toques. Luna roja: 4 toques.'
+                }
+            };
+            let selectedCharacter = 'normal';
+
+            function applyCharacter(isNewGame) {
+                const id = selectedCharacter;
+                player.character = id;
+                player.color = CHARACTERS[id].color;
+                player.stamina = STAMINA_MAX; player.exhausted = false; player.staminaDelay = 0;
+                player.nightmare = false; player.doubleCannon = false; player.nmCd = 0;
+                player.speed = 3.5;
+
+                if (id === 'juggernaut') {
+                    player.hp = 650; player.maxHp = 650; player.speed = 1.9; player.laserDamage = 2.5; player.r = 24;
+                } else if (id === 'ninja') {
+                    player.hp = 60; player.maxHp = 60; player.speed = 6.5;
+                    player.cannonLvl = Math.max(1, player.cannonLvl || 0); player.doubleCannon = true;
+                } else if (id === 'godzilla') {
+                    player.hp = 300; player.maxHp = 300; player.speed = 3.2;
+                    abyssUnlocked = true;
+                } else if (id === 'nightmare') {
+                    player.hp = 1; player.maxHp = 1; player.shields = 0; player.speed = 12;
+                    player.nightmare = true;
+                    if (isNewGame) playerLives = 1;
+                }
+            }
+
+            // Nightmare Star: mata al tocar, rebota contra los jefes y los vence a toques
+            function updateNightmare() {
+                if (!player.nightmare || player.dead) return;
+                if (player.nmCd > 0) player.nmCd--;
+                player.shields = 0;
+                if (Math.random() < 0.9) particles.push({ x: player.x + (Math.random() - 0.5) * player.r, y: player.y + (Math.random() - 0.5) * player.r, vx: 0, vy: 0, color: Math.random() > 0.4 ? "#FF0040" : "#330010", life: 22 });
+
+                bots.forEach(b => {
+                    if (b.dead || Math.hypot(b.x - player.x, b.y - player.y) > player.r + b.r) return;
+                    b.dead = true; dropMass(b); player.r += 0.8;
+                    for (let k = 0; k < 14; k++) particles.push({ x: b.x, y: b.y, vx: (Math.random() - 0.5) * 9, vy: (Math.random() - 0.5) * 9, color: "#FF0040", life: 22 });
+                    floatingTexts.push({ x: b.x, y: b.y, text: "¡ANIQUILADO!", icon: "burst", color: "#FF0040", life: 40, size: 20 });
+                });
+
+                const bounceFrom = (obj) => {
+                    let a = Math.atan2(player.y - obj.y, player.x - obj.x);
+                    player.kbx = Math.cos(a) * 16; player.kby = Math.sin(a) * 16;
+                    player.x = obj.x + Math.cos(a) * (obj.r * 0.85 + player.r + 2);
+                    player.y = obj.y + Math.sin(a) * (obj.r * 0.85 + player.r + 2);
+                };
+                const touchBoss = (obj, needed, damageFn, label) => {
+                    obj.nmHits = (obj.nmHits || 0) + 1;
+                    let dmg = obj.nmHits >= needed ? obj.hp + 1 : obj.maxHp / needed;
+                    damageFn(dmg, "#FF0040");
+                    playAbilitySfx('boom');
+                    floatingTexts.push({ x: obj.x, y: obj.y - obj.r - 50, text: `${label} ${Math.min(obj.nmHits, needed)}/${needed}`, color: "#FF0040", life: 60, size: 28 });
+                    player.nmCd = 40;
+                };
+
+                if (!blackHole.dead && Math.hypot(blackHole.x - player.x, blackHole.y - player.y) < player.r + blackHole.r * 0.85) {
+                    if (player.nmCd <= 0) touchBoss(blackHole, 2, damageBlackHole, "TOQUE");
+                    if (!blackHole.dead) bounceFrom(blackHole);
+                }
+                if (!meteor.dead && Math.hypot(meteor.x - player.x, meteor.y - player.y) < player.r + meteor.r * 0.85) {
+                    if (meteor.isBoss && player.nmCd <= 0 && cinematicTimer <= 0) touchBoss(meteor, 4, damageMeteor, "TOQUE");
+                    if (!meteor.dead) bounceFrom(meteor);
+                }
+            }
+
+            // Pantalla de selección
+            const charSelect = document.getElementById('char-select');
+            const charGrid = document.getElementById('char-grid');
+            function charStarSvg(color) {
+                return '<svg viewBox="0 0 48 48" width="70" height="70"><polygon points="24.00,2.00 29.29,16.72 44.92,17.20 32.56,26.78 36.93,41.80 24.00,33.00 11.07,41.80 15.44,26.78 3.08,17.20 18.71,16.72" fill="' + color + '" stroke="#FFFFFF" stroke-width="1.4" stroke-linejoin="round" style="filter: drop-shadow(0 0 6px ' + color + ');"/></svg>';
+            }
+            function pipsHtml(n, color) {
+                let h = '<span class="pips">';
+                for (let i = 1; i <= 5; i++) h += '<span class="pip" style="background:' + (i <= n ? color : '#2a3344') + (n > 5 && i <= 5 ? ';box-shadow:0 0 6px ' + color : '') + '"></span>';
+                return h + '</span>';
+            }
+            function buildCharCards() {
+                charGrid.innerHTML = '';
+                Object.keys(CHARACTERS).forEach(id => {
+                    const c = CHARACTERS[id];
+                    const card = document.createElement('button');
+                    card.className = 'char-card';
+                    card.style.borderColor = c.color;
+                    card.style.boxShadow = id === selectedCharacter ? '0 0 18px ' + c.color : 'none';
+                    card.innerHTML = charStarSvg(c.color) +
+                        '<div class="char-name" style="color:' + c.color + '">' + c.name + '</div>' +
+                        '<div class="char-stats">' +
+                            '<div class="char-stat"><span>VIDA</span>' + pipsHtml(c.stats[0], c.color) + '</div>' +
+                            '<div class="char-stat"><span>VELOCIDAD</span>' + pipsHtml(c.stats[1], c.color) + '</div>' +
+                            '<div class="char-stat"><span>DAÑO</span>' + pipsHtml(c.stats[2], c.color) + '</div>' +
+                        '</div>' +
+                        '<div class="char-perk">' + c.perk + '</div>';
+                    card.addEventListener('click', () => {
+                        selectedCharacter = id;
+                        charSelect.style.display = 'none';
+                        startGame();
+                    });
+                    charGrid.appendChild(card);
+                });
+            }
+            function openCharSelect() {
+                buildCharCards();
+                charSelect.style.display = 'flex';
+            }
+
             // Nombre secreto: RISSOS empieza con todo al máximo
             function isRissos() { return (playerName || "").trim().toUpperCase() === "RISSOS"; }
             function applyRissosMode() {
                 if (!isRissos()) return;
                 player.r = 60; player.hp = 1000; player.maxHp = 1000; player.shields = 10;
-                player.speed = 5.5; player.hasInvulnCharge = true;
+                player.speed = Math.max(player.speed, 5.5); player.hasInvulnCharge = true;
                 player.laserRange = 3.0; player.laserDamage = 5.0;
                 player.multiLevel = 10; player.crossLevel = 10;
                 player.cannonLvl = 10; player.pushLvl = 10; player.rhinoLvl = 10; player.reflectLvl = 10;
@@ -1342,6 +1510,7 @@ codigo_juego_template = """
                 
                 spawnBox(); spawnBox(); spawnRedBox(); spawnOrb();
                 resetAbilities(); cannonShots = []; pushHands = [];
+                applyCharacter(true);
                 applyRissosMode();
             }
 
@@ -1367,6 +1536,11 @@ codigo_juego_template = """
 
             function takeDamage(target, amount) {
                 if(target === player && player.invulnTimer > 0) return;
+                if(target === player && player.nightmare && player.rhinoTimer <= 0) {
+                    // Nightmare Star: un solo golpe te mata
+                    if (!player.dead) { player.hp = 0; player.dead = true; floatingTexts.push({ x: player.x, y: player.y, text: "UN GOLPE BASTÓ", icon: "burst", color: "#FF0040", life: 60, size: 22 }); handlePlayerDeath(); }
+                    return;
+                }
                 if(target === player && player.rhinoTimer > 0) {
                     if (Math.random() < 0.15) floatingTexts.push({ x: player.x, y: player.y - player.r - 20, text: "BLINDADO", icon: "shield", color: "#C0C4CE", life: 30, size: 16 });
                     return;
@@ -1546,6 +1720,20 @@ codigo_juego_template = """
                     let baseSpeed = player.speed * Math.max(0.35, 20 / (player.r + 5));
 
                     if (player.speedBoostTimer > 0) baseSpeed *= 1.7;
+
+                    // Sprint con SHIFT (estamina 100)
+                    let wantSprint = (keysDown.has('ShiftLeft') || keysDown.has('ShiftRight')) && dist > 0;
+                    if (wantSprint && !player.exhausted && player.stamina > 0) {
+                        baseSpeed *= SPRINT_MULT;
+                        player.stamina = Math.max(0, player.stamina - STAMINA_DRAIN);
+                        player.staminaDelay = 40;
+                        if (player.stamina <= 0) { player.exhausted = true; floatingTexts.push({ x: player.x, y: player.y - player.r - 20, text: "SIN ESTAMINA", color: "#FFCC00", life: 35, size: 14 }); }
+                        if (Math.random() < 0.6) particles.push({ x: player.x - (dx / dist) * player.r, y: player.y - (dy / dist) * player.r, vx: -(dx / dist) * 2 + (Math.random() - 0.5), vy: -(dy / dist) * 2 + (Math.random() - 0.5), color: "#FFE066", life: 14 });
+                    } else {
+                        if (player.staminaDelay > 0) player.staminaDelay--;
+                        else player.stamina = Math.min(STAMINA_MAX, player.stamina + STAMINA_REGEN);
+                        if (player.exhausted && player.stamina >= 25) player.exhausted = false;
+                    }
                     if (dashTimer > 0) { baseSpeed *= 3.8; dashTimer--; }
 
                     if (dist > 0) { player.x += (dx / dist) * baseSpeed; player.y += (dy / dist) * baseSpeed; }
@@ -1554,6 +1742,7 @@ codigo_juego_template = """
 
                 updateAbyssLaser();
                 updateAbilities();
+                updateNightmare();
 
                 bots.forEach(bot => {
                     let botSpeed = 3 * Math.max(0.35, 20 / (bot.r + 5));
@@ -1652,11 +1841,11 @@ codigo_juego_template = """
 
                 for(let i = hearts.length - 1; i >= 0; i--) { let h = hearts[i]; if(!player.dead && Math.hypot(player.x - h.x, player.y - h.y) < player.r + h.r) { hearts.splice(i, 1); spawnHeart(); playSfx("food"); player.hp += 20; if(player.hp > player.maxHp) player.maxHp = player.hp; floatingTexts.push({ x: player.x, y: player.y - player.r - 15, text: "+20 HP", icon: "heart", color: "#FF3366", life: 40, size: 18 }); } }
 
-                if(!meteor.dead) { allStars.forEach(s => { if(Math.hypot(s.x - meteor.x, s.y - meteor.y) < s.r + meteor.r * 0.85) takeDamage(s, 100); }); }
+                if(!meteor.dead) { allStars.forEach(s => { if(s === player && player.nightmare) return; if(Math.hypot(s.x - meteor.x, s.y - meteor.y) < s.r + meteor.r * 0.85) takeDamage(s, 100); }); }
                 
                 if(!blackHole.dead) {
                     allStars.forEach(s => {
-                        if(Math.hypot(s.x - blackHole.x, s.y - blackHole.y) < s.r + blackHole.r * 0.8) {
+                        if(!(s === player && player.nightmare) && Math.hypot(s.x - blackHole.x, s.y - blackHole.y) < s.r + blackHole.r * 0.8) {
                             if(s.r > blackHole.r * 1.25) { 
                                 blackHole.dead = true; unlockAbyssLaser(); s.r += 35; 
                                 playSfx("bh_death", 2.5);
@@ -1694,11 +1883,11 @@ codigo_juego_template = """
 
                 for(let i = 0; i < allStars.length; i++) {
                     for(let j = i + 1; j < allStars.length; j++) {
-                        let e1 = allStars[i], e2 = allStars[j]; let d = Math.hypot(e1.x - e2.x, e1.y - e2.y);
+                        let e1 = allStars[i], e2 = allStars[j]; if (e1.dead || e2.dead) continue; let d = Math.hypot(e1.x - e2.x, e1.y - e2.y);
                         if(d < e1.r + e2.r) { if(e1 === player && player.fireTimer > 0 && (now - (e2.lastBurnTime || 0) > 500)) { takeDamage(e2, 40); e2.lastBurnTime = now; } else if (e2 === player && player.fireTimer > 0 && (now - (e1.lastBurnTime || 0) > 500)) { takeDamage(e1, 40); e1.lastBurnTime = now; } }
                         let bigger = e1.r > e2.r ? e1 : e2; let smaller = e1.r > e2.r ? e2 : e1;
                         if(d < bigger.r * 0.75 && bigger.r > smaller.r * 1.15) {
-                            if(smaller === player && (player.invulnTimer > 0 || player.rhinoTimer > 0)) continue;
+                            if(smaller === player && (player.invulnTimer > 0 || player.rhinoTimer > 0 || player.nightmare)) continue;
                             bigger.r += smaller.r * 0.35;
                             if(bigger === player) { player.hp += 35; if(player.hp > player.maxHp) player.maxHp = player.hp; } else { bigger.hp = Math.min(bigger.maxHp, bigger.hp + 35); }
                             if(smaller === player && !player.dead) { smaller.hp = 0; smaller.dead = true; handlePlayerDeath(); } else { smaller.dead = true; }
@@ -2045,6 +2234,16 @@ codigo_juego_template = """
                 ctx.fillStyle = "#FFF"; ctx.font = "bold 11px sans-serif"; ctx.textAlign = "center"; ctx.fillText(`SALUD: ${Math.ceil(player.hp)} / ${Math.ceil(player.maxHp)} HP`, x + 110, y + 13);
 
                 for(let i = 0; i < 4; i++) { drawIcon(ctx, i < player.shields ? 'shield' : 'shieldEmpty', x + (i * 22) + 10, y - 14, 18); }
+
+                // Estamina
+                let stPct = Math.max(0, (player.stamina || 0) / STAMINA_MAX);
+                ctx.fillStyle = "rgba(10, 10, 20, 0.85)"; ctx.fillRect(x, y + 22, 220, 9);
+                ctx.fillStyle = player.exhausted ? "#886600" : "#FFD700"; ctx.fillRect(x + 1, y + 23, 218 * stPct, 7);
+                ctx.strokeStyle = "#444"; ctx.lineWidth = 1; ctx.strokeRect(x, y + 22, 220, 9);
+                ctx.fillStyle = "#FFF"; ctx.font = "bold 8px sans-serif"; ctx.textAlign = "left"; ctx.fillText("SHIFT ESTAMINA", x + 228, y + 30);
+                // Personaje
+                let ch = CHARACTERS[player.character || 'normal'];
+                ctx.fillStyle = ch.color; ctx.font = "bold 12px sans-serif"; ctx.textAlign = "left"; ctx.fillText(ch.name, x + 228, y + 13);
                 
                 let bx = x; const by = y - 58;
                 ctx.font = "bold 12px sans-serif"; ctx.textAlign = "left";
@@ -2095,7 +2294,8 @@ codigo_juego_template = """
                 namePanel.style.display = 'none';
             }
 
-            document.getElementById("btn-play").addEventListener('click', startGame);
+            document.getElementById("btn-play").addEventListener('click', openCharSelect);
+            document.getElementById("char-back").addEventListener('click', () => { charSelect.style.display = 'none'; });
             document.getElementById("btn-sound").addEventListener('click', () => { settingsModal.style.display = 'block'; });
             document.getElementById("btn-name").addEventListener('click', () => {
                 let open = namePanel.style.display === 'flex';
