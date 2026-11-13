@@ -253,10 +253,11 @@ codigo_juego_template = """
                 </div>
 
                 <div class="menu-controls">
-                    <span><i class="key">CLICK IZQ</i> Disparar</span>
+                    <span><i class="key">MANTÉN CLICK IZQ</i> Disparar</span>
                     <span><i class="key">CLICK DER</i> Dash</span>
                     <span><i class="key">ESPACIO</i> Modo fantasma</span>
-                    <span><i class="key">MOUSE</i> Moverse</span>
+                    <span><i class="key">WASD</i> Moverse</span>
+                    <span><i class="key">MOUSE</i> Apuntar</span>
                 </div>
             </div>
 
@@ -621,12 +622,25 @@ codigo_juego_template = """
                 screenMouseX = e.clientX - rect.left; screenMouseY = e.clientY - rect.top;
             });
 
+            // Movimiento con WASD (y flechas)
+            const keysDown = new Set();
+            const MOVE_KEYS = ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
+            window.addEventListener('keydown', (e) => { if (MOVE_KEYS.includes(e.code)) keysDown.add(e.code); });
+            window.addEventListener('keyup', (e) => { keysDown.delete(e.code); });
+            window.addEventListener('blur', () => { keysDown.clear(); isFiring = false; });
+
+            // Disparo automático manteniendo el click izquierdo
+            let isFiring = false;
+            let fireCooldown = 0;
+            const FIRE_RATE = 7; // frames entre disparos (~8 disparos por segundo)
+
             canvas.addEventListener('mousedown', (e) => {
                 if(gameState !== 'playing' || isPaused) return;
                 if(player.dead) { if (playerLives > 0) respawnPlayer(); else goToMenu(); return; }
-                if(e.button === 0) shootLaser();
+                if(e.button === 0) { isFiring = true; if (fireCooldown <= 0) { shootLaser(); fireCooldown = FIRE_RATE; } }
                 else if(e.button === 2) { e.preventDefault(); triggerDash(); }
             });
+            window.addEventListener('mouseup', (e) => { if (e.button === 0) isFiring = false; });
 
             window.addEventListener('keydown', (e) => {
                 if(gameState !== 'playing' || isPaused) return;
@@ -654,8 +668,21 @@ codigo_juego_template = """
                 player.multiLevel = 1; player.crossLevel = 0; player.continuousLaserTimer = 0;
                 isGameOver = false; overScreen.style.display = 'none';
                 
+                applyRissosMode();
                 playSfx("respawn");
                 floatingTexts.push({ x: player.x, y: player.y - 30, text: `¡REAPARECISTE! (${playerLives} vidas)`, icon: "star", color: "#33FF66", life: 50, size: 18 });
+            }
+
+            // Nombre secreto: RISSOS empieza con todo al máximo
+            function isRissos() { return (playerName || "").trim().toUpperCase() === "RISSOS"; }
+            function applyRissosMode() {
+                if (!isRissos()) return;
+                player.r = 60; player.hp = 1000; player.maxHp = 1000; player.shields = 10;
+                player.speed = 5.5; player.hasInvulnCharge = true;
+                player.laserRange = 3.0; player.laserDamage = 5.0;
+                player.multiLevel = 10; player.crossLevel = 10;
+                player.rissos = true;
+                floatingTexts.push({ x: player.x, y: player.y - 80, text: "MODO RISSOS: TODO AL MÁXIMO", icon: "star", iconBoth: true, color: "#FFD700", life: 120, size: 26 });
             }
 
             function triggerInvulnerability() {
@@ -667,7 +694,7 @@ codigo_juego_template = """
 
             function triggerDash() {
                 const now = Date.now();
-                if(!player.dead && now - lastDashTime >= dashCooldown) {
+                if(!player.dead && now - lastDashTime >= (player.rissos ? 1500 : dashCooldown)) {
                     lastDashTime = now; dashTimer = 12; 
                     playSfx("dash");
                     floatingTexts.push({ x: player.x, y: player.y - player.r - 20, text: "DASH!", icon: "bolt", color: "#00FFFF", life: 30, size: 18 });
@@ -679,7 +706,7 @@ codigo_juego_template = """
             }
 
             function shootLaser() {
-                if(player.dead || player.r <= 12) return;
+                if(player.dead || (player.r <= 12 && !player.rissos)) return;
                 let targetX = (screenMouseX - canvas.width / 2) / zoom + camX + canvas.width / 2;
                 let targetY = (screenMouseY - canvas.height / 2) / zoom + camY + canvas.height / 2;
                 let dx = targetX - player.x; let dy = targetY - player.y; let dist = Math.hypot(dx, dy);
@@ -711,8 +738,8 @@ codigo_juego_template = """
                     }
                 }
 
-                playSfx("laser");
-                player.r = Math.max(10, player.r - Math.min(1.5, costPerShot));
+                playSfx("laser", player.rissos ? 0.35 : 1);
+                if (!player.rissos) player.r = Math.max(10, player.r - Math.min(1.5, costPerShot));
             }
 
             const nombres = ["Alpha", "Nova", "Sirius", "Vega", "Orion", "Cosmos", "Apollo", "Zeta", "Pulsar"];
@@ -757,6 +784,7 @@ codigo_juego_template = """
                 for(let i=0; i<35; i++) spawnHeart();
                 
                 spawnBox(); spawnBox(); spawnRedBox(); spawnOrb();
+                applyRissosMode();
             }
 
             function spawnBot() { bots.push({ x: Math.random() * worldW, y: Math.random() * worldH, r: Math.random() * 20 + 10, color: randomColor(), name: randomName(), vx: (Math.random() - 0.5) * 4, vy: (Math.random() - 0.5) * 4, hp: 200, maxHp: 200, lastShootTime: 0, dead: false, lastBurnTime: 0 }); }
@@ -926,16 +954,22 @@ codigo_juego_template = """
 
                 let allStars = [player, ...bots].filter(s => !s.dead); const now = Date.now();
 
+                if (fireCooldown > 0) fireCooldown--;
+                if (isFiring && !player.dead && fireCooldown <= 0) { shootLaser(); fireCooldown = FIRE_RATE; }
+
                 if(!player.dead && cinematicTimer <= 0) {
-                    let targetX = (screenMouseX - canvas.width / 2) / zoom + camX + canvas.width / 2;
-                    let targetY = (screenMouseY - canvas.height / 2) / zoom + camY + canvas.height / 2;
-                    let dx = targetX - player.x, dy = targetY - player.y; let dist = Math.sqrt(dx*dx + dy*dy);
+                    let dx = 0, dy = 0;
+                    if (keysDown.has('KeyW') || keysDown.has('ArrowUp')) dy -= 1;
+                    if (keysDown.has('KeyS') || keysDown.has('ArrowDown')) dy += 1;
+                    if (keysDown.has('KeyA') || keysDown.has('ArrowLeft')) dx -= 1;
+                    if (keysDown.has('KeyD') || keysDown.has('ArrowRight')) dx += 1;
+                    let dist = Math.sqrt(dx*dx + dy*dy);
                     let baseSpeed = player.speed * Math.max(0.35, 20 / (player.r + 5));
 
                     if (player.speedBoostTimer > 0) baseSpeed *= 1.7;
                     if (dashTimer > 0) { baseSpeed *= 3.8; dashTimer--; }
 
-                    if (dist > 5) { player.x += (dx / dist) * baseSpeed; player.y += (dy / dist) * baseSpeed; }
+                    if (dist > 0) { player.x += (dx / dist) * baseSpeed; player.y += (dy / dist) * baseSpeed; }
                     player.x = Math.max(player.r, Math.min(worldW - player.r, player.x)); player.y = Math.max(player.r, Math.min(worldH - player.r, player.y));
                 }
 
@@ -1448,7 +1482,7 @@ codigo_juego_template = """
                 gameState = 'playing';
             }
             function goToMenu() {
-                gameState = 'menu'; isPaused = false;
+                gameState = 'menu'; isPaused = false; isFiring = false; keysDown.clear();
                 overScreen.style.display = 'none'; orbModal.style.display = 'none'; settingsModal.style.display = 'none';
                 audioControls.style.display = 'none'; lbPanel.style.display = 'none';
                 mainMenu.style.display = 'flex';
