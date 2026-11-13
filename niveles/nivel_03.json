@@ -1,15 +1,40 @@
 {
   "nombre": "Vacío Final",
-  "descripcion": "Un mapa enorme, bots muy peligrosos y la luna del vacío.",
-  "mundo": { "ancho": 4000, "alto": 4000, "color_fondo": "#02020A", "color_borde": "#00E5FF" },
-  "bots": { "cantidad": 40, "vida": 320, "velocidad": 1.3, "espera_disparo_ms": 1600, "potencia_disparo": 1.5 },
+  "descripcion": "El vacío con la Luna del Vacío. Por ahora usa las mismas mecánicas que el nivel 1, con otro aspecto y un poco más de dificultad.",
+  "mundo": {
+    "ancho": 4000,
+    "alto": 4000,
+    "color_fondo": "#02020A",
+    "color_borde": "#00E5FF"
+  },
+  "bots": {
+    "cantidad": 32,
+    "vida": 240,
+    "velocidad": 1.1,
+    "espera_disparo_ms": 2100,
+    "potencia_disparo": 1.2
+  },
   "comida": 800,
-  "orbes_max": 5,
-  "agujero_negro": { "vida": 20000, "radio": 95, "pos_x": 0.5, "pos_y": 0.2, "crecimiento": 0.02, "fuerza_atraccion": 3.6 },
+  "musica_victoria": "epica",
+  "orbes_max": 3,
+  "agujero_negro": {
+    "vida": 13000,
+    "radio": 85,
+    "pos_x": 0.5,
+    "pos_y": 0.2,
+    "crecimiento": 0.015,
+    "fuerza_atraccion": 3.1
+  },
   "jefe": {
-    "nombre": "LUNA DEL VACÍO", "nombre_fase2": "OJO DEL VACÍO",
-    "vida": 30000, "velocidad": 1.6, "velocidad_fase2": 0.75,
-    "color": "#7A00FF", "color_fase2": "#00E5FF",
-    "potencia_balas": 2.2, "espera_laser_frames": 1200, "potencia_laser": 7
+    "nombre": "LUNA DEL VACÍO",
+    "nombre_fase2": "OJO DEL VACÍO",
+    "vida": 20000,
+    "velocidad": 1.35,
+    "velocidad_fase2": 0.55,
+    "color": "#7A00FF",
+    "color_fase2": "#00E5FF",
+    "potencia_balas": 1.7,
+    "espera_laser_frames": 1550,
+    "potencia_laser": 6
   }
 }
