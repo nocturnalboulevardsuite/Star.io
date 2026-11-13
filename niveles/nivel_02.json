@@ -1,15 +1,40 @@
 {
   "nombre": "Nebulosa Carmesí",
-  "descripcion": "Más bots, más agresivos y una luna de lava más resistente.",
-  "mundo": { "ancho": 3600, "alto": 3600, "color_fondo": "#12040A", "color_borde": "#FF6600" },
-  "bots": { "cantidad": 34, "vida": 260, "velocidad": 1.15, "espera_disparo_ms": 2000, "potencia_disparo": 1.2 },
+  "descripcion": "Nebulosa roja con la Luna de Lava. Por ahora usa las mismas mecánicas que el nivel 1, con otro aspecto y un poco más de dificultad.",
+  "mundo": {
+    "ancho": 3600,
+    "alto": 3600,
+    "color_fondo": "#12040A",
+    "color_borde": "#FF6600"
+  },
+  "bots": {
+    "cantidad": 30,
+    "vida": 220,
+    "velocidad": 1.05,
+    "espera_disparo_ms": 2300,
+    "potencia_disparo": 1.1
+  },
   "comida": 700,
-  "orbes_max": 4,
-  "agujero_negro": { "vida": 14000, "radio": 85, "pos_x": 0.25, "pos_y": 0.7, "crecimiento": 0.016, "fuerza_atraccion": 3.2 },
+  "musica_victoria": "espacial",
+  "orbes_max": 3,
+  "agujero_negro": {
+    "vida": 12000,
+    "radio": 80,
+    "pos_x": 0.25,
+    "pos_y": 0.7,
+    "crecimiento": 0.014,
+    "fuerza_atraccion": 3.0
+  },
   "jefe": {
-    "nombre": "LUNA DE LAVA", "nombre_fase2": "LUNA INFERNAL",
-    "vida": 22000, "velocidad": 1.4, "velocidad_fase2": 0.6,
-    "color": "#FF3300", "color_fase2": "#B30000",
-    "potencia_balas": 1.8, "espera_laser_frames": 1500, "potencia_laser": 6
+    "nombre": "LUNA DE LAVA",
+    "nombre_fase2": "LUNA INFERNAL",
+    "vida": 18000,
+    "velocidad": 1.3,
+    "velocidad_fase2": 0.5,
+    "color": "#FF3300",
+    "color_fase2": "#B30000",
+    "potencia_balas": 1.6,
+    "espera_laser_frames": 1650,
+    "potencia_laser": 5.5
   }
 }
