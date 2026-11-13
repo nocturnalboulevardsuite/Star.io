@@ -1,0 +1,15 @@
+{
+  "nombre": "Nebulosa Carmesí",
+  "descripcion": "Más bots, más agresivos y una luna de lava más resistente.",
+  "mundo": { "ancho": 3600, "alto": 3600, "color_fondo": "#12040A", "color_borde": "#FF6600" },
+  "bots": { "cantidad": 34, "vida": 260, "velocidad": 1.15, "espera_disparo_ms": 2000, "potencia_disparo": 1.2 },
+  "comida": 700,
+  "orbes_max": 4,
+  "agujero_negro": { "vida": 14000, "radio": 85, "pos_x": 0.25, "pos_y": 0.7, "crecimiento": 0.016, "fuerza_atraccion": 3.2 },
+  "jefe": {
+    "nombre": "LUNA DE LAVA", "nombre_fase2": "LUNA INFERNAL",
+    "vida": 22000, "velocidad": 1.4, "velocidad_fase2": 0.6,
+    "color": "#FF3300", "color_fase2": "#B30000",
+    "potencia_balas": 1.8, "espera_laser_frames": 1500, "potencia_laser": 6
+  }
+}
