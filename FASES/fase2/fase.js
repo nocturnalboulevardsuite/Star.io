@@ -20,6 +20,11 @@
             objetos_espera_min: 150, objetos_espera_max: 240
         },
         momia_gigante: { nombre: "MOMIA GIGANTE", vida: 700, fase2_en: 0.5, rollos_espera_min: 100, rollos_espera_max: 160 },
+        tutankamon: {
+            nombre: "TUTANKAMÓN", vida: 1000, fase2_en: 0.5,
+            laser_espera_min: 140, laser_espera_max: 220, laser_aviso: 40, laser_duracion: 35,
+            manos_espera_min: 120, manos_espera_max: 190, manos_aviso: 60, "daño_manos": 3, "daño_ola": 2
+        },
         momias: { vida: 20, "daño_golpe": 2, "daño_espada": 4, velocidad: 1.2, espera_min: 480, espera_max: 720, max: 2, prob_ankh: 0.25 },
         jugador: { vida: 6, salto_min: 7, salto_max: 19, carga_frames: 40, golpes: [8, 10, 18] },
         espada: { duracion_s: 15, cooldown_s: 60, multiplicador: 2.5 },
@@ -198,7 +203,7 @@
                 flyOff: 0, rise: 0, armAnim: 0
             },
             sandY: FLOOR + 30, lowTime: 0, sandWarned: false,
-            mummies: [], mummyT: 240, objects: [], rolls: [], pickups: [], particles: [], texts: [],
+            mummies: [], mummyT: 240, objects: [], rolls: [], pickups: [], particles: [], texts: [], hands: [], waves: [],
             dust: Array.from({ length: 40 }, () => ({ x: rand(0, W), y: rand(0, H), s: rand(0.4, 1.4) })),
             rissos
         };
@@ -301,7 +306,7 @@
     function hurtPlayer(n, fromX, kind) {
         const p = S.player;
         if (p.inv > 0 || S.over) return;
-        if (isGuarding()) {
+        if (isGuarding() && kind !== 'aplastar') {
             p.guard -= kind === 'laser' ? C.guardia.costo_laser : C.guardia.costo_golpe;
             p.guardDelay = 40; p.blockFlash = 6;
             if (kind !== 'laser' || S.t % 10 === 0) { for (let i = 0; i < 5; i++) puff(p.x + p.facing * 22, p.y - 5, '#BFE9FF'); }
@@ -310,6 +315,7 @@
             return;
         }
         p.hp -= n; p.inv = 60;
+        if (kind === 'aplastar') { S.shake = Math.max(S.shake, 16); text(p.x, p.y - 80, '¡APLASTADO!', '#FF3355', 24); }
         p.vy = -7; p.kbx = (p.x < fromX ? -1 : 1) * 7; p.onGround = false; p.charging = false; p.charge = 0;
         text(p.x, p.y - 50, `-${n}`, '#FF3355', 22);
         api.playAbilitySfx('boom');
@@ -425,11 +431,11 @@
         if (p.hitCombo >= 3) text(p.x, p.y - 80, `COMBO x${p.hitCombo}`, '#FFD700', 18 + Math.min(14, p.hitCombo));
     }
 
-    function bossHittable() { const b = S.boss; return (b.stage === 'faraon' || b.stage === 'momia') && pose().hittable; }
+    function bossHittable() { const b = S.boss; return (b.stage === 'faraon' || b.stage === 'momia' || b.stage === 'tut') && pose().hittable; }
 
     function resolveHits() {
         const p = S.player, a = attackCircle(), b = S.boss;
-        if (!pose().hittable && (b.stage === 'faraon' || b.stage === 'momia') && p.atk === 10 && !S.hintT) { text(p.x, p.y - 70, '¡SUBE PARA PEGARLE!', '#FFF2D0', 16); S.hintT = 180; }
+        if (!pose().hittable && (b.stage === 'faraon' || b.stage === 'momia' || b.stage === 'tut') && p.atk === 10 && !S.hintT) { text(p.x, p.y - 70, '¡SUBE PARA PEGARLE!', '#FFF2D0', 16); S.hintT = 180; }
         // Jefe
         if (bossHittable() && !p.hitThisSwing.has('boss')) {
             const P = pose(), cy = P.y + (b.stage === 'momia' ? 30 : 0) * P.s;
@@ -440,12 +446,13 @@
                 text(a.x, a.y - 20, `-${dmg}`, p.sword > 0 ? '#FF8FB8' : '#FFFFFF', 22);
                 for (let i = 0; i < 8; i++) puff(a.x, a.y, b.stage === 'momia' ? '#E8D9B0' : '#FFD700');
                 api.playAbilitySfx('ping');
-                const half = b.stage === 'momia' ? C.momia_gigante.fase2_en : C.jefe.fase2_en;
+                const half = b.stage === 'momia' ? C.momia_gigante.fase2_en : (b.stage === 'tut' ? C.tutankamon.fase2_en : C.jefe.fase2_en);
                 if (!b.phase2 && b.hp > 0 && b.hp <= b.maxHp * half) {
                     b.phase2 = true;
-                    text(P.x, P.y - 300 * P.s, b.stage === 'momia' ? '¡LA MOMIA SE DESENVUELVE!' : '¡EL FARAÓN SE ENFURECE!', '#FF3355', 30);
+                    const msg = { momia: '¡LA MOMIA SE DESENVUELVE!', tut: '¡TUTANKAMÓN ESTÁ FURIOSO!', faraon: '¡EL FARAÓN SE ENFURECE!' }[b.stage];
+                    text(P.x, P.y - 300 * P.s, msg, '#FF3355', 30);
                 }
-                if (b.hp <= 0) b.stage === 'faraon' ? pharaohDefeated() : giantMummyDefeated();
+                if (b.hp <= 0) { if (b.stage === 'faraon') pharaohDefeated(); else if (b.stage === 'momia') giantMummyDefeated(); else tutDefeated(); }
             }
         }
         // Momias
@@ -512,11 +519,41 @@
         if (b.stage === 'fin') {
             if (b.t % 3 === 0) { const P = pose(); for (let i = 0; i < 4; i++) puff(P.x + rand(-200, 200) * P.s, P.y + rand(-250, 250) * P.s, i % 2 ? '#E8D9B0' : '#8B7355'); }
             S.shake = Math.max(S.shake, 3);
+            if (b.t >= 170) { b.stage = 'regreso'; b.t = 0; b.flyOff = -1400; text(HEAD.x, pose().y + 1400 - 100, '¡EL FARAÓN REGRESA!', '#FFD700', 34); scream(200, 1.6); }
+            return;
         }
+        if (b.stage === 'regreso') {
+            b.flyOff += (0 - b.flyOff) * 0.07;
+            if (b.t >= 110) { b.flyOff = 0; b.stage = 'mascara'; b.t = 0; S.shake = 60; }
+            return;
+        }
+        if (b.stage === 'mascara') {
+            if (b.t === 45) { text(HEAD.x, pose().y - 280 * pose().s, '¡SE QUITA LA MÁSCARA!', '#FFD700', 30); api.playAbilitySfx('metal'); }
+            if (b.t === 120) { S.shake = 50; scream(110, 2.2); }
+            if (b.t >= 175) {
+                const T = C.tutankamon;
+                b.stage = 'tut'; b.t = 0; b.hp = T.vida; b.maxHp = T.vida; b.phase2 = false;
+                b.laserT = 90; b.handT = 60; b.laser = null;
+                text(HEAD.x, pose().y + 260 * pose().s, '¡TUTANKAMÓN!', '#FFD200', 44);
+            }
+            return;
+        }
+        if (b.stage === 'tut') { if (!S.over) tutAttacks(); return; }
+        if (b.stage === 'tut_fin') { if (b.t % 3 === 0) { const P = pose(); for (let i = 0; i < 5; i++) puff(P.x + rand(-200, 200) * P.s, P.y + rand(-250, 250) * P.s, i % 2 ? '#FFD700' : '#5A3A22'); } }
     }
 
     function pharaohAttacks() {
-        const b = S.boss, p = S.player, J = C.jefe, speed = b.phase2 ? 1.6 : 1;
+        const b = S.boss, J = C.jefe, speed = b.phase2 ? 1.6 : 1;
+        eyeLasers(J, speed);
+        if ((b.throwT -= 1) <= 0) {
+            const n = b.phase2 ? 2 : 1;
+            for (let i = 0; i < n; i++) throwObject(i);
+            b.throwT = rand(J.objetos_espera_min, J.objetos_espera_max) / speed;
+        }
+    }
+
+    function eyeLasers(J, speed) {
+        const b = S.boss, p = S.player;
         if (b.laser) {
             b.laser.t++;
             if (b.laser.t === J.laser_aviso) api.playSfx('laser', 1);
@@ -533,11 +570,6 @@
             const tx = p.x + p.vx * 10, ty = p.y + p.vy * 4;
             b.laser = { t: 0, angles: [0, 1].map(i => { const e = eyePos(i); return Math.atan2(ty - e.y, tx - e.x); }) };
             api.playAbilitySfx('shield');
-        }
-        if ((b.throwT -= 1) <= 0) {
-            const n = b.phase2 ? 2 : 1;
-            for (let i = 0; i < n; i++) throwObject(i);
-            b.throwT = rand(J.objetos_espera_min, J.objetos_espera_max) / speed;
         }
     }
 
@@ -618,10 +650,177 @@
         b.stage = 'fin'; b.t = 0; b.hp = 0;
         S.mummies.forEach(m => { if (!m.dead) killMummy(m, true); });
         S.rolls.forEach(breakRoll);
-        S.player.inv = 99999;
+        S.player.inv = 150;
         scream(60, 2.6);
         text(HEAD.x, pose().y, '¡MOMIA GIGANTE DERROTADA!', '#FFD700', 40);
-        const st = S; setTimeout(() => { if (S === st) win(); }, 2800);
+    }
+
+    // ======================================================
+    // TUTANKAMÓN (tercera parte de la pelea)
+    // ======================================================
+    function surfaceBelow(x, y) {
+        let best = FLOOR;
+        for (const pl of PLATFORMS) if (x >= pl.x - 10 && x <= pl.x + pl.w + 10 && pl.y >= y - 6 && pl.y < best) best = pl.y;
+        return best;
+    }
+    function spawnHand(side) {
+        const p = S.player, T = C.tutankamon;
+        const x = Math.max(120, Math.min(W - 120, p.x + p.vx * 15 + rand(-40, 40) + (side || 0) * rand(140, 220)));
+        const sy = surfaceBelow(x, p.y + 35 - (p.onGround ? 0 : 0));
+        S.hands.push({ x, sy, y: S.camY - 300, state: 'aviso', t: 0, aviso: S.boss.phase2 ? T.manos_aviso * 0.75 : T.manos_aviso, side: side || (x < W / 2 ? -1 : 1) });
+        api.playAbilitySfx('whoosh');
+    }
+    const HAND_H = 230;   // alto del puño (el borde inferior es el que golpea)
+    function updateHands() {
+        const p = S.player, T = C.tutankamon;
+        S.hands.forEach(h => {
+            h.t++;
+            const hover = h.sy - HAND_H / 2 - 280;
+            if (h.state === 'aviso') {
+                h.y += (hover - h.y) * 0.15;
+                if (h.t >= h.aviso) { h.state = 'golpe'; h.t = 0; h.vy = 6; }
+            } else if (h.state === 'golpe') {
+                h.vy += 4; h.y += h.vy;
+                const ground = h.sy - HAND_H / 2;
+                if (h.y >= ground) {
+                    h.y = ground; h.state = 'quieto'; h.t = 0;
+                    S.shake = Math.max(S.shake, 22);
+                    api.playAbilitySfx('boom');
+                    for (let i = 0; i < 26; i++) S.particles.push({ x: h.x + rand(-120, 120), y: h.sy, vx: rand(-6, 6), vy: rand(-9, -2), life: rand(20, 36), color: i % 2 ? '#E8C27A' : '#C99A50' });
+                    // golpe directo: mucho daño y no se puede bloquear
+                    const feet = p.y + 35;
+                    if (Math.abs(p.x - h.x) < 120 && feet > h.sy - 200 && feet < h.sy + 12) hurtPlayer(T['daño_manos'], h.x, 'aplastar');
+                    S.mummies.forEach(m => { if (!m.dead && Math.abs(m.x - h.x) < 120 && Math.abs(m.y + 32 - h.sy) < 40) killMummy(m, true); });
+                    // en fase 2 el golpe levanta olas de arena por el suelo: hay que saltarlas
+                    if (S.boss.phase2) [-1, 1].forEach(d => S.waves.push({ x: h.x + d * 110, y: h.sy, dir: d, life: 70 }));
+                }
+            } else if (h.state === 'quieto') {
+                if (Math.abs(p.x - h.x) < 100 && p.y + 35 > h.y - HAND_H / 2 && p.y - 35 < h.y + HAND_H / 2) hurtPlayer(1, h.x, 'golpe');
+                if (h.t >= 35) { h.state = 'sube'; h.t = 0; }
+            } else if (h.state === 'sube') {
+                h.y -= 4 + h.t * 0.6;
+                if (h.t > 50) h.dead = true;
+            }
+        });
+        S.hands = S.hands.filter(h => !h.dead);
+        S.waves.forEach(w => {
+            w.x += w.dir * 7; w.life--;
+            if (S.t % 2 === 0) puff(w.x, w.y, '#E8C27A');
+            const plat = w.y === FLOOR || PLATFORMS.some(pl => pl.y === w.y && w.x >= pl.x && w.x <= pl.x + pl.w);
+            if (!plat) w.life = 0;
+            if (p.onGround && Math.abs(p.x - w.x) < 30 && Math.abs(p.y + 35 - w.y) < 8) { hurtPlayer(C.tutankamon['daño_ola'], w.x, 'aplastar'); w.life = 0; }
+        });
+        S.waves = S.waves.filter(w => w.life > 0);
+    }
+
+    function tutAttacks() {
+        const b = S.boss, T = C.tutankamon;
+        eyeLasers(T, b.phase2 ? 1.5 : 1);
+        if ((b.handT -= 1) <= 0 && S.hands.length < (b.phase2 ? 2 : 1)) {
+            if (b.phase2 && Math.random() < 0.5) { spawnHand(-1); spawnHand(1); }
+            else spawnHand(0);
+            b.handT = rand(T.manos_espera_min, T.manos_espera_max) / (b.phase2 ? 1.4 : 1);
+        }
+    }
+
+    function tutDefeated() {
+        const b = S.boss;
+        b.stage = 'tut_fin'; b.t = 0; b.hp = 0; b.laser = null;
+        S.hands.forEach(h => { h.state = 'sube'; h.t = 0; });
+        S.mummies.forEach(m => { if (!m.dead) killMummy(m, true); });
+        S.player.inv = 99999; S.shake = 120;
+        scream(140, 3);
+        text(HEAD.x, pose().y, '¡TUTANKAMÓN DERROTADO!', '#FFD700', 42);
+        const st = S; setTimeout(() => { if (S === st) win(); }, 3000);
+    }
+
+    function drawHands() {
+        S.hands.forEach(h => {
+            // aviso en el suelo: sombra que crece y marca roja
+            if (h.state === 'aviso' || h.state === 'golpe') {
+                const k = h.state === 'aviso' ? h.t / h.aviso : 1;
+                ctx.fillStyle = 'rgba(0, 0, 0, ' + (0.15 + 0.3 * k) + ')';
+                ctx.beginPath(); ctx.ellipse(h.x, h.sy, 60 + 60 * k, 12 + 6 * k, 0, 0, Math.PI * 2); ctx.fill();
+                if (Math.floor(S.t / 5) % 2) { ctx.strokeStyle = '#FF2244'; ctx.lineWidth = 4; ctx.beginPath(); ctx.ellipse(h.x, h.sy, 120, 22, 0, 0, Math.PI * 2); ctx.stroke(); }
+            }
+            const top = h.y - HAND_H / 2, bot = h.y + HAND_H / 2;
+            // antebrazo vendado que baja desde arriba
+            ctx.fillStyle = '#6B4A2E'; ctx.fillRect(h.x - 70, top - 900, 140, 900 + 40);
+            ctx.fillStyle = '#E8D9B0';
+            for (let y = top - 880; y < top + 20; y += 46) ctx.fillRect(h.x - 70, y, 140, 16);
+            ctx.fillStyle = '#F5C542'; ctx.fillRect(h.x - 78, top - 10, 156, 28);
+            ctx.fillStyle = '#1F4FA8'; for (let i = 0; i < 5; i++) ctx.fillRect(h.x - 70 + i * 30, top - 4, 14, 16);
+            // puño
+            ctx.fillStyle = '#7A5634'; ctx.fillRect(h.x - 100, top + 18, 200, HAND_H - 30);
+            ctx.fillStyle = '#5A3A22';
+            for (let i = 0; i < 4; i++) ctx.fillRect(h.x - 96 + i * 50, bot - 70, 44, 58);         // nudillos
+            ctx.fillStyle = '#8E6A44'; for (let i = 0; i < 4; i++) ctx.fillRect(h.x - 90 + i * 50, bot - 64, 32, 10);
+            ctx.fillStyle = '#E8D9B0'; ctx.fillRect(h.x - 100, top + 60, 200, 14); ctx.fillRect(h.x - 100, top + 110, 200, 10);
+            ctx.strokeStyle = '#2A1A0A'; ctx.lineWidth = 4; ctx.strokeRect(h.x - 100, top + 18, 200, HAND_H - 30);
+            // anillo con escarabajo
+            ctx.fillStyle = '#F5C542'; ctx.fillRect(h.x - 46, bot - 76, 40, 10); ctx.fillStyle = '#1FB5A8'; ctx.fillRect(h.x - 36, bot - 84, 20, 12);
+        });
+        S.waves.forEach(w => {
+            ctx.fillStyle = '#D9A55B'; ctx.beginPath(); ctx.moveTo(w.x - 34, w.y); ctx.quadraticCurveTo(w.x, w.y - 46, w.x + 34, w.y); ctx.fill();
+            ctx.fillStyle = '#F0C27A'; ctx.beginPath(); ctx.moveTo(w.x - 18, w.y - 6); ctx.quadraticCurveTo(w.x + w.dir * 6, w.y - 40, w.x + 20, w.y - 6); ctx.fill();
+        });
+    }
+
+    // Cara real de Tutankamón (sin la máscara): momificada, ojos dorados, corona azul y collar
+    function drawTut() {
+        const b = S.boss, cx = HEAD.x, cy = HEAD.y;
+        ctx.save();
+        const { P, p } = enterBossSpace();
+        ctx.globalAlpha = 1 - 0.3 * P.k;
+        if (b.stage === 'tut_fin') { ctx.globalAlpha = Math.max(0, 1 - b.t / 170); ctx.translate(rand(-6, 6), b.t * 1.2); }
+        else if (b.stage === 'mascara' && b.t < 50) ctx.translate(rand(-4, 4), rand(-4, 4));
+        // collar ancho (usekh)
+        [['#F5C542', 300], ['#1F4FA8', 270], ['#D93030', 240], ['#F5C542', 210], ['#1FB5A8', 180]].forEach(([c, r]) => {
+            ctx.fillStyle = c; ctx.beginPath(); ctx.ellipse(cx, cy + 210, r, r * 0.42, 0, 0, Math.PI); ctx.fill();
+        });
+        // cuello
+        ctx.fillStyle = '#4A2E1A'; ctx.fillRect(cx - 70, cy + 140, 140, 90);
+        // cabeza momificada
+        const skin = b.flash > 0 ? '#FFFFFF' : (b.phase2 ? '#3E2414' : '#5A3A22');
+        ctx.fillStyle = skin; ctx.beginPath(); ctx.ellipse(cx, cy + 10, 145, 195, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = '#2A1A0A'; ctx.lineWidth = 4; ctx.stroke();
+        // arrugas / piel seca
+        ctx.strokeStyle = 'rgba(30, 15, 5, 0.55)'; ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(cx - 110, cy + 60); ctx.quadraticCurveTo(cx - 80, cy + 120, cx - 40, cy + 150);
+        ctx.moveTo(cx + 110, cy + 60); ctx.quadraticCurveTo(cx + 80, cy + 120, cx + 40, cy + 150);
+        ctx.moveTo(cx - 60, cy - 120); ctx.lineTo(cx + 60, cy - 110); ctx.moveTo(cx - 70, cy - 95); ctx.lineTo(cx + 50, cy - 88);
+        ctx.stroke();
+        // corona azul (khepresh) con discos dorados y cobra
+        ctx.fillStyle = '#1F3F8A'; ctx.beginPath();
+        ctx.moveTo(cx - 140, cy - 120); ctx.quadraticCurveTo(cx - 170, cy - 300, cx, cy - 330); ctx.quadraticCurveTo(cx + 170, cy - 300, cx + 140, cy - 120); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = '#F5C542'; for (let r = 0; r < 4; r++) for (let c = -3; c <= 3; c++) { ctx.beginPath(); ctx.arc(cx + c * 34 + (r % 2) * 17, cy - 270 + r * 36, 6, 0, Math.PI * 2); ctx.fill(); }
+        ctx.fillStyle = '#F5C542'; ctx.fillRect(cx - 145, cy - 135, 290, 22);
+        ctx.fillStyle = '#F5C542'; ctx.beginPath(); ctx.ellipse(cx, cy - 160, 18, 30, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#D93030'; ctx.beginPath(); ctx.arc(cx, cy - 168, 6, 0, Math.PI * 2); ctx.fill();
+        // cuencas y ojos que brillan y te siguen
+        const glowing = b.laser && b.laser.t <= C.tutankamon.laser_aviso;
+        const eyeCol = b.phase2 || glowing ? '#FF2244' : '#FFD200';
+        EYES.forEach(e => {
+            ctx.fillStyle = '#140A04'; ctx.beginPath(); ctx.ellipse(e.x, e.y, 48, 34, 0, 0, Math.PI * 2); ctx.fill();
+            const a = Math.atan2(p.y - e.y, p.x - e.x), d = Math.min(16, Math.hypot(p.x - e.x, p.y - e.y) / 32);
+            const ex = e.x + Math.cos(a) * d, ey = e.y + Math.sin(a) * d * 0.6;
+            ctx.fillStyle = eyeCol + (glowing ? '88' : '44'); ctx.beginPath(); ctx.arc(ex, ey, glowing ? 30 : 22, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = eyeCol; ctx.beginPath(); ctx.arc(ex, ey, 11, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#FFF6C8'; ctx.beginPath(); ctx.arc(ex - 3, ey - 3, 4, 0, Math.PI * 2); ctx.fill();
+        });
+        // nariz hundida y boca con dientes
+        ctx.fillStyle = '#140A04'; ctx.beginPath(); ctx.moveTo(cx - 14, cy + 70); ctx.lineTo(cx, cy + 20); ctx.lineTo(cx + 14, cy + 70); ctx.closePath(); ctx.fill();
+        const open = b.stage === 'mascara' || b.stage === 'tut_fin' || (b.laser && b.laser.t > C.tutankamon.laser_aviso) ? 30 : 12;
+        ctx.fillStyle = '#140A04'; ctx.beginPath(); ctx.ellipse(cx, cy + 125, 58, open, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#E8DDB8'; for (let i = -4; i <= 4; i++) { ctx.fillRect(cx + i * 12 - 4, cy + 125 - open + 2, 8, 12); ctx.fillRect(cx + i * 12 - 4, cy + 125 + open - 14, 8, 12); }
+        // grietas brillantes en fase 2
+        if (b.phase2) {
+            ctx.strokeStyle = '#FFB000'; ctx.lineWidth = 4; ctx.beginPath();
+            ctx.moveTo(cx - 90, cy - 60); ctx.lineTo(cx - 60, cy - 20); ctx.lineTo(cx - 80, cy + 30);
+            ctx.moveTo(cx + 100, cy - 30); ctx.lineTo(cx + 70, cy + 10); ctx.lineTo(cx + 95, cy + 70); ctx.stroke();
+        }
+        ctx.restore();
     }
 
     // ---------- Momias pequeñas ----------
@@ -644,7 +843,7 @@
     }
     function updateMummies() {
         const p = S.player, b = S.boss, M = C.momias;
-        const fighting = b.stage === 'faraon' || b.stage === 'momia';
+        const fighting = b.stage === 'faraon' || b.stage === 'momia' || b.stage === 'tut';
         const max = b.phase2 ? M.max + 1 : M.max;
         if (fighting && (S.mummyT -= 1) <= 0) {
             if (S.mummies.filter(m => !m.dead).length < max) spawnMummy();
@@ -694,7 +893,7 @@
         S.over = true;
         api.onWin(ID);
         api.playVictoryMusic();
-        showOverlay('¡FASE 2 COMPLETADA!', 'Venciste al Faraón y a la Momia Gigante', '#FFD700', [
+        showOverlay('¡FASE 2 COMPLETADA!', 'Venciste al Faraón, a la Momia Gigante y a Tutankamón', '#FFD700', [
             ['REPETIR FASE', '#FFD700', true, () => { api.stopVictoryMusic(true); restart(); }],
             ['VOLVER A NIVELES', '#00FFFF', false, () => { api.stopVictoryMusic(true); exit(); }]
         ]);
@@ -743,7 +942,7 @@
         S.viewH = canvas.height / S.scale;
         if (S.hintT > 0) S.hintT--;
         if (S.shake > 0) S.shake--;
-        if (!S.over) { updatePlayer(); updateSand(); updateProjectiles(); updateMummies(); updatePickups(); }
+        if (!S.over) { updatePlayer(); updateSand(); updateProjectiles(); updateMummies(); updatePickups(); updateHands(); }
         updateBoss();
         const close = Math.max(0, Math.min(1, (1150 - S.player.y) / 400));
         const ratio = 0.58 + 0.27 * close;
@@ -777,7 +976,9 @@
         ctx.save(); ctx.translate(S.offX + shx, shy); ctx.scale(sc, sc); ctx.translate(0, -S.camY);
         drawWalls();
         const st = S.boss.stage;
-        if (st === 'faraon' || st === 'grito' || st === 'vuela') drawPharaoh();
+        if (st === 'faraon' || st === 'grito' || st === 'vuela' || st === 'regreso') drawPharaoh();
+        else if (st === 'mascara') { drawTut(); drawPharaoh(); }
+        else if (st === 'tut' || st === 'tut_fin') drawTut();
         else drawGiantMummy();
         PLATFORMS.forEach(drawPlatform);
         ctx.fillStyle = '#E2B062'; ctx.fillRect(-400, FLOOR, W + 800, 200);
@@ -788,6 +989,7 @@
         S.pickups.forEach(drawAnkh);
         S.mummies.forEach(drawMummy);
         drawPlayer();
+        drawHands();
         drawSand();
         for (const q of S.particles) { ctx.globalAlpha = Math.min(1, q.life / 15); ctx.fillStyle = q.color; ctx.fillRect(q.x - 3, q.y - 3, 6, 6); }
         ctx.globalAlpha = 0.35; ctx.fillStyle = '#FFF2D0'; for (const d of S.dust) ctx.fillRect(d.x, d.y, 2.5 * d.s, 2.5 * d.s); ctx.globalAlpha = 1;
@@ -830,8 +1032,16 @@
         ctx.save();
         const { P, p } = enterBossSpace();
         ctx.globalAlpha = 1 - 0.3 * P.k;
-        const screaming = b.stage === 'grito' || b.stage === 'vuela';
+        const screaming = b.stage === 'grito' || b.stage === 'vuela' || b.stage === 'regreso';
         if (screaming) ctx.translate(rand(-5, 5), rand(-5, 5));
+        if (b.stage === 'mascara') {
+            // la máscara tiembla, se agrieta y se cae
+            if (b.t < 45) ctx.translate(rand(-4, 4), rand(-4, 4));
+            const fall = Math.max(0, b.t - 45);
+            ctx.translate(cx, cy); ctx.rotate(fall * 0.004); ctx.translate(-cx, -cy);
+            ctx.translate(fall * 0.6, fall * fall * 0.06);
+            ctx.globalAlpha *= Math.max(0, 1 - fall / 130);
+        }
         // Tocado (nemes)
         ctx.beginPath();
         ctx.moveTo(cx - 150, cy - 230); ctx.quadraticCurveTo(cx, cy - 330, cx + 150, cy - 230);
@@ -889,6 +1099,12 @@
         }
         ctx.fillStyle = '#E8B934'; ctx.fillRect(cx - 26, cy + 190, 52, 70);
         ctx.fillStyle = '#1F4FA8'; for (let y = cy + 200; y < cy + 260; y += 16) ctx.fillRect(cx - 26, y, 52, 7);
+        if (b.stage === 'mascara') {
+            ctx.strokeStyle = '#FFE38A'; ctx.lineWidth = 5; ctx.beginPath();
+            ctx.moveTo(cx - 20, cy - 150); ctx.lineTo(cx - 40, cy - 60); ctx.lineTo(cx - 10, cy + 20); ctx.lineTo(cx - 50, cy + 140);
+            ctx.moveTo(cx + 60, cy - 120); ctx.lineTo(cx + 90, cy - 20); ctx.lineTo(cx + 60, cy + 80);
+            ctx.stroke();
+        }
         ctx.restore();
     }
 
@@ -956,8 +1172,8 @@
     }
 
     function drawLaser() {
-        const b = S.boss; if (!b.laser || b.stage !== 'faraon') return;
-        const J = C.jefe;
+        const b = S.boss; if (!b.laser || (b.stage !== 'faraon' && b.stage !== 'tut')) return;
+        const J = b.stage === 'tut' ? C.tutankamon : C.jefe;
         // Sin shadowBlur: varias pasadas con transparencia (mucho más rápido)
         for (let i = 0; i < 2; i++) {
             const e = eyePos(i), a = b.laser.angles[i], x2 = e.x + Math.cos(a) * LASER_LEN, y2 = e.y + Math.sin(a) * LASER_LEN;
@@ -1128,13 +1344,14 @@
         let name = null;
         if (b.stage === 'faraon') name = `${C.jefe.nombre}${b.phase2 ? ' (FURIOSO)' : ''}`;
         if (b.stage === 'momia') name = `${C.momia_gigante.nombre}${b.phase2 ? ' (DESENVUELTA)' : ''}`;
+        if (b.stage === 'tut') name = `${C.tutankamon.nombre}${b.phase2 ? ' (FURIOSO)' : ''}`;
         if (name) {
             const bw = Math.min(520, cw * 0.6), bx = (cw - bw) / 2;
             ctx.fillStyle = 'rgba(30, 15, 5, 0.85)'; ctx.fillRect(bx, 14, bw, 18);
-            ctx.fillStyle = b.stage === 'momia' ? (b.phase2 ? '#33FF66' : '#E8D9B0') : (b.phase2 ? '#FF3355' : '#F5C542');
+            ctx.fillStyle = b.stage === 'momia' ? (b.phase2 ? '#33FF66' : '#E8D9B0') : (b.stage === 'tut' ? (b.phase2 ? '#FF2244' : '#FFD200') : (b.phase2 ? '#FF3355' : '#F5C542'));
             ctx.fillRect(bx + 2, 16, (bw - 4) * Math.max(0, b.hp / b.maxHp), 14);
             ctx.strokeStyle = '#F5C542'; ctx.lineWidth = 2; ctx.strokeRect(bx, 14, bw, 18);
-            ctx.fillStyle = b.stage === 'momia' ? '#1a1208' : '#FFF2D0'; ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'center';
+            ctx.fillStyle = b.stage === 'momia' || b.stage === 'tut' ? '#1a1208' : '#FFF2D0'; ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'center';
             ctx.fillText(`${name}: ${Math.max(0, Math.ceil(b.hp))} / ${b.maxHp}`, cw / 2, 27);
         }
         // Vida
