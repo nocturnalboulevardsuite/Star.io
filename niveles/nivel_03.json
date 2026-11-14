@@ -53,16 +53,18 @@
       "embestida_velocidad": 38
     },
     "dios": {
-      "vida": 8000,
+      "vida": 20000,
       "daño_puño": 0.5,
       "rafaga_espera_s": 5,
-      "tp_espera_s": 6,
-      "tp_aviso_s": 1.2,
-      "palabras_espera_s": 1.5,
+      "tp_espera_s": 4,
+      "tp_aviso_s": 1.4,
+      "palabras_espera_s": 1.6,
       "daño_palabra": 1.5,
       "radio": 190,
       "omega_vida": 2500,
-      "omega_espera_s": 2.5
+      "omega_espera_s": 2.5,
+      "tp_en": 0.2,
+      "tp_radio": 130
     }
   }
 }
