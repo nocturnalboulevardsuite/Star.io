@@ -1003,7 +1003,7 @@ codigo_juego_template = """
 
                 if (abyssTimer % ABYSS_TICK === 0) {
                     let dmg = player.laserDamage;
-                    if (isVoid() && voidState) voidState.twins.forEach(t => { if (!t.dead && distToBeam(t.x, t.y, x1, y1, x2, y2) < w + t.r) voidTwinDamage(t, ABYSS_DMG_BOSS * dmg); });
+                    if (isVoid() && voidState) voidTargets().forEach(t => { if (!t.dead && distToBeam(t.x, t.y, x1, y1, x2, y2) < w + t.r) voidTwinDamage(t, ABYSS_DMG_BOSS * dmg); });
                     bots.forEach(b => { if (!b.dead && distToBeam(b.x, b.y, x1, y1, x2, y2) < w + b.r) takeDamage(b, ABYSS_DMG_BOTS * dmg); });
                     if (meteor.isBoss && !meteor.dead && distToBeam(meteor.x, meteor.y, x1, y1, x2, y2) < w + meteor.r) {
                         meteor.hp -= ABYSS_DMG_BOSS * dmg;
@@ -1279,7 +1279,7 @@ codigo_juego_template = """
                     // jefes: se detiene y hace 1/5 del porcentaje
                     if (!blackHole.dead && Math.hypot(blackHole.x - c.x, blackHole.y - c.y) < blackHole.r + c.r) { damageBlackHole(blackHole.maxHp * c.pct * 0.2); done = true; }
                     if (!done && meteor.isBoss && !meteor.dead && Math.hypot(meteor.x - c.x, meteor.y - c.y) < meteor.r + c.r) { damageMeteor(meteor.maxHp * c.pct * 0.2); done = true; }
-                    if (!done && isVoid() && voidState) for (const t of voidState.twins) if (!t.dead && Math.hypot(t.x - c.x, t.y - c.y) < t.r + c.r) { voidTwinDamage(t, t.maxHp * c.pct * 0.2); done = true; break; }
+                    if (!done && isVoid() && voidState) for (const t of voidTargets()) if (!t.dead && Math.hypot(t.x - c.x, t.y - c.y) < t.r + c.r) { voidTwinDamage(t, t.maxHp * c.pct * 0.2); done = true; break; }
                     if (c.x < -c.r || c.y < -c.r || c.x > worldW + c.r || c.y > worldH + c.r) c.life = 0;
                     if (done || c.life <= 0) {
                         for (let k = 0; k < 30; k++) particles.push({ x: c.x, y: c.y, vx: (Math.random() - 0.5) * 12, vy: (Math.random() - 0.5) * 12, color: Math.random() > 0.5 ? "#FF8C00" : "#FFFFFF", life: 25 });
@@ -1482,7 +1482,7 @@ codigo_juego_template = """
                     if (player.nmCd <= 0) touchBoss(blackHole, 2, damageBlackHole, "TOQUE");
                     if (!blackHole.dead) bounceFrom(blackHole);
                 }
-                if (isVoid() && voidState) voidState.twins.forEach(t => {
+                if (isVoid() && voidState) voidTargets().forEach(t => {
                     if (t.dead || Math.hypot(t.x - player.x, t.y - player.y) > player.r + t.r) return;
                     if (player.nmCd <= 0) { voidTwinDamage(t, t.maxHp / 3 + 1); player.nmCd = 40; playAbilitySfx('boom'); }
                     const a = Math.atan2(player.y - t.y, player.x - t.x); player.kbx = Math.cos(a) * 16; player.kby = Math.sin(a) * 16;
@@ -1597,6 +1597,7 @@ codigo_juego_template = """
 
             function stopVictoryMusic(resumeBg) {
                 stopSpaceLoop();
+                if (typeof stopMusicLoop === 'function') stopMusicLoop();
                 if (victoryMusicTimeout) { clearTimeout(victoryMusicTimeout); victoryMusicTimeout = null; }
                 if (victoryMusicNode) {
                     const ac = getAudioCtx(), node = victoryMusicNode; victoryMusicNode = null;
@@ -2719,9 +2720,17 @@ codigo_juego_template = """
                 return true;
             }
 
+            function voidTargets() {
+                if (!voidState) return [];
+                const arr = voidState.twins.filter(t => !t.dead);
+                if (voidState.god && !voidState.god.dead) arr.push(voidState.god);
+                return arr;
+            }
             function voidTwinDamage(t, amount) {
                 if (t.dead) return;
+                if (t.isGod && (voidCinematicActive())) return;
                 t.hp -= amount; t.flash = 5;
+                if (t.isGod) { if (t.hp <= 0) godDefeated(); return; }
                 if (t.hp <= 0) {
                     t.dead = true;
                     for (let i = 0; i < 40; i++) { const a = Math.random() * Math.PI * 2, sp = Math.random() * 10; particles.push({ x: t.x, y: t.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, color: t.color === 'blanco' ? "#C8C8D8" : "#111", life: 40 }); }
@@ -2729,16 +2738,14 @@ codigo_juego_template = """
                     playSfx("bh_death", 2); 
                     if (voidState.twins.every(q => q.dead) && !voidState.won) {
                         voidState.won = true;
-                        floatingTexts.push({ x: t.x, y: t.y, text: "VICTORIA GALÁCTICA", icon: "star", iconBoth: true, color: "#FFD700", life: 300, size: 50 });
-                        if (bgMusic && audioSrc) { bgMusic.pause(); bgMusic.src = audioSrc; usingBossTrack = false; bgMusic.currentTime = 0; bgMusic.play().catch(e => console.log(e)); }
-                        onBossDefeated();
+                        startGodIntro();     // ...pero todavía no termina
                     }
                 }
             }
             // Golpe de un proyectil del jugador: true si le pegó a un gemelo
             function voidTwinsHitByLaser(l, dmg) {
                 if (!isVoid() || !voidState) return false;
-                for (const t of voidState.twins) if (!t.dead && l.owner !== t && Math.hypot(l.x - t.x, l.y - t.y) < t.r) { voidTwinDamage(t, dmg); return true; }
+                for (const t of voidTargets()) if (l.owner !== t && Math.hypot(l.x - t.x, l.y - t.y) < t.r) { voidTwinDamage(t, dmg); return true; }
                 return false;
             }
 
@@ -2902,6 +2909,362 @@ codigo_juego_template = """
                 ctx.restore();
             }
 
+            // ======================================================
+            // === FINAL DEL VACÍO: EL DIOS OMNIPOTENTE ===
+            // Al matar a los gemelos: todo negro, música anime épica, subtítulos,
+            // aparece un agujero blanco con ojos rojos y aura roja.
+            //  · Ráfaga de palmadas "ORA ORA"   · Mitad de vida: teletransporte detrás tuyo, empujón y marca mortal
+            //  · Poca vida: lanza palabras en japonés   · Al ganar: final triste con todos los jefes
+            // ======================================================
+            const GOD_DEF = { vida: 8000, "daño_puño": 0.5, rafaga_espera_s: 5, tp_espera_s: 6, tp_aviso_s: 1.2, palabras_espera_s: 1.5, "daño_palabra": 1.5 };
+            function godCfg() { return Object.assign({}, GOD_DEF, LV.jefe.dios || {}); }
+            const KANJI_WORDS = ["死ね", "死", "無駄", "消えろ", "神", "終わりだ"];
+
+            // ---------- Música (bucle genérico sintetizado) ----------
+            let musicLoop = null;
+            function startMusicLoop(segFn, vol) {
+                stopMusicLoop();
+                if (!isUserInteracted || musicVolume === 0) return;
+                try {
+                    if (bgMusic) bgMusic.pause();
+                    const ac = getAudioCtx(), now = ac.currentTime;
+                    const master = ac.createGain(); master.gain.setValueAtTime(0.0001, now); master.gain.linearRampToValueAtTime(Math.min(1, musicVolume * vol), now + 1.2);
+                    const comp = ac.createDynamicsCompressor(); comp.threshold.value = -16; comp.ratio.value = 4;
+                    master.connect(comp); comp.connect(ac.destination);
+                    const rev = makeReverb(ac, 2.8, 2), rg = ac.createGain(); rg.gain.value = 0.35; rev.connect(rg); rg.connect(master);
+                    const bus = ac.createGain(); bus.connect(master); bus.connect(rev);
+                    const st = { master, bus, timer: null, next: now + 0.1 };
+                    const sched = () => { if (musicLoop !== st) return; const len = segFn(ac, st.bus, st.next); st.next += len; st.timer = setTimeout(sched, Math.max(100, (st.next - ac.currentTime - 2) * 1000)); };
+                    musicLoop = st; sched();
+                } catch (e) { console.log(e); }
+            }
+            function stopMusicLoop() {
+                if (!musicLoop) return;
+                const st = musicLoop; musicLoop = null; if (st.timer) clearTimeout(st.timer);
+                try { const ac = getAudioCtx(); st.master.gain.cancelScheduledValues(ac.currentTime); st.master.gain.setValueAtTime(st.master.gain.value, ac.currentTime); st.master.gain.linearRampToValueAtTime(0, ac.currentTime + 0.8); setTimeout(() => { try { st.master.disconnect(); } catch (e) {} }, 1000); } catch (e) {}
+            }
+            function mNote(ac, out, type, m, t, dur, vol, cutoff) {
+                const o = ac.createOscillator(); o.type = type; o.frequency.value = midiHz(m);
+                const g = ac.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+                if (cutoff) { const f = ac.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = cutoff; o.connect(f); f.connect(g); } else o.connect(g);
+                g.connect(out); o.start(t); o.stop(t + dur + 0.05);
+            }
+            let noiseBufCache = null;
+            function mNoise(ac, out, t, dur, vol, hp) {
+                if (!noiseBufCache) { const len = ac.sampleRate, b = ac.createBuffer(1, len, ac.sampleRate), d = b.getChannelData(0); for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1; noiseBufCache = b; }
+                const n = ac.createBufferSource(); n.buffer = noiseBufCache;
+                const f = ac.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = hp;
+                const g = ac.createGain(); g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+                n.connect(f); f.connect(g); g.connect(out); n.start(t); n.stop(t + dur + 0.02);
+            }
+            // Música de batalla anime épica (150 BPM, Re menor)
+            function animeEpicSegment(ac, out, t0) {
+                const beat = 60 / 150, bar = beat * 4;
+                const chords = [[50, 53, 57], [46, 50, 53], [48, 52, 55], [45, 49, 52]];
+                const lead = [[74, 77, 81, 79, 77, 76, 74, 76], [77, 74, 70, 74, 77, 79, 81, 79], [79, 76, 72, 76, 79, 81, 84, 83], [81, 79, 76, 73, 76, 79, 81, 81]];
+                chords.forEach((ch, b) => {
+                    const bt = t0 + b * bar;
+                    for (let k = 0; k < 4; k++) { // bombo y caja
+                        const tk = bt + k * beat;
+                        const kick = ac.createOscillator(); kick.type = 'sine'; kick.frequency.setValueAtTime(140, tk); kick.frequency.exponentialRampToValueAtTime(40, tk + 0.15);
+                        const kg = ac.createGain(); kg.gain.setValueAtTime(0.9, tk); kg.gain.exponentialRampToValueAtTime(0.0001, tk + 0.2); kick.connect(kg); kg.connect(out); kick.start(tk); kick.stop(tk + 0.22);
+                        if (k % 2 === 1) mNoise(ac, out, tk, 0.18, 0.5, 1500);
+                    }
+                    for (let k = 0; k < 8; k++) { mNoise(ac, out, bt + k * beat / 2, 0.05, 0.15, 7000); mNote(ac, out, 'sawtooth', ch[0] - 12, bt + k * beat / 2, beat / 2 * 0.9, 0.12, 900); }
+                    ch.forEach(m => { mNote(ac, out, 'sawtooth', m + 12, bt, beat * 0.35, 0.06, 2500); mNote(ac, out, 'sawtooth', m + 12, bt + beat * 2.5, beat * 0.35, 0.05, 2500); mNote(ac, out, 'sawtooth', m, bt, bar, 0.025, 1200); });
+                    lead[b].forEach((m, k) => mNote(ac, out, 'square', m, bt + k * beat / 2, beat / 2 * 0.95, 0.05, 3000));
+                });
+                return chords.length * bar;
+            }
+            // Música triste (piano lento en La menor)
+            function sadSegment(ac, out, t0) {
+                const beat = 60 / 66, bar = beat * 4;
+                const chords = [[57, 60, 64], [53, 57, 60], [48, 52, 55], [55, 59, 62]];
+                const mel = [[76, 74, 72, 71], [72, 69, 65, 69], [67, 72, 76, 74], [71, 67, 74, 71]];
+                chords.forEach((ch, b) => {
+                    const bt = t0 + b * bar;
+                    mNote(ac, out, 'sine', ch[0] - 24, bt, bar * 0.95, 0.18);
+                    for (let k = 0; k < 8; k++) { const m = [ch[0], ch[1], ch[2], ch[1] + 12, ch[2], ch[1], ch[0] + 12, ch[2]][k]; mNote(ac, out, 'triangle', m, bt + k * beat / 2, beat * 1.4, 0.07); }
+                    mel[b].forEach((m, k) => { mNote(ac, out, 'triangle', m, bt + k * beat, beat * 1.8, 0.12); mNote(ac, out, 'sine', m + 12, bt + k * beat, beat * 1.2, 0.03); });
+                });
+                return chords.length * bar;
+            }
+
+            // ---------- Cinemáticas ----------
+            const voidCinematicActive = () => isVoid() && voidState && gameState === 'playing' && ((voidState.intro && !voidState.intro.done) || (voidState.outro && !voidState.outro.done));
+            function startGodIntro() {
+                const V = voidState;
+                V.intro = { t: 0, done: false };
+                lasers = lasers.filter(l => l.owner === player);
+                isFiring = false; keysDown.clear();
+                startMusicLoop(animeEpicSegment, 1.4);
+                playSfx("bh_death", 2.5);
+            }
+            function updateVoidCinematic() {
+                const V = voidState;
+                particles.forEach(p => { p.x += p.vx || 0; p.y += p.vy || 0; p.life--; }); particles = particles.filter(p => p.life > 0);
+                floatingTexts.forEach(ft => { ft.y -= 0.6; ft.life--; }); floatingTexts = floatingTexts.filter(ft => ft.life > 0);
+                if (V.intro && !V.intro.done) {
+                    const I = V.intro; I.t++;
+                    if (I.t === 60) { LV.mundo.color_fondo = "#000000"; LV.mundo.claro = false; LV.mundo.color_borde = "#FF0033"; }
+                    if (I.t === 300) playAbilitySfx('boom');
+                    if (I.t >= 440) {
+                        I.done = true;
+                        const c = godCfg(), hp = Math.round(c.vida * (DIFFS[difficulty].mult.jefe_vida || 1));
+                        const cx = camX + canvas.width / 2, cy = camY + canvas.height / 2 - 120 / zoom;
+                        V.god = { x: Math.max(150, Math.min(worldW - 150, cx)), y: Math.max(150, Math.min(worldH - 150, cy)), r: 110, hp, maxHp: hp, dead: false, isGod: true, flash: 0,
+                                  barrageT: 120, barrage: 0, hand: 0, tpT: 0, tp: null, wordT: 0, half: false, low: false };
+                        floatingTexts.push({ x: V.god.x, y: V.god.y - 200, text: "DIOS OMNIPOTENTE", color: "#FF0033", life: 160, size: 44 });
+                    }
+                    return;
+                }
+                if (V.outro && !V.outro.done) {
+                    const O = V.outro; O.t++;
+                    if (O.t === 40) startMusicLoop(sadSegment, 3);
+                    if (O.t >= 900) {
+                        O.done = true; V.ending = true;
+                        onBossDefeated(); victoryTimer = 1;
+                    }
+                }
+            }
+            function godDefeated() {
+                const V = voidState, g = V.god;
+                g.dead = true;
+                for (let i = 0; i < 80; i++) { const a = Math.random() * Math.PI * 2, sp = Math.random() * 14; particles.push({ x: g.x, y: g.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, color: i % 2 ? "#FFFFFF" : "#FF0033", life: 60 }); }
+                playSfx("bh_death", 2.5); playAbilitySfx('boom');
+                V.outro = { t: 0, done: false };
+                lasers = lasers.filter(l => l.owner === player);
+                isFiring = false; keysDown.clear();
+            }
+
+            // ---------- Pelea contra el Dios ----------
+            function updateGod() {
+                const V = voidState, g = V && V.god;
+                if (!g || g.dead) return;
+                const c = godCfg();
+                if (g.flash > 0) g.flash--;
+                if (!g.half && g.hp <= g.maxHp * 0.5) { g.half = true; g.tpT = 90; floatingTexts.push({ x: g.x, y: g.y - g.r - 80, text: "¡¿ES ESO UNA REFERENCIA A JOJO?!", color: "#FF66CC", life: 180, size: 34 }); }
+                if (!g.low && g.hp <= g.maxHp * 0.25) { g.low = true; g.wordT = 60; floatingTexts.push({ x: g.x, y: g.y - g.r - 80, text: "死ね", color: "#FFFFFF", life: 150, size: 60 }); }
+                if (player.dead) return;
+                const toP = Math.atan2(player.y - g.y, player.x - g.x), d = Math.hypot(player.x - g.x, player.y - g.y);
+                // flota hacia ti
+                if (!g.tp && g.barrage <= 0 && d > g.r * 2.4) { g.x += Math.cos(toP) * 1.6; g.y += Math.sin(toP) * 1.6; }
+                if (d < g.r + player.r) takeDamage(player, 4);
+                // ráfaga de palmadas ORA ORA
+                if (g.barrage > 0) {
+                    g.barrage--;
+                    if (g.barrage % 3 === 0) {
+                        g.hand = 1 - g.hand;
+                        const side = g.hand ? 1 : -1, a = toP + (Math.random() - 0.5) * 0.55;
+                        const hx = g.x + Math.cos(toP + side * 0.9) * g.r * 1.1, hy = g.y + Math.sin(toP + side * 0.9) * g.r * 1.1;
+                        lasers.push({ x: hx, y: hy, vx: Math.cos(a) * 17, vy: Math.sin(a) * 17, owner: g, isStar: false, kind: 'puño', life: 32, r: 18, color: "#FFF", damageMult: c['daño_puño'] });
+                    }
+                    if (g.barrage % 10 === 0) { floatingTexts.push({ x: g.x + (Math.random() - 0.5) * g.r * 3, y: g.y + (Math.random() - 0.5) * g.r * 2, text: Math.random() < 0.5 ? "ORA" : "オラ", color: Math.random() < 0.5 ? "#FFD700" : "#FFFFFF", life: 30, size: 28 }); playAbilitySfx('ping'); }
+                } else if (!g.tp && (g.barrageT -= 1) <= 0) {
+                    g.barrage = 90; g.barrageT = c.rafaga_espera_s * 60 * (g.low ? 1.4 : 1);
+                    floatingTexts.push({ x: g.x, y: g.y - g.r - 50, text: "¡ORA ORA ORA ORA!", color: "#FFD700", life: 70, size: 34 });
+                }
+                // teletransporte detrás tuyo + empujón + marca mortal
+                if (g.half) {
+                    if (g.tp) {
+                        const T = g.tp; T.t++;
+                        if (T.t <= 15) { player.x += T.px * (16 - T.t) * 1.1; player.y += T.py * (16 - T.t) * 1.1; player.x = Math.max(player.r, Math.min(worldW - player.r, player.x)); player.y = Math.max(player.r, Math.min(worldH - player.r, player.y)); }
+                        if (T.t === 16) { T.mx = player.x; T.my = player.y; floatingTexts.push({ x: player.x, y: player.y - 60, text: "¡MUÉVETE!", color: "#FF0033", life: 60, size: 30 }); }
+                        const AV = 16 + c.tp_aviso_s * 60;
+                        if (T.t === Math.round(AV)) {
+                            playAbilitySfx('boom');
+                            for (let i = 0; i < 30; i++) { const a = Math.random() * Math.PI * 2, sp = Math.random() * 9; particles.push({ x: T.mx, y: T.my, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, color: "#FF0033", life: 30 }); }
+                            if (Math.hypot(player.x - T.mx, player.y - T.my) < 120 + player.r && !(player.invulnTimer > 0) && !(player.rhinoTimer > 0)) {
+                                player.hp = 0; player.dead = true; player.shields = 0;
+                                floatingTexts.push({ x: player.x, y: player.y - 40, text: "無駄無駄", color: "#FFFFFF", life: 90, size: 34 });
+                                handlePlayerDeath();
+                            }
+                        }
+                        if (T.t > AV + 20) { g.tp = null; g.tpT = c.tp_espera_s * 60; }
+                    } else if (g.barrage <= 0 && (g.tpT -= 1) <= 0) {
+                        // aparece detrás de ti (al lado contrario hacia donde vas)
+                        let mvx = 0, mvy = 0;
+                        if (keysDown.has('KeyD') || keysDown.has('ArrowRight')) mvx += 1; if (keysDown.has('KeyA') || keysDown.has('ArrowLeft')) mvx -= 1;
+                        if (keysDown.has('KeyS') || keysDown.has('ArrowDown')) mvy += 1; if (keysDown.has('KeyW') || keysDown.has('ArrowUp')) mvy -= 1;
+                        if (!mvx && !mvy) { const a = Math.random() * Math.PI * 2; mvx = Math.cos(a); mvy = Math.sin(a); }
+                        const L = Math.hypot(mvx, mvy); mvx /= L; mvy /= L;
+                        for (let i = 0; i < 20; i++) particles.push({ x: g.x + (Math.random() - 0.5) * g.r, y: g.y + (Math.random() - 0.5) * g.r, vx: 0, vy: 0, color: "#FF0033", life: 25 });
+                        g.x = player.x - mvx * (g.r + player.r + 60); g.y = player.y - mvy * (g.r + player.r + 60);
+                        g.tp = { t: 0, px: mvx, py: mvy };
+                        floatingTexts.push({ x: g.x, y: g.y - g.r - 40, text: "ゴゴゴゴ", color: "#CC66FF", life: 60, size: 32 });
+                        playAbilitySfx('whoosh');
+                    }
+                }
+                // palabras en japonés
+                if (g.low && (g.wordT -= 1) <= 0) {
+                    for (let i = 0; i < 3; i++) {
+                        const a = toP + (i - 1) * 0.35, w = KANJI_WORDS[Math.floor(Math.random() * KANJI_WORDS.length)];
+                        lasers.push({ x: g.x + Math.cos(a) * g.r, y: g.y + Math.sin(a) * g.r, vx: Math.cos(a) * 5, vy: Math.sin(a) * 5, owner: g, isStar: false, kind: 'kanji', word: w, life: 260, r: 24, color: "#FFF", damageMult: c['daño_palabra'], homing: 60 });
+                    }
+                    g.wordT = c.palabras_espera_s * 60;
+                }
+                lasers.forEach(l => {
+                    if (l.kind === 'kanji' && l.homing > 0 && l.owner === g) { l.homing--; const a = Math.atan2(player.y - l.y, player.x - l.x), sp = Math.hypot(l.vx, l.vy); l.vx += (Math.cos(a) * sp - l.vx) * 0.05; l.vy += (Math.sin(a) * sp - l.vy) * 0.05; }
+                });
+            }
+
+            function drawGodBody(x, y, r, now) {
+                // aura roja
+                const aura = ctx.createRadialGradient(x, y, r * 0.8, x, y, r * 2.2);
+                aura.addColorStop(0, "rgba(255, 0, 40, 0.7)"); aura.addColorStop(1, "rgba(255, 0, 40, 0)");
+                ctx.fillStyle = aura; ctx.beginPath(); ctx.arc(x, y, r * 2.2, 0, Math.PI * 2); ctx.fill();
+                ctx.save(); ctx.translate(x, y); ctx.rotate(now / 700); ctx.fillStyle = "rgba(255, 0, 51, 0.55)";
+                for (let i = 0; i < 16; i++) { const a = i * Math.PI / 8, len = r * (1.35 + 0.25 * Math.sin(now / 120 + i)); ctx.beginPath(); ctx.moveTo(Math.cos(a - 0.1) * r, Math.sin(a - 0.1) * r); ctx.lineTo(Math.cos(a) * len, Math.sin(a) * len); ctx.lineTo(Math.cos(a + 0.1) * r, Math.sin(a + 0.1) * r); ctx.fill(); }
+                ctx.restore();
+                // agujero blanco
+                ctx.fillStyle = "#FFFFFF"; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+                ctx.strokeStyle = "#FF0033"; ctx.lineWidth = 5; ctx.stroke();
+                // ojos rojos
+                const toP = Math.atan2(player.y - y, player.x - x);
+                [-1, 1].forEach(sd => {
+                    ctx.fillStyle = "#FF0033"; ctx.beginPath(); ctx.moveTo(x + sd * r * 0.12, y - r * 0.12); ctx.lineTo(x + sd * r * 0.6, y - r * 0.28); ctx.lineTo(x + sd * r * 0.5, y + r * 0.02); ctx.closePath(); ctx.fill();
+                    ctx.fillStyle = "#000"; ctx.beginPath(); ctx.arc(x + sd * r * 0.38 + Math.cos(toP) * r * 0.04, y - r * 0.12 + Math.sin(toP) * r * 0.03, r * 0.05, 0, Math.PI * 2); ctx.fill();
+                });
+            }
+            function drawGodHand(x, y, r, ang, fist) {
+                ctx.save(); ctx.translate(x, y); ctx.rotate(ang);
+                ctx.fillStyle = "#FFFFFF"; ctx.strokeStyle = "#FF0033"; ctx.lineWidth = 3;
+                ctx.beginPath(); ctx.ellipse(0, 0, r, r * 0.85, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+                if (!fist) for (let f = 0; f < 4; f++) { ctx.beginPath(); ctx.ellipse(r * 1.05, (-0.45 + f * 0.3) * r, r * 0.45, r * 0.14, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); }
+                else for (let f = 0; f < 4; f++) { ctx.beginPath(); ctx.arc(r * 0.8, (-0.45 + f * 0.3) * r, r * 0.18, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); }
+                ctx.restore();
+            }
+            function drawGod() {
+                const V = voidState, g = V && V.god; if (!g || g.dead) return;
+                const now = Date.now(), toP = Math.atan2(player.y - g.y, player.x - g.x);
+                // marca mortal
+                if (g.tp && g.tp.mx !== undefined) {
+                    const T = g.tp, k = (T.t - 16) / (godCfg().tp_aviso_s * 60);
+                    ctx.save(); ctx.strokeStyle = "#FF0033"; ctx.lineWidth = 5; ctx.globalAlpha = 0.5 + 0.5 * (Math.floor(T.t / 5) % 2);
+                    ctx.beginPath(); ctx.arc(T.mx, T.my, 120, 0, Math.PI * 2); ctx.stroke();
+                    ctx.fillStyle = "rgba(255, 0, 51, " + Math.min(0.45, k * 0.45) + ")"; ctx.beginPath(); ctx.arc(T.mx, T.my, 120 * Math.min(1, k), 0, Math.PI * 2); ctx.fill();
+                    ctx.restore();
+                }
+                drawGodBody(g.x, g.y, g.r, now);
+                if (g.flash > 0) { ctx.fillStyle = "rgba(255,0,51,0.4)"; ctx.beginPath(); ctx.arc(g.x, g.y, g.r, 0, Math.PI * 2); ctx.fill(); }
+                // manos: en la ráfaga golpean muy rápido (con "fantasmas" de los golpes)
+                [-1, 1].forEach((sd, i) => {
+                    let hx = g.x + Math.cos(toP + sd * 1.1) * g.r * 1.35, hy = g.y + Math.sin(toP + sd * 1.1) * g.r * 1.35;
+                    if (g.barrage > 0) {
+                        for (let k = 0; k < 3; k++) {
+                            const ext = ((now / 25 + k * 7 + i * 11) % 20) / 20;
+                            ctx.globalAlpha = 0.35 + 0.2 * k;
+                            drawGodHand(hx + Math.cos(toP) * g.r * 1.2 * ext + (Math.random() - 0.5) * 20, hy + Math.sin(toP) * g.r * 1.2 * ext + (Math.random() - 0.5) * 20, g.r * 0.32, toP, true);
+                        }
+                        ctx.globalAlpha = 1;
+                    } else drawGodHand(hx, hy, g.r * 0.32, toP + sd * 0.2, false);
+                });
+                // barra de vida
+                const bw = 320, top = g.y - g.r * 2.2 - 24;
+                ctx.fillStyle = "rgba(0,0,0,0.8)"; ctx.fillRect(g.x - bw / 2, top, bw, 16);
+                ctx.fillStyle = g.low ? "#FFFFFF" : "#FF0033"; ctx.fillRect(g.x - bw / 2 + 1, top + 1, (bw - 2) * Math.max(0, g.hp / g.maxHp), 14);
+                ctx.strokeStyle = "#FF0033"; ctx.lineWidth = 2; ctx.strokeRect(g.x - bw / 2, top, bw, 16);
+                ctx.fillStyle = "#FFFFFF"; ctx.font = "bold 18px sans-serif"; ctx.textAlign = "center";
+                ctx.fillText(`DIOS OMNIPOTENTE: ${Math.ceil(g.hp)} / ${g.maxHp}`, g.x, top - 8);
+            }
+            function drawGodProjectile(l) {
+                if (l.kind === 'puño') { drawGodHand(l.x, l.y, 16, Math.atan2(l.vy, l.vx), true); return; }
+                ctx.save(); ctx.translate(l.x, l.y); ctx.rotate(Math.sin(Date.now() / 150 + l.r) * 0.2);
+                ctx.font = "bold 40px 'Hiragino Sans', 'Yu Gothic', 'Noto Sans JP', sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+                ctx.lineWidth = 8; ctx.strokeStyle = "rgba(255, 0, 51, 0.7)"; ctx.strokeText(l.word, 0, 0);
+                ctx.fillStyle = "#FFFFFF"; ctx.fillText(l.word, 0, 0);
+                ctx.restore();
+            }
+
+            // ---------- Subtítulos y pantallas de cinemática (espacio de pantalla) ----------
+            function subtitle(es, ja, t, tStart, tEnd) {
+                if (t < tStart || t > tEnd) return;
+                const W = canvas.width, H = canvas.height, k = Math.min(1, (t - tStart) / ((tEnd - tStart) * 0.55));
+                const esShow = es.slice(0, Math.ceil(es.length * k)), jaShow = ja.slice(0, Math.ceil(ja.length * k));
+                const fade = Math.min(1, (tEnd - t) / 15);
+                ctx.save(); ctx.globalAlpha = fade; ctx.textAlign = "center"; ctx.lineJoin = "round";
+                ctx.font = "bold 26px 'Hiragino Sans', 'Yu Gothic', 'Noto Sans JP', sans-serif"; ctx.lineWidth = 6; ctx.strokeStyle = "#000";
+                ctx.strokeText(jaShow, W / 2, H - 120); ctx.fillStyle = "#FFFFFF"; ctx.fillText(jaShow, W / 2, H - 120);
+                ctx.font = "bold 34px sans-serif"; ctx.strokeText(esShow, W / 2, H - 72); ctx.fillStyle = "#FFE600"; ctx.fillText(esShow, W / 2, H - 72);
+                ctx.restore();
+            }
+            function drawAnimeBackground(t) {
+                const W = canvas.width, H = canvas.height;
+                const sky = ctx.createLinearGradient(0, 0, 0, H);
+                sky.addColorStop(0, "#2E1A5C"); sky.addColorStop(0.45, "#E86A92"); sky.addColorStop(0.75, "#FFB26B"); sky.addColorStop(1, "#FFDCA8");
+                ctx.fillStyle = sky; ctx.fillRect(0, 0, W, H);
+                // sol del atardecer con franjas
+                const sx = W / 2, sy = H * 0.72, sr = Math.min(W, H) * 0.22;
+                ctx.save(); ctx.beginPath(); ctx.arc(sx, sy, sr, 0, Math.PI * 2); ctx.clip();
+                ctx.fillStyle = "#FFE9A8"; ctx.fillRect(sx - sr, sy - sr, sr * 2, sr * 2);
+                ctx.fillStyle = "#FF9A7A"; for (let i = 0; i < 6; i++) ctx.fillRect(sx - sr, sy + i * sr * 0.18, sr * 2, sr * 0.06 + i * 2);
+                ctx.restore();
+                // nubes
+                ctx.fillStyle = "rgba(255, 220, 235, 0.75)";
+                [[0.15, 0.25, 1], [0.7, 0.18, 1.3], [0.45, 0.35, 0.8], [0.88, 0.4, 0.9]].forEach(([cx, cy, s], i) => {
+                    const x = W * cx + Math.sin(t / 200 + i) * 20, y = H * cy, w = 140 * s;
+                    ctx.beginPath(); ctx.ellipse(x, y, w, w * 0.22, 0, 0, Math.PI * 2); ctx.ellipse(x - w * 0.4, y - w * 0.12, w * 0.45, w * 0.2, 0, 0, Math.PI * 2); ctx.ellipse(x + w * 0.35, y - w * 0.1, w * 0.4, w * 0.18, 0, 0, Math.PI * 2); ctx.fill();
+                });
+                // colina
+                ctx.fillStyle = "#3A2350"; ctx.beginPath(); ctx.moveTo(0, H); ctx.lineTo(0, H * 0.82); ctx.quadraticCurveTo(W / 2, H * 0.7, W, H * 0.82); ctx.lineTo(W, H); ctx.fill();
+                // pétalos de sakura cayendo
+                ctx.fillStyle = "#FFC0D9";
+                for (let i = 0; i < 40; i++) { const x = ((i * 137 + t * (1 + i % 3)) % (W + 40)) - 20, y = ((i * 83 + t * (0.8 + (i % 4) * 0.3)) % (H + 40)) - 20; ctx.save(); ctx.translate(x, y); ctx.rotate(t / 30 + i); ctx.beginPath(); ctx.ellipse(0, 0, 6, 3, 0, 0, Math.PI * 2); ctx.fill(); ctx.restore(); }
+            }
+            // Todos los jefes anteriores en miniatura
+            function drawLineup(t, start) {
+                const W = canvas.width, H = canvas.height, n = 7, gap = Math.min(150, W / (n + 1)), y = H * 0.74, x0 = W / 2 - gap * (n - 1) / 2, now = Date.now();
+                const draws = [
+                    (x, y, s) => { ctx.fillStyle = "#FF6600"; ctx.beginPath(); ctx.arc(x, y, s, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = "#990000"; [[-0.3, -0.2, 0.2], [0.3, -0.3, 0.15], [0.1, 0.3, 0.25]].forEach(([a, b, c]) => { ctx.beginPath(); ctx.arc(x + a * s, y + b * s, c * s, 0, Math.PI * 2); ctx.fill(); }); },   // Luna
+                    (x, y, s) => { ctx.fillStyle = "#FFB300"; ctx.beginPath(); ctx.arc(x, y, s, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = "#111"; ctx.beginPath(); ctx.ellipse(x - s * 0.3, y - s * 0.15, s * 0.22, s * 0.14, 0, 0, Math.PI * 2); ctx.ellipse(x + s * 0.3, y - s * 0.15, s * 0.22, s * 0.14, 0, 0, Math.PI * 2); ctx.fill(); ctx.strokeStyle = "#7A1F00"; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(x, y + s * 0.15, s * 0.35, 0.2, Math.PI - 0.2); ctx.stroke(); },   // Sol
+                    (x, y, s) => { ctx.fillStyle = "#E8B934"; ctx.beginPath(); ctx.moveTo(x - s * 1.1, y + s); ctx.lineTo(x - s * 0.7, y - s); ctx.lineTo(x + s * 0.7, y - s); ctx.lineTo(x + s * 1.1, y + s); ctx.fill(); ctx.fillStyle = "#1F4FA8"; for (let i = -2; i <= 2; i++) ctx.fillRect(x + i * s * 0.4 - 3, y - s, 6, s * 2); ctx.fillStyle = "#C68E4E"; ctx.beginPath(); ctx.ellipse(x, y + s * 0.1, s * 0.55, s * 0.75, 0, 0, Math.PI * 2); ctx.fill(); },   // Faraón
+                    (x, y, s) => { ctx.fillStyle = "#E8D9B0"; ctx.beginPath(); ctx.arc(x, y, s * 0.9, 0, Math.PI * 2); ctx.fill(); ctx.strokeStyle = "rgba(120,95,60,0.8)"; ctx.lineWidth = 2; for (let i = -3; i <= 3; i++) { ctx.beginPath(); ctx.moveTo(x - s * 0.9, y + i * s * 0.22); ctx.lineTo(x + s * 0.9, y + i * s * 0.22 + 6); ctx.stroke(); } ctx.fillStyle = "#FFD200"; ctx.beginPath(); ctx.arc(x - s * 0.3, y - s * 0.15, 4, 0, Math.PI * 2); ctx.arc(x + s * 0.3, y - s * 0.15, 4, 0, Math.PI * 2); ctx.fill(); },   // Momia
+                    (x, y, s) => { ctx.fillStyle = "#1F3F8A"; ctx.beginPath(); ctx.ellipse(x, y - s * 0.55, s * 0.75, s * 0.6, 0, Math.PI, 0); ctx.fill(); ctx.fillStyle = "#5A3A22"; ctx.beginPath(); ctx.ellipse(x, y + s * 0.1, s * 0.6, s * 0.75, 0, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = "#FFD200"; ctx.beginPath(); ctx.arc(x - s * 0.25, y - s * 0.05, 4, 0, Math.PI * 2); ctx.arc(x + s * 0.25, y - s * 0.05, 4, 0, Math.PI * 2); ctx.fill(); },   // Tutankamón
+                    (x, y, s) => { ctx.fillStyle = "#05000A"; ctx.beginPath(); ctx.arc(x, y, s, 0, Math.PI * 2); ctx.fill(); ctx.strokeStyle = "#B026FF"; ctx.lineWidth = 3; ctx.stroke(); ctx.fillStyle = "#FFF"; ctx.beginPath(); ctx.ellipse(x - s * 0.35, y - s * 0.1, s * 0.18, s * 0.1, 0, 0, Math.PI * 2); ctx.ellipse(x + s * 0.35, y - s * 0.1, s * 0.18, s * 0.1, 0, 0, Math.PI * 2); ctx.fill(); },   // Vacío
+                    (x, y, s) => { ctx.fillStyle = "#FFFFFF"; ctx.beginPath(); ctx.arc(x, y, s, 0, Math.PI * 2); ctx.fill(); ctx.strokeStyle = "#FF0033"; ctx.lineWidth = 3; ctx.stroke(); ctx.fillStyle = "#FF0033"; ctx.beginPath(); ctx.arc(x - s * 0.35, y - s * 0.12, 5, 0, Math.PI * 2); ctx.arc(x + s * 0.35, y - s * 0.12, 5, 0, Math.PI * 2); ctx.fill(); }   // Dios
+                ];
+                const names = ["LUNA", "SOL", "FARAÓN", "MOMIA", "TUTANKAMÓN", "EL VACÍO", "DIOS"];
+                draws.forEach((fn, i) => {
+                    const appear = start + i * 25; if (t < appear) return;
+                    const k = Math.min(1, (t - appear) / 20), x = x0 + i * gap, yy = y - Math.sin(now / 400 + i) * 4 + (1 - k) * 40;
+                    ctx.save(); ctx.globalAlpha = k; fn(x, yy, gap * 0.28);
+                    ctx.fillStyle = "#FFFFFF"; ctx.font = "bold 13px sans-serif"; ctx.textAlign = "center"; ctx.fillText(names[i], x, yy + gap * 0.28 + 22);
+                    ctx.restore();
+                });
+            }
+            function drawVoidCinematics() {
+                if (!isVoid() || !voidState) return;
+                const V = voidState, W = canvas.width, H = canvas.height, now = Date.now();
+                if (V.intro && !V.intro.done) {
+                    const t = V.intro.t;
+                    ctx.save(); ctx.fillStyle = `rgba(0,0,0,${Math.min(1, t / 60)})`; ctx.fillRect(0, 0, W, H);
+                    if (t > 280) {   // aparece desde la oscuridad
+                        const k = Math.min(1, (t - 280) / 120), r = Math.min(W, H) * 0.16 * k;
+                        ctx.globalAlpha = k; drawGodBody(W / 2, H * 0.42, Math.max(1, r), now);
+                    }
+                    ctx.restore();
+                    subtitle("Yo no soy tú... insecto...", "我はお前ではない……虫けらめ……", t, 70, 200);
+                    subtitle("¡¡¡Soy un Dios Omnipotenteeee!!!", "我は全知全能の神なりィィィ！！！", t, 210, 430);
+                    return;
+                }
+                if (V.outro) {
+                    const t = V.outro.t;
+                    if (t < 50) { ctx.fillStyle = `rgba(255,255,255,${t < 15 ? t / 15 : 1})`; ctx.fillRect(0, 0, W, H); return; }
+                    drawAnimeBackground(t);
+                    if (t < 80) { ctx.fillStyle = `rgba(255,255,255,${1 - (t - 50) / 30})`; ctx.fillRect(0, 0, W, H); }
+                    subtitle("No logré ganar...", "勝てなかった……", t, 110, 300);
+                    subtitle("...pero lo intenté por todos ustedes.", "……でも、みんなのために戦ったんだ。", t, 310, 560);
+                    drawLineup(t, 330);
+                    if (t > 620) {
+                        const k = Math.min(1, (t - 620) / 60);
+                        ctx.save(); ctx.globalAlpha = k; ctx.textAlign = "center";
+                        ctx.font = "bold 96px serif"; ctx.lineWidth = 8; ctx.strokeStyle = "#2E1A5C"; ctx.strokeText("FIN", W / 2, H * 0.32); ctx.fillStyle = "#FFFFFF"; ctx.fillText("FIN", W / 2, H * 0.32);
+                        ctx.font = "bold 40px 'Hiragino Sans', 'Yu Gothic', 'Noto Sans JP', sans-serif"; ctx.fillStyle = "#FFE600"; ctx.fillText("終", W / 2, H * 0.32 + 56);
+                        ctx.restore();
+                    }
+                }
+            }
+
             // === FONDO: PLANETA TIERRA (se dibuja una vez y se reutiliza) ===
             let earthImg = null;
             function getEarthImage() {
@@ -2950,6 +3313,7 @@ codigo_juego_template = """
                 // "musica_victoria" del nivel: "espacial" (loop), "epica" o "ninguna".
                 // Si no se indica: el último nivel usa la épica y los demás la espacial. En NIGHTMARE siempre suena la épica.
                 let tipo = difficulty === 'nightmare' ? 'epica' : (LV.musica_victoria || (levelIndex >= LEVELS.length - 1 ? 'epica' : 'espacial'));
+                if (isVoid() && voidState && voidState.ending) tipo = 'ninguna';   // el final del vacío ya tiene su música triste
                 if (tipo === 'epica') setTimeout(playVictoryMusic, 120);
                 else if (tipo === 'espacial') setTimeout(playSpaceVictoryLoop, 120);
                 victoryTimer = (LV.jefe.tipo === 'sol' && sunSplit) ? 270 : 150;   // con el sol: tiempo para el paneo
@@ -3389,8 +3753,10 @@ codigo_juego_template = """
 
             function update() {
                 if (sunQteActive()) { updateSunQTE(); return; }
+                if (voidCinematicActive()) { updateVoidCinematic(); return; }
                 updateSunSplit();
                 updateVoidBoss();
+                updateGod();
                 if (victoryTimer > 0) { victoryTimer--; if (victoryTimer === 0 && !isGameOver) showVictory(); }
                 if(Math.random() < 0.003 && boxes.length < 5) spawnBox();
                 if(Math.random() < 0.0015 && redBoxes.length < 2) spawnRedBox();
@@ -3957,8 +4323,10 @@ codigo_juego_template = """
                 particles.forEach(p => { ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, Math.PI * 2); ctx.fillStyle = p.color; ctx.fill(); });
                 
                 drawVoidBoss();
+                drawGod();
                 lasers.forEach(l => { 
                     if (l.kind === 'mini_agujero') { drawMiniHole(l); return; }
+                    if (l.kind === 'puño' || l.kind === 'kanji') { drawGodProjectile(l); return; }
                     if (l.kind) { drawSunProjectile(l); return; }
                     if(l.isStar) {
                         ctx.save(); ctx.translate(l.x, l.y); ctx.rotate(Date.now() / 150); ctx.beginPath(); ctx.fillStyle = l.color;
@@ -4051,6 +4419,7 @@ codigo_juego_template = """
                 ctx.restore();
                 drawAbilityBar();
                 drawSunQTEOverlay();
+                drawVoidCinematics();
                 if (sunSplit && LV.jefe.tipo === 'sol') {
                     const k = Math.min(1, sunSplit.t / 30), bar = canvas.height * 0.11 * k;
                     ctx.fillStyle = "#000"; ctx.fillRect(0, 0, canvas.width, bar); ctx.fillRect(0, canvas.height - bar, canvas.width, bar);
