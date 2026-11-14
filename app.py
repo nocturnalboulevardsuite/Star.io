@@ -1944,11 +1944,11 @@ codigo_juego_template = """
             const SUN_DEF = { gesto_espera_s: 10, fuego_cantidad: 3, estrellas_espera_s: 7, estrellas_cantidad: 8, sheriff_en: 0.25, balas: 10, recarga_s: 10, "daño_bala": 4,
                 furioso_vida: 0.6, planetas_espera_s: 2.5, planetas_cantidad: 3, "daño_planeta": 3,
                 laser_dedos_espera_s: 5, laser_dedos_duracion_s: 2, "daño_laser_dedos": 3,
-                qte_flechas: 6, qte_rondas: 2, qte_tiempo_s: 7 };
+                qte_flechas: 6, qte_rondas: 2, qte_tiempo_s: 4, "qte_daño_error": 0.35 };
             function sunCfg() { return Object.assign({}, SUN_DEF, LV.jefe.sol || {}); }
             function sunReset() {
                 meteor.sun = { gestT: 300, gest: 0, gestKind: '', starT: 200, sheriff: false, sheriffAnim: 0, ammo: 0, reload: 0, shotT: 0, hand: 0, flash: [0, 0], glassesOff: 0, spinT: [0, 0],
-                               furioso: false, furyAnim: 0, furyHalf: false, planetT: 0, fingerT: 0, finger: null, qte: null, qteDone: false, r0: 0 };
+                               furioso: false, furyAnim: 0, furyHalf: false, planetT: 0, fingerT: 0, finger: null, qte: null, qteDone: false, r0: 0, death: null };
             }
             function sunGunSfx() {
                 if (!isUserInteracted || sfxVolume === 0) return;
@@ -2322,7 +2322,7 @@ codigo_juego_template = """
                 if (LV.jefe.tipo !== 'sol' || !meteor.sun) return false;
                 const s = meteor.sun;
                 if (!s.furioso) { sunTransformToFury(); return true; }
-                if (s.qteDone) return false;
+                if (s.qteDone) { sunSplit = { x: meteor.x, y: meteor.y, r: meteor.r, t: 0 }; playAbilitySfx('boom'); playSfx("bh_death", 2.5); return false; }
                 if (!s.qte) startSunQTE();
                 meteor.hp = 1; return true;
             }
@@ -2378,22 +2378,30 @@ codigo_juego_template = """
                 floatingTexts.push({ x: meteor.x, y: meteor.y - meteor.r - 100, text: "¡SUPERNOVA!", icon: "burst", iconBoth: true, color: "#FFFFFF", life: 120, size: 50 });
                 playSfx("bh_death", 2.5);
             }
-            function sunQteActive() { return LV.jefe.tipo === 'sol' && meteor && meteor.sun && meteor.sun.qte && gameState === 'playing'; }
+            function sunQteActive() { return LV.jefe.tipo === 'sol' && meteor && meteor.sun && (meteor.sun.qte || meteor.sun.death) && gameState === 'playing'; }
             function handleQteKey(code) {
-                const q = meteor.sun.qte; if (q.end > 0) return;
+                const q = meteor.sun.qte; if (!q || q.end > 0) return;
                 const map = { ArrowUp: 'up', KeyW: 'up', ArrowDown: 'down', KeyS: 'down', ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right' };
                 const d = map[code]; if (!d) return;
                 if (d === q.seq[q.idx]) {
                     q.idx++; q.good = 6; playAbilitySfx('ping');
                     if (q.idx >= q.seq.length) {
                         q.round++;
-                        if (q.round >= q.rounds) { q.end = 90; playAbilitySfx('shield'); floatingTexts.push({ x: player.x, y: player.y - 60, text: "¡ESQUIVASTE LA SUPERNOVA!", color: "#33FF66", life: 120, size: 30 }); }
+                        if (q.round >= q.rounds) { q.end = 40; playAbilitySfx('shield'); floatingTexts.push({ x: player.x, y: player.y - 60, text: "¡ESQUIVASTE LA SUPERNOVA!", color: "#33FF66", life: 120, size: 30 }); }
                         else { q.seq = newQteSeq(sunCfg().qte_flechas); q.idx = 0; q.time = q.timeMax; playAbilitySfx('shield'); }
                     }
-                } else { q.idx = 0; q.bad = 12; playAbilitySfx('metal'); }   // error: la ronda vuelve a empezar
+                } else {
+                    // error: la ronda vuelve a empezar y el calor del sol te quema
+                    q.idx = 0; q.bad = 14; playAbilitySfx('boom');
+                    const dmg = Math.ceil(player.maxHp * sunCfg()['qte_daño_error']);
+                    player.hp -= dmg;
+                    floatingTexts.push({ x: player.x, y: player.y - 50, text: `-${dmg}`, color: "#FF3B30", life: 60, size: 30 });
+                    if (player.hp <= 0) { player.hp = 0; sunKillsPlayer(); }
+                }
             }
             function updateSunQTE() {
                 const s = meteor.sun, q = s.qte;
+                if (s.death) { updateSunDeath(); return; }
                 q.t++;
                 particles.forEach(p => { p.x += p.vx || 0; p.y += p.vy || 0; p.life--; }); particles = particles.filter(p => p.life > 0);
                 floatingTexts.forEach(ft => { ft.y -= 0.6; ft.life--; }); floatingTexts = floatingTexts.filter(ft => ft.life > 0);
@@ -2405,14 +2413,7 @@ codigo_juego_template = """
                     return;
                 }
                 q.time--;
-                if (q.time <= 0) {
-                    // la explosión te alcanza
-                    playAbilitySfx('boom');
-                    if (playerLives <= 1) { s.qte = null; player.hp = 0; player.dead = true; handlePlayerDeath(); return; }
-                    playerLives--;
-                    floatingTexts.push({ x: player.x, y: player.y - 60, text: "¡LA EXPLOSIÓN TE ALCANZÓ! -1 VIDA", color: "#FF3B30", life: 120, size: 26 });
-                    q.round = 0; q.seq = newQteSeq(sunCfg().qte_flechas); q.idx = 0; q.time = q.timeMax; q.bad = 20;
-                }
+                if (q.time <= 0) sunKillsPlayer();   // se acabó el tiempo: el sol te atrapa
             }
             function drawQteArrow(cx, cy, size, dir, fill) {
                 const rot = { up: -Math.PI / 2, down: Math.PI / 2, left: Math.PI, right: 0 }[dir];
@@ -2424,7 +2425,19 @@ codigo_juego_template = """
             }
             function drawSunQTEOverlay() {
                 if (!sunQteActive()) return;
-                const q = meteor.sun.qte, W = canvas.width, H = canvas.height;
+                const W = canvas.width, H = canvas.height;
+                if (meteor.sun.death) {
+                    const t = meteor.sun.death.t;
+                    if (t > 100) {
+                        // cámara en blanco: destello cegador, luego se ve el hongo, y todo vuelve a blanco
+                        let a = t < 130 ? 1 : (t < 260 ? Math.max(0.25, 1 - (t - 130) / 100) : Math.min(1, 0.25 + (t - 260) / 50));
+                        ctx.save(); ctx.fillStyle = `rgba(255, 255, 255, ${a})`; ctx.fillRect(0, 0, W, H);
+                        if (t > 260) { ctx.fillStyle = `rgba(30, 10, 0, ${Math.min(1, (t - 260) / 60) * 0.9})`; ctx.font = "bold 46px sans-serif"; ctx.textAlign = "center"; ctx.fillText("EL SOL TE DESINTEGRÓ", W / 2, H / 2); }
+                        ctx.restore();
+                    } else if (t > 60) { ctx.save(); ctx.fillStyle = `rgba(255, 240, 200, ${(t - 60) / 40 * 0.6})`; ctx.fillRect(0, 0, W, H); ctx.restore(); }
+                    return;
+                }
+                const q = meteor.sun.qte;
                 ctx.save();
                 ctx.fillStyle = q.bad > 0 ? "rgba(120, 0, 0, 0.45)" : "rgba(40, 10, 0, " + (0.35 + 0.1 * Math.sin(q.t / 6)) + ")"; ctx.fillRect(0, 0, W, H);
                 if (q.end > 0) { ctx.fillStyle = "rgba(255, 255, 255, " + Math.min(1, (90 - q.end) / 30) * 0.85 + ")"; ctx.fillRect(0, 0, W, H); ctx.restore(); return; }
@@ -2558,6 +2571,115 @@ codigo_juego_template = """
                     ctx.fillText(`${LV.jefe.nombre_furioso || 'SOL FURIOSO'}: ${Math.ceil(meteor.hp)} / ${meteor.maxHp} HP`, 0, top - 8);
                     ctx.restore();
                 }
+            }
+
+            // ---------- El Sol te agarra y explota (si te mata durante la supernova) ----------
+            function nukeSfx() {
+                if (!isUserInteracted || sfxVolume === 0) return;
+                try {
+                    const ac = getAudioCtx(), t = ac.currentTime, dur = 6;
+                    const comp = ac.createDynamicsCompressor(); comp.threshold.value = -20; comp.ratio.value = 8;
+                    const master = ac.createGain(); master.gain.value = Math.min(1, sfxVolume * 1.6);
+                    comp.connect(master); master.connect(ac.destination);
+                    const drive = ac.createWaveShaper(); drive.curve = makeDistortion(800); drive.oversample = '4x';
+                    const lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.setValueAtTime(1800, t); lp.frequency.exponentialRampToValueAtTime(220, t + dur);
+                    drive.connect(lp); lp.connect(comp);
+                    // golpe inicial y sub-bajos saturados que retumban
+                    [[38, 'sine', 1.0], [55, 'sawtooth', 0.6], [27, 'square', 0.5]].forEach(([f, type, v]) => {
+                        const o = ac.createOscillator(); o.type = type;
+                        o.frequency.setValueAtTime(f * 3, t); o.frequency.exponentialRampToValueAtTime(f, t + 0.25); o.frequency.exponentialRampToValueAtTime(f * 0.5, t + dur);
+                        const g = ac.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(v, t + 0.02); g.gain.exponentialRampToValueAtTime(v * 0.4, t + 1.2); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+                        const trem = ac.createOscillator(); trem.frequency.value = 7; const td = ac.createGain(); td.gain.value = v * 0.25; trem.connect(td); td.connect(g.gain);
+                        o.connect(g); g.connect(drive); o.start(t); o.stop(t + dur); trem.start(t); trem.stop(t + dur);
+                    });
+                    // rugido de la onda expansiva (ruido)
+                    const len = Math.ceil(ac.sampleRate * dur), buf = ac.createBuffer(1, len, ac.sampleRate), d = buf.getChannelData(0);
+                    for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+                    const n = ac.createBufferSource(); n.buffer = buf;
+                    const nf = ac.createBiquadFilter(); nf.type = 'lowpass'; nf.frequency.setValueAtTime(3000, t); nf.frequency.exponentialRampToValueAtTime(150, t + dur);
+                    const ng = ac.createGain(); ng.gain.setValueAtTime(0.0001, t); ng.gain.exponentialRampToValueAtTime(0.9, t + 0.05); ng.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+                    n.connect(nf); nf.connect(ng); ng.connect(drive); n.start(t);
+                } catch (e) {}
+            }
+            function sunKillsPlayer() {
+                const s = meteor.sun;
+                if (s.death) return;
+                s.qte = null; s.death = { t: 0, px: player.x, py: player.y, hx: sunHandPos(1).x, hy: sunHandPos(1).y };
+                isFiring = false; keysDown.clear();
+                floatingTexts.push({ x: player.x, y: player.y - 60, text: "¡EL SOL TE ATRAPÓ!", color: "#FF3B30", life: 90, size: 30 });
+                playAbilitySfx('whoosh');
+            }
+            // 0-60: la mano te agarra · 60-100: te lleva al sol y se comprime · 100+: explosión gigante
+            function updateSunDeath() {
+                const s = meteor.sun, D = s.death; D.t++;
+                // la cámara se centra en el sol y se aleja para ver la explosión
+                camX += (meteor.x - canvas.width / 2 - camX) * 0.08; camY += (meteor.y - canvas.height / 2 - camY) * 0.08;
+                zoom += ((D.t > 100 ? 0.35 : 0.6) - zoom) * 0.05;
+                particles.forEach(p => { p.x += p.vx || 0; p.y += p.vy || 0; p.life--; }); particles = particles.filter(p => p.life > 0);
+                floatingTexts.forEach(ft => { ft.y -= 0.6; ft.life--; }); floatingTexts = floatingTexts.filter(ft => ft.life > 0);
+                if (D.t <= 60) { const k = D.t / 60; D.hx += (player.x - D.hx) * 0.15 * (1 + k); D.hy += (player.y - D.hy) * 0.15 * (1 + k); }
+                else if (D.t <= 100) { const k = (D.t - 60) / 40; player.x += (meteor.x - player.x) * 0.12; player.y += (meteor.y - player.y) * 0.12; D.hx = player.x; D.hy = player.y; meteor.r = s.r0 * 1.45 * (1 - 0.35 * k); }
+                if (D.t === 100) { nukeSfx(); player.dead = true; }
+                if (D.t === 340) {
+                    s.death = null; meteor.r = s.r0 * 1.45; meteor.hp = 1;   // el sol sigue vivo con 1 de vida: pégale otra vez para repetir la supernova
+                    player.hp = 0; player.dead = true; handlePlayerDeath();
+                }
+            }
+            function drawSunDeathWorld() {
+                const s = meteor.sun; if (!s || !s.death) return;
+                const D = s.death;
+                if (D.t <= 100) {   // mano gigante que te agarra
+                    ctx.save(); ctx.strokeStyle = "#FFFFFF"; ctx.lineWidth = meteor.r * 0.12; ctx.lineCap = "round";
+                    const sh = { x: meteor.x + meteor.r * 0.9, y: meteor.y + meteor.r * 0.3 };
+                    ctx.beginPath(); ctx.moveTo(sh.x, sh.y); ctx.quadraticCurveTo((sh.x + D.hx) / 2, Math.min(sh.y, D.hy) - meteor.r * 0.5, D.hx, D.hy); ctx.stroke();
+                    ctx.strokeStyle = "#2A1A0A"; ctx.lineWidth = 3; ctx.stroke();
+                    ctx.restore();
+                    drawOpenHand(D.hx, D.hy, meteor.r * 0.35, Math.atan2(D.hy - meteor.y, D.hx - meteor.x) + Math.PI);
+                }
+                if (D.t > 100) {   // hongo y bola de fuego
+                    const k = Math.min(1, (D.t - 100) / 120), R = meteor.r * (1 + k * 4);
+                    ctx.save(); ctx.translate(meteor.x, meteor.y);
+                    ctx.fillStyle = "rgba(90, 70, 60, 0.75)"; ctx.fillRect(-R * 0.18, -R * 0.2, R * 0.36, R * 1.4);                      // tallo
+                    const cap = ctx.createRadialGradient(0, -R * 0.6, R * 0.1, 0, -R * 0.6, R * 0.9);
+                    cap.addColorStop(0, "#FFFFFF"); cap.addColorStop(0.3, "#FFE38A"); cap.addColorStop(0.6, "#FF6A00"); cap.addColorStop(1, "rgba(90, 40, 20, 0)");
+                    ctx.fillStyle = cap; ctx.beginPath(); ctx.ellipse(0, -R * 0.6, R * 0.95, R * 0.55, 0, 0, Math.PI * 2); ctx.fill();     // cabeza del hongo
+                    const ball = ctx.createRadialGradient(0, 0, 0, 0, 0, R * 0.7);
+                    ball.addColorStop(0, "#FFFFFF"); ball.addColorStop(0.5, "#FFD23F"); ball.addColorStop(1, "rgba(255, 80, 0, 0)");
+                    ctx.fillStyle = ball; ctx.beginPath(); ctx.arc(0, 0, R * 0.7, 0, Math.PI * 2); ctx.fill();
+                    ctx.strokeStyle = `rgba(255, 255, 255, ${0.8 * (1 - k)})`; ctx.lineWidth = 30; ctx.beginPath(); ctx.arc(0, 0, R * 1.3, 0, Math.PI * 2); ctx.stroke();   // onda expansiva
+                    ctx.restore();
+                }
+            }
+
+            // ---------- El Sol se parte en dos y se desintegra (victoria) ----------
+            let sunSplit = null;
+            function updateSunSplit() {
+                if (!sunSplit) return;
+                sunSplit.t++;
+                if (sunSplit.t % 2 === 0 && sunSplit.t < 170) for (let i = 0; i < 6; i++) {
+                    const side = i % 2 ? 1 : -1, off = sunSplit.t * 1.6;
+                    const a = Math.random() * Math.PI - Math.PI / 2, rr = sunSplit.r * Math.random();
+                    particles.push({ x: sunSplit.x + side * (off + Math.cos(a) * rr), y: sunSplit.y + Math.sin(a) * rr * 1.2, vx: side * (1 + Math.random() * 3), vy: (Math.random() - 0.5) * 3, color: ["#FFE600", "#FF8C00", "#FF3B30", "#FFFFFF"][i % 4], life: 40 });
+                }
+                if (sunSplit.t > 200) sunSplit = null;
+            }
+            function drawSunSplit() {
+                if (!sunSplit) return;
+                const S2 = sunSplit, k = Math.min(1, S2.t / 170), off = S2.t * 1.6, r = S2.r;
+                [-1, 1].forEach(side => {
+                    ctx.save(); ctx.translate(S2.x + side * off, S2.y + k * k * 120); ctx.rotate(side * k * 0.6);
+                    ctx.globalAlpha = Math.max(0, 1 - k);
+                    ctx.beginPath(); ctx.rect(side < 0 ? -r * 2 : 0, -r * 2, r * 2, r * 4); ctx.clip();
+                    const g = ctx.createRadialGradient(0, 0, r * 0.1, 0, 0, r);
+                    g.addColorStop(0, "#FFFFFF"); g.addColorStop(0.5, "#FF8A1F"); g.addColorStop(1, "#D9261C");
+                    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, r * (1 - 0.4 * k), 0, Math.PI * 2); ctx.fill();
+                    // borde del corte brillando
+                    ctx.fillStyle = "#FFFFFF"; ctx.fillRect(-r * 0.04, -r, r * 0.08, r * 2);
+                    // mitad de los lentes
+                    ctx.fillStyle = "#0A0A0F"; ctx.fillRect(side < 0 ? -r * 0.7 : 0, -r * 0.3, r * 0.7, r * 0.22);
+                    ctx.restore();
+                });
+                if (S2.t < 20) { ctx.save(); ctx.fillStyle = `rgba(255,255,255,${1 - S2.t / 20})`; ctx.fillRect(S2.x - 6, S2.y - r * 1.4, 12, r * 2.8); ctx.restore(); }
             }
 
             // === FONDO: PLANETA TIERRA (se dibuja una vez y se reutiliza) ===
@@ -2918,7 +3040,7 @@ codigo_juego_template = """
                     craters: [ {x: -35, y: -25, r: 20}, {x: 35, y: -35, r: 16}, {x: 10, y: 30, r: 25}, {x: -40, y: 25, r: 14}, {x: 0, y: 0, r: 18} ] 
                 };
                 meteor.rays = []; meteor.rayTimer = 0; meteor.bombTimer = 0; meteor.veins = makeVeins(); bossBombs = [];
-                sunReset();
+                sunReset(); sunSplit = null;
 
                 player = { 
                     x: Math.random() * worldW, y: Math.random() * worldH, r: 18, color: '#FFFFFF', name: playerName, speed: 3.5, dead: false,
@@ -3046,6 +3168,7 @@ codigo_juego_template = """
 
             function update() {
                 if (sunQteActive()) { updateSunQTE(); return; }
+                updateSunSplit();
                 if (victoryTimer > 0) { victoryTimer--; if (victoryTimer === 0 && !isGameOver) showVictory(); }
                 if(Math.random() < 0.003 && boxes.length < 5) spawnBox();
                 if(Math.random() < 0.0015 && redBoxes.length < 2) spawnRedBox();
@@ -3554,7 +3677,8 @@ codigo_juego_template = """
                     }
                 }
 
-                if(!meteor.dead && LV.jefe.tipo === 'sol') { drawFingerLasers(); drawSunBoss(); }
+                if(!meteor.dead && LV.jefe.tipo === 'sol') { drawFingerLasers(); if (!(meteor.sun && meteor.sun.death && meteor.sun.death.t > 100)) drawSunBoss(); drawSunDeathWorld(); }
+                if (LV.jefe.tipo === 'sol') drawSunSplit();
                 else if(!meteor.dead) {
                     ctx.save(); ctx.translate(meteor.x, meteor.y); ctx.rotate(meteor.angle); ctx.beginPath(); ctx.arc(0, 0, meteor.r, 0, Math.PI * 2); 
                     ctx.fillStyle = meteor.isBoss ? (meteor.isPhase2 ? LV.jefe.color_fase2 : LV.jefe.color) : "#A9A9A9"; 
