@@ -712,6 +712,7 @@ codigo_juego_template = """
             window.addEventListener('keydown', (e) => {
                 if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'PageUp', 'PageDown', 'Home', 'End'].includes(e.code)) e.preventDefault();
                 if (typeof sunQteActive === 'function' && sunQteActive() && !e.repeat) handleQteKey(e.code);
+                if ((e.code === 'Enter' || e.code === 'NumpadEnter') && !e.repeat && typeof voidCinematicActive === 'function' && voidCinematicActive()) skipVoidCinematic();
             });
 
             // ======================================================
@@ -813,7 +814,7 @@ codigo_juego_template = """
             const FIRE_RATE = 7; // frames entre disparos (~8 disparos por segundo)
 
             canvas.addEventListener('mousedown', (e) => {
-                if (typeof voidCinematicActive === 'function' && voidCinematicActive()) { skipVoidCinematic(); return; }
+                if (typeof voidCinematicActive === 'function' && voidCinematicActive()) return;   // durante la cinemática el click no hace nada
                 if(gameState !== 'playing' || isPaused) return;
                 if(player.dead) { if (playerLives > 0) respawnPlayer(); else goToMenu(); return; }
                 if(e.button === 0) { isFiring = true; if (fireCooldown <= 0) { shootLaser(); fireCooldown = FIRE_RATE; } }
@@ -2917,7 +2918,7 @@ codigo_juego_template = """
             //  · Ráfaga de palmadas "ORA ORA"   · Mitad de vida: teletransporte detrás tuyo, empujón y marca mortal
             //  · Poca vida: lanza palabras en japonés   · Al ganar: final triste con todos los jefes
             // ======================================================
-            const GOD_DEF = { vida: 8000, radio: 190, "daño_puño": 0.5, rafaga_espera_s: 5, tp_espera_s: 6, tp_aviso_s: 1.2, palabras_espera_s: 1.5, "daño_palabra": 1.5, omega_vida: 2500, omega_espera_s: 2.5 };
+            const GOD_DEF = { vida: 20000, radio: 190, "daño_puño": 0.5, rafaga_espera_s: 5, tp_en: 0.2, tp_espera_s: 4, tp_aviso_s: 1.4, tp_radio: 130, palabras_espera_s: 1.6, "daño_palabra": 1.5, omega_vida: 2500, omega_espera_s: 2.5 };
             function godCfg() { return Object.assign({}, GOD_DEF, LV.jefe.dios || {}); }
             const KANJI_WORDS = ["死ね", "死", "無駄", "消えろ", "神", "終わりだ"];
 
@@ -3001,34 +3002,71 @@ codigo_juego_template = """
                 startMusicLoop(animeEpicSegment, 1.4);
                 playSfx("bh_death", 2.5);
             }
+            // Las cinemáticas avanzan con el reloj real (60 pasos por segundo), así duran lo mismo
+            // en cualquier pantalla (60 Hz, 120 Hz, 144 Hz...).
+            function cineSteps(C) {
+                const now = performance.now();
+                if (C.t0 === undefined) { C.t0 = now - C.t * (1000 / 60); }
+                const target = Math.floor((now - C.t0) / (1000 / 60));
+                return Math.max(0, Math.min(6, target - C.t));
+            }
             function updateVoidCinematic() {
                 const V = voidState;
                 particles.forEach(p => { p.x += p.vx || 0; p.y += p.vy || 0; p.life--; }); particles = particles.filter(p => p.life > 0);
                 floatingTexts.forEach(ft => { ft.y -= 0.6; ft.life--; }); floatingTexts = floatingTexts.filter(ft => ft.life > 0);
                 if (V.intro && !V.intro.done) {
-                    const I = V.intro; I.t++;
-                    if (I.t === 60) { LV.mundo.color_fondo = "#000000"; LV.mundo.claro = false; LV.mundo.color_borde = "#FF0033"; }
-                    if (I.t === 900 || I.t === 1200) playAbilitySfx('boom');
-                    if (I.t >= INTRO_END) {
-                        I.done = true;
-                        const c = godCfg(), hp = Math.round(c.vida * (DIFFS[difficulty].mult.jefe_vida || 1));
-                        const cx = camX + canvas.width / 2, cy = camY + canvas.height / 2 - 120 / zoom;
-                        V.god = { x: Math.max(250, Math.min(worldW - 250, cx)), y: Math.max(250, Math.min(worldH - 250, cy)), r: c.radio, hp, maxHp: hp, dead: false, isGod: true, flash: 0,
-                                  barrageT: 120, barrage: 0, hand: 0, tpT: 0, tp: null, wordT: 0, half: false, low: false };
-                        floatingTexts.push({ x: V.god.x, y: V.god.y - 200, text: "DIOS OMNIPOTENTE", color: "#FF0033", life: 160, size: 44 });
+                    const I = V.intro;
+                    for (let n = cineSteps(I); n > 0 && !I.done; n--) {
+                        I.t++;
+                        if (I.t === 60) { LV.mundo.color_fondo = "#000000"; LV.mundo.claro = false; LV.mundo.color_borde = "#FF0033"; }
+                        if (I.t === 900 || I.t === 1200) playAbilitySfx('boom');
+                        if (I.t >= INTRO_END) {
+                            I.done = true;
+                            const c = godCfg(), hp = Math.round(c.vida * (DIFFS[difficulty].mult.jefe_vida || 1));
+                            const cx = camX + canvas.width / 2, cy = camY + canvas.height / 2 - 120 / zoom;
+                            V.god = { x: Math.max(250, Math.min(worldW - 250, cx)), y: Math.max(250, Math.min(worldH - 250, cy)), r: c.radio, hp, maxHp: hp, dead: false, isGod: true, flash: 0,
+                                      barrageT: 90, barrage: 0, hand: 0, tpT: 60, tp: null, wordT: 60, half: false, low: false, oraBig: 0 };
+                            floatingTexts.push({ x: V.god.x, y: V.god.y - 260, text: "DIOS OMNIPOTENTE", color: "#FF0033", life: 160, size: 44 });
+                        }
                     }
                     return;
                 }
                 if (V.outro && !V.outro.done) {
-                    const O = V.outro; O.t++;
-                    if (O.t === 40) startMusicLoop(sadSegment, 3);
-                    if (O.t === FIN.twist - 20) stopMusicLoop();
-                    if (O.t === 2240) playAbilitySfx('boom');
-                    if (O.t >= FIN.end) {
-                        O.done = true; V.ending = true;
-                        onBossDefeated(); victoryTimer = 1;
+                    const O = V.outro;
+                    for (let n = cineSteps(O); n > 0 && !O.done; n--) {
+                        O.t++;
+                        if (O.t === 40) startMusicLoop(sadSegment, 3);
+                        if (O.t === FIN.twist - 20) startMusicLoop(horrorSegment, 2.2);   // "tú eras el villano": suspenso
+                        if (O.t === 2240) playAbilitySfx('boom');
+                        if (O.t >= FIN.end) { O.done = true; V.ending = true; onBossDefeated(); victoryTimer = 1; }
                     }
                 }
+            }
+            // Música de suspenso/terror: bajos graves, disonancia, latidos y un chirrido agudo
+            function horrorSegment(ac, out, t0) {
+                const len = 8;
+                // dron grave disonante (segunda menor)
+                [[33, 'sawtooth', 0.22], [34, 'sawtooth', 0.18], [45, 'sine', 0.25]].forEach(([m, type, v]) => {
+                    const o = ac.createOscillator(); o.type = type; o.frequency.value = midiHz(m); o.detune.value = (Math.random() - 0.5) * 20;
+                    const f = ac.createBiquadFilter(); f.type = 'lowpass'; f.frequency.setValueAtTime(180, t0); f.frequency.linearRampToValueAtTime(420, t0 + len / 2); f.frequency.linearRampToValueAtTime(180, t0 + len);
+                    const g = ac.createGain(); g.gain.setValueAtTime(0.0001, t0); g.gain.linearRampToValueAtTime(v, t0 + 1); g.gain.setValueAtTime(v, t0 + len - 1); g.gain.linearRampToValueAtTime(0.0001, t0 + len + 0.3);
+                    o.connect(f); f.connect(g); g.connect(out); o.start(t0); o.stop(t0 + len + 0.4);
+                });
+                // latidos
+                [0.5, 0.75, 2.5, 2.75, 4.5, 4.75, 6.5, 6.75].forEach((dt, i) => {
+                    const t = t0 + dt, o = ac.createOscillator(); o.type = 'sine';
+                    o.frequency.setValueAtTime(70, t); o.frequency.exponentialRampToValueAtTime(35, t + 0.18);
+                    const g = ac.createGain(); g.gain.setValueAtTime(i % 2 ? 0.45 : 0.7, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.25);
+                    o.connect(g); g.connect(out); o.start(t); o.stop(t + 0.3);
+                });
+                // chirrido agudo que tiembla
+                const w = ac.createOscillator(); w.type = 'sine'; w.frequency.setValueAtTime(midiHz(91), t0 + 3); w.frequency.linearRampToValueAtTime(midiHz(92), t0 + len);
+                const vib = ac.createOscillator(); vib.frequency.value = 6; const vd = ac.createGain(); vd.gain.value = 12; vib.connect(vd); vd.connect(w.frequency);
+                const wg = ac.createGain(); wg.gain.setValueAtTime(0.0001, t0 + 3); wg.gain.linearRampToValueAtTime(0.025, t0 + 5); wg.gain.linearRampToValueAtTime(0.0001, t0 + len);
+                w.connect(wg); wg.connect(out); w.start(t0 + 3); w.stop(t0 + len); vib.start(t0 + 3); vib.stop(t0 + len);
+                // golpe metálico raspado
+                mNoise(ac, out, t0 + 5.3, 1.2, 0.08, 3000);
+                return len;
             }
             function godDefeated() {
                 const V = voidState, g = V.god;
@@ -3042,78 +3080,99 @@ codigo_juego_template = """
             }
 
             // ---------- Pelea contra el Dios ----------
+            // Inicio: palmadas ORA ORA (morado, letras japonesas grandes)
+            // Mitad de vida: además lanza palabras en japonés blancas
+            // Muy poca vida: se teletransporta detrás tuyo y golpea donde estás (si no te mueves, mueres)
             function updateGod() {
                 const V = voidState, g = V && V.god;
                 if (!g || g.dead) return;
                 const c = godCfg();
                 if (g.flash > 0) g.flash--;
+                if (g.oraBig > 0) g.oraBig--;
                 lasers.forEach(l => {
                     if ((l.kind === 'kanji' || l.kind === 'estrella_verde') && l.homing > 0 && l.owner === g && !player.dead) { l.homing--; const a = Math.atan2(player.y - l.y, player.x - l.x), sp = Math.hypot(l.vx, l.vy); l.vx += (Math.cos(a) * sp - l.vx) * 0.05; l.vy += (Math.sin(a) * sp - l.vy) * 0.05; }
                 });
                 if (g.omega) { if (!player.dead) updateOmega(g); return; }
-                if (!g.half && g.hp <= g.maxHp * 0.5) { g.half = true; g.tpT = 90; floatingTexts.push({ x: g.x, y: g.y - g.r - 80, text: "¡¿ES ESO UNA REFERENCIA A JOJO?!", color: "#FF66CC", life: 180, size: 34 }); }
-                if (!g.low && g.hp <= g.maxHp * 0.25) { g.low = true; g.wordT = 60; floatingTexts.push({ x: g.x, y: g.y - g.r - 80, text: "死ね", color: "#FFFFFF", life: 150, size: 60 }); }
+                if (!g.half && g.hp <= g.maxHp * 0.5) { g.half = true; g.wordT = 30; floatingTexts.push({ x: g.x, y: g.y - g.r - 90, text: "死ね", color: "#FFFFFF", life: 150, size: 80 }); }
+                if (!g.low && g.hp <= g.maxHp * c.tp_en) { g.low = true; g.tpT = 40; floatingTexts.push({ x: g.x, y: g.y - g.r - 90, text: "¡¿ES ESO UNA REFERENCIA A JOJO?!", color: "#CC66FF", life: 180, size: 34 }); }
                 if (player.dead) return;
                 const toP = Math.atan2(player.y - g.y, player.x - g.x), d = Math.hypot(player.x - g.x, player.y - g.y);
-                // flota hacia ti
-                if (!g.tp && g.barrage <= 0 && d > g.r * 2.4) { g.x += Math.cos(toP) * 1.6; g.y += Math.sin(toP) * 1.6; }
-                if (d < g.r + player.r) takeDamage(player, 4);
-                // ráfaga de palmadas ORA ORA
+                if (!g.tp && g.barrage <= 0 && d > g.r * 2.3) { g.x += Math.cos(toP) * 1.6; g.y += Math.sin(toP) * 1.6; }
+                if (!g.tp && d < g.r + player.r) takeDamage(player, 4);
+
+                // ráfaga ORA ORA
                 if (g.barrage > 0) {
                     g.barrage--;
                     if (g.barrage % 3 === 0) {
                         g.hand = 1 - g.hand;
                         const side = g.hand ? 1 : -1, a = toP + (Math.random() - 0.5) * 0.55;
                         const hx = g.x + Math.cos(toP + side * 0.9) * g.r * 1.1, hy = g.y + Math.sin(toP + side * 0.9) * g.r * 1.1;
-                        lasers.push({ x: hx, y: hy, vx: Math.cos(a) * 17, vy: Math.sin(a) * 17, owner: g, isStar: false, kind: 'puño', life: 32, r: 18, color: "#FFF", damageMult: c['daño_puño'] });
+                        lasers.push({ x: hx, y: hy, vx: Math.cos(a) * 17, vy: Math.sin(a) * 17, owner: g, isStar: false, kind: 'puño', life: 34, r: 18, color: "#FFF", damageMult: c['daño_puño'] });
                     }
-                    if (g.barrage % 10 === 0) { floatingTexts.push({ x: g.x + (Math.random() - 0.5) * g.r * 3, y: g.y + (Math.random() - 0.5) * g.r * 2, text: Math.random() < 0.5 ? "ORA" : "オラ", color: Math.random() < 0.5 ? "#FFD700" : "#FFFFFF", life: 30, size: 28 }); playAbilitySfx('ping'); }
+                    if (g.barrage % 8 === 0) {
+                        floatingTexts.push({ x: g.x + (Math.random() - 0.5) * g.r * 3.2, y: g.y + (Math.random() - 0.5) * g.r * 2.4, text: Math.random() < 0.5 ? "ORA" : "オラ", color: Math.random() < 0.5 ? "#B026FF" : "#E0A0FF", life: 34, size: 34 + Math.random() * 18 });
+                        playAbilitySfx('ping');
+                    }
                 } else if (!g.tp && (g.barrageT -= 1) <= 0) {
-                    g.barrage = 90; g.barrageT = c.rafaga_espera_s * 60 * (g.low ? 1.4 : 1);
-                    floatingTexts.push({ x: g.x, y: g.y - g.r - 50, text: "¡ORA ORA ORA ORA!", color: "#FFD700", life: 70, size: 34 });
+                    g.barrage = 100; g.oraBig = 100;
+                    g.barrageT = c.rafaga_espera_s * 60 * (g.half ? 1.5 : 1) * (g.low ? 1.3 : 1);
                 }
-                // teletransporte detrás tuyo + empujón + marca mortal
-                if (g.half) {
-                    if (g.tp) {
-                        const T = g.tp; T.t++;
-                        if (T.t <= 15) { player.x += T.px * (16 - T.t) * 1.1; player.y += T.py * (16 - T.t) * 1.1; player.x = Math.max(player.r, Math.min(worldW - player.r, player.x)); player.y = Math.max(player.r, Math.min(worldH - player.r, player.y)); }
-                        if (T.t === 16) { T.mx = player.x; T.my = player.y; floatingTexts.push({ x: player.x, y: player.y - 60, text: "¡MUÉVETE!", color: "#FF0033", life: 60, size: 30 }); }
-                        const AV = 16 + c.tp_aviso_s * 60;
-                        if (T.t === Math.round(AV)) {
-                            playAbilitySfx('boom');
-                            for (let i = 0; i < 30; i++) { const a = Math.random() * Math.PI * 2, sp = Math.random() * 9; particles.push({ x: T.mx, y: T.my, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, color: "#FF0033", life: 30 }); }
-                            if (Math.hypot(player.x - T.mx, player.y - T.my) < 120 + player.r && !(player.invulnTimer > 0) && !(player.rhinoTimer > 0)) {
-                                player.hp = 0; player.dead = true; player.shields = 0;
-                                floatingTexts.push({ x: player.x, y: player.y - 40, text: "無駄無駄", color: "#FFFFFF", life: 90, size: 34 });
-                                handlePlayerDeath();
-                            }
-                        }
-                        if (T.t > AV + 20) { g.tp = null; g.tpT = c.tp_espera_s * 60; }
-                    } else if (g.barrage <= 0 && (g.tpT -= 1) <= 0) {
-                        // aparece detrás de ti (al lado contrario hacia donde vas)
-                        let mvx = 0, mvy = 0;
-                        if (keysDown.has('KeyD') || keysDown.has('ArrowRight')) mvx += 1; if (keysDown.has('KeyA') || keysDown.has('ArrowLeft')) mvx -= 1;
-                        if (keysDown.has('KeyS') || keysDown.has('ArrowDown')) mvy += 1; if (keysDown.has('KeyW') || keysDown.has('ArrowUp')) mvy -= 1;
-                        if (!mvx && !mvy) { const a = Math.random() * Math.PI * 2; mvx = Math.cos(a); mvy = Math.sin(a); }
-                        const L = Math.hypot(mvx, mvy); mvx /= L; mvy /= L;
-                        for (let i = 0; i < 20; i++) particles.push({ x: g.x + (Math.random() - 0.5) * g.r, y: g.y + (Math.random() - 0.5) * g.r, vx: 0, vy: 0, color: "#FF0033", life: 25 });
-                        g.x = player.x - mvx * (g.r + player.r + 60); g.y = player.y - mvy * (g.r + player.r + 60);
-                        g.tp = { t: 0, px: mvx, py: mvy };
-                        floatingTexts.push({ x: g.x, y: g.y - g.r - 40, text: "ゴゴゴゴ", color: "#CC66FF", life: 60, size: 32 });
-                        playAbilitySfx('whoosh');
-                    }
-                }
-                // palabras en japonés
-                if (g.low && (g.wordT -= 1) <= 0) {
-                    for (let i = 0; i < 3; i++) {
-                        const a = toP + (i - 1) * 0.35, w = KANJI_WORDS[Math.floor(Math.random() * KANJI_WORDS.length)];
-                        lasers.push({ x: g.x + Math.cos(a) * g.r, y: g.y + Math.sin(a) * g.r, vx: Math.cos(a) * 5, vy: Math.sin(a) * 5, owner: g, isStar: false, kind: 'kanji', word: w, life: 260, r: 24, color: "#FFF", damageMult: c['daño_palabra'], homing: 60 });
+
+                // palabras en japonés (desde la mitad)
+                if (g.half && !g.tp && (g.wordT -= 1) <= 0) {
+                    const n = g.low ? 3 : 4;
+                    for (let i = 0; i < n; i++) {
+                        const a = toP + (i - (n - 1) / 2) * 0.3, w = KANJI_WORDS[Math.floor(Math.random() * KANJI_WORDS.length)];
+                        lasers.push({ x: g.x + Math.cos(a) * g.r, y: g.y + Math.sin(a) * g.r, vx: Math.cos(a) * 5, vy: Math.sin(a) * 5, owner: g, isStar: false, kind: 'kanji', word: w, life: 280, r: 26, color: "#FFF", damageMult: c['daño_palabra'], homing: 70 });
                     }
                     g.wordT = c.palabras_espera_s * 60;
                 }
-                lasers.forEach(l => {
-                    if (l.kind === 'kanji' && l.homing > 0 && l.owner === g) { l.homing--; const a = Math.atan2(player.y - l.y, player.x - l.x), sp = Math.hypot(l.vx, l.vy); l.vx += (Math.cos(a) * sp - l.vx) * 0.05; l.vy += (Math.sin(a) * sp - l.vy) * 0.05; }
-                });
+
+                // teletransporte detrás tuyo (muy poca vida)
+                if (g.low) {
+                    if (g.tp) updateGodTP(g, c);
+                    else if (g.barrage <= 0 && (g.tpT -= 1) <= 0) startGodTP(g, 1 + (g.hp <= g.maxHp * c.tp_en * 0.5 ? 1 : 0));
+                }
+            }
+            function startGodTP(g, chain) {
+                // desaparece dejando una silueta y aparece detrás tuyo (al lado contrario hacia donde vas)
+                let mvx = 0, mvy = 0;
+                if (keysDown.has('KeyD') || keysDown.has('ArrowRight')) mvx += 1; if (keysDown.has('KeyA') || keysDown.has('ArrowLeft')) mvx -= 1;
+                if (keysDown.has('KeyS') || keysDown.has('ArrowDown')) mvy += 1; if (keysDown.has('KeyW') || keysDown.has('ArrowUp')) mvy -= 1;
+                if (!mvx && !mvy) { const a = Math.random() * Math.PI * 2; mvx = Math.cos(a); mvy = Math.sin(a); }
+                const L = Math.hypot(mvx, mvy); mvx /= L; mvy /= L;
+                for (let i = 0; i < 30; i++) particles.push({ x: g.x + (Math.random() - 0.5) * g.r * 1.6, y: g.y + (Math.random() - 0.5) * g.r * 1.6, vx: (Math.random() - 0.5) * 2, vy: -Math.random() * 2, color: i % 2 ? "#B026FF" : "#FF0033", life: 35 });
+                g.tp = { t: 0, ox: g.x, oy: g.y, nx: player.x - mvx * (g.r + player.r + 70), ny: player.y - mvy * (g.r + player.r + 70), mx: player.x, my: player.y, chain };
+                g.tp.nx = Math.max(g.r, Math.min(worldW - g.r, g.tp.nx)); g.tp.ny = Math.max(g.r, Math.min(worldH - g.r, g.tp.ny));
+                playAbilitySfx('whoosh');
+            }
+            // 0-18: desaparece · 18: aparece detrás · 18-AV: carga el puño (zona roja) · AV: GOLPE · +25: termina
+            function updateGodTP(g, c) {
+                const T = g.tp; T.t++;
+                const AV = 18 + Math.round(c.tp_aviso_s * 60);
+                if (T.t === 18) {
+                    g.x = T.nx; g.y = T.ny;
+                    floatingTexts.push({ x: T.mx, y: T.my - 90, text: "¡MUÉVETE!", color: "#FF0033", life: 60, size: 34 });
+                    for (let i = 0; i < 4; i++) floatingTexts.push({ x: T.mx + (Math.random() - 0.5) * 300, y: T.my + (Math.random() - 0.5) * 220, text: "ゴ", color: "#B026FF", life: 70, size: 40 + Math.random() * 20 });
+                    playAbilitySfx('shield');
+                }
+                if (T.t === AV) {
+                    // ¡golpe!
+                    playAbilitySfx('boom');
+                    g.x += (T.mx - g.x) * 0.6; g.y += (T.my - g.y) * 0.6;   // se lanza al punto marcado
+                    for (let i = 0; i < 40; i++) { const a = Math.random() * Math.PI * 2, sp = 4 + Math.random() * 10; particles.push({ x: T.mx, y: T.my, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, color: i % 3 ? "#FF0033" : "#FFFFFF", life: 35 }); }
+                    T.boom = 25;
+                    if (!player.dead && Math.hypot(player.x - T.mx, player.y - T.my) < c.tp_radio + player.r && !(player.invulnTimer > 0) && !(player.rhinoTimer > 0)) {
+                        player.hp = 0; player.dead = true; player.shields = 0;
+                        floatingTexts.push({ x: player.x, y: player.y - 50, text: "無駄無駄無駄", color: "#FFFFFF", life: 100, size: 40 });
+                        handlePlayerDeath();
+                    }
+                }
+                if (T.boom > 0) T.boom--;
+                if (T.t > AV + 25) {
+                    if (T.chain > 1 && !player.dead) { startGodTP(g, T.chain - 1); g.tp.t = 6; }   // a veces encadena otro
+                    else { g.tp = null; g.tpT = c.tp_espera_s * 60; }
+                }
             }
 
             function drawGodBody(x, y, r, now) {
@@ -3145,16 +3204,42 @@ codigo_juego_template = """
             function drawGod() {
                 const V = voidState, g = V && V.god; if (!g || g.dead) return;
                 const now = Date.now(), toP = Math.atan2(player.y - g.y, player.x - g.x);
-                // marca mortal
-                if (g.tp && g.tp.mx !== undefined) {
-                    const T = g.tp, k = (T.t - 16) / (godCfg().tp_aviso_s * 60);
-                    ctx.save(); ctx.strokeStyle = "#FF0033"; ctx.lineWidth = 5; ctx.globalAlpha = 0.5 + 0.5 * (Math.floor(T.t / 5) % 2);
-                    ctx.beginPath(); ctx.arc(T.mx, T.my, 120, 0, Math.PI * 2); ctx.stroke();
-                    ctx.fillStyle = "rgba(255, 0, 51, " + Math.min(0.45, k * 0.45) + ")"; ctx.beginPath(); ctx.arc(T.mx, T.my, 120 * Math.min(1, k), 0, Math.PI * 2); ctx.fill();
-                    ctx.restore();
+                // teletransporte: silueta donde estaba, zona mortal que se llena y onda del golpe
+                if (g.tp) {
+                    const T = g.tp, c = godCfg(), AV = 18 + Math.round(c.tp_aviso_s * 60), R = c.tp_radio;
+                    if (T.t < 30) { ctx.save(); ctx.globalAlpha = Math.max(0, 0.6 - T.t / 50); drawGodBody(T.ox, T.oy, g.r, now); ctx.restore(); }
+                    if (T.t >= 18 && T.t < AV) {
+                        const k = (T.t - 18) / (AV - 18);
+                        ctx.save();
+                        ctx.fillStyle = "rgba(255, 0, 51, " + (0.15 + 0.35 * k) + ")"; ctx.beginPath(); ctx.arc(T.mx, T.my, R * k, 0, Math.PI * 2); ctx.fill();
+                        ctx.strokeStyle = "#FF0033"; ctx.lineWidth = 6; ctx.globalAlpha = 0.6 + 0.4 * (Math.floor(T.t / 4) % 2);
+                        ctx.beginPath(); ctx.arc(T.mx, T.my, R, 0, Math.PI * 2); ctx.stroke();
+                        ctx.setLineDash([18, 12]); ctx.beginPath(); ctx.moveTo(g.x, g.y); ctx.lineTo(T.mx, T.my); ctx.stroke(); ctx.setLineDash([]);
+                        ctx.globalAlpha = 1; ctx.fillStyle = "#FFFFFF"; ctx.font = "bold 28px sans-serif"; ctx.textAlign = "center";
+                        ctx.fillText(((AV - T.t) / 60).toFixed(1) + "s", T.mx, T.my - R - 14);
+                        ctx.restore();
+                    }
+                    if (T.boom > 0) {
+                        const k = 1 - T.boom / 25;
+                        ctx.save(); ctx.strokeStyle = "rgba(255, 255, 255, " + (1 - k) + ")"; ctx.lineWidth = 16; ctx.beginPath(); ctx.arc(T.mx, T.my, R * (0.6 + k * 1.8), 0, Math.PI * 2); ctx.stroke(); ctx.restore();
+                    }
                 }
                 if (g.omega) drawOmegaExtras(g);
+                if (g.oraBig > 0) {
+                    ctx.save(); ctx.globalAlpha = Math.min(1, g.oraBig / 20) * 0.9; ctx.textAlign = "center"; ctx.font = `bold ${Math.round(g.r * 0.75)}px 'Hiragino Sans', 'Yu Gothic', 'Noto Sans JP', sans-serif`;
+                    ctx.lineWidth = 10; ctx.strokeStyle = "#2A0040"; ctx.fillStyle = "#B026FF";
+                    const shake = () => (Math.random() - 0.5) * 8;
+                    ctx.strokeText("オラオラオラ", g.x + shake(), g.y - g.r * 1.55 + shake()); ctx.fillText("オラオラオラ", g.x + shake(), g.y - g.r * 1.55 + shake());
+                    ctx.font = `bold ${Math.round(g.r * 0.4)}px sans-serif`; ctx.fillStyle = "#E0A0FF";
+                    ctx.strokeText("ORA ORA ORA ORA", g.x, g.y + g.r * 1.75); ctx.fillText("ORA ORA ORA ORA", g.x, g.y + g.r * 1.75);
+                    ctx.restore();
+                }
                 drawGodBody(g.x, g.y, g.r, now);
+                if (g.tp && g.tp.t >= 18) {   // puño cargándose
+                    const a = Math.atan2(g.tp.my - g.y, g.tp.mx - g.x), k = Math.min(1, (g.tp.t - 18) / 40);
+                    ctx.save(); ctx.globalAlpha = 0.4 + 0.3 * Math.sin(now / 60); ctx.fillStyle = "#FF0033"; ctx.beginPath(); ctx.arc(g.x + Math.cos(a) * g.r * 1.2, g.y + Math.sin(a) * g.r * 1.2, g.r * 0.45 * k, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+                    drawGodHand(g.x + Math.cos(a) * g.r * (1.2 - 0.25 * k), g.y + Math.sin(a) * g.r * (1.2 - 0.25 * k), g.r * 0.4, a, true);
+                }
                 if (g.omega) drawOmegaFace(g);
                 if (g.flash > 0) { ctx.fillStyle = "rgba(255,0,51,0.4)"; ctx.beginPath(); ctx.arc(g.x, g.y, g.r, 0, Math.PI * 2); ctx.fill(); }
                 // manos: en la ráfaga golpean muy rápido (con "fantasmas" de los golpes)
@@ -3259,7 +3344,7 @@ codigo_juego_template = """
                     }
                     ctx.restore();
                     INTRO_LINES.forEach(([es, ja, a, b]) => subtitle(es, ja, t, a, b));
-                    ctx.save(); ctx.fillStyle = "rgba(255,255,255,0.4)"; ctx.font = "12px sans-serif"; ctx.textAlign = "right"; ctx.fillText("click para saltar", W - 16, H - 16); ctx.restore();
+                    ctx.save(); ctx.fillStyle = "rgba(255,255,255,0.4)"; ctx.font = "12px sans-serif"; ctx.textAlign = "right"; ctx.fillText(t > 120 ? "ENTER para saltar" : "", W - 16, H - 16); ctx.restore();
                     return;
                 }
                 if (V.outro) {
@@ -3314,11 +3399,13 @@ codigo_juego_template = """
 
             function skipVoidCinematic() {
                 const V = voidState; if (!V) return;
-                if (V.intro && !V.intro.done) { if (V.intro.t < 1180) V.intro.t = 1180; return; }
+                if (V.intro && !V.intro.done) { if (V.intro.t < 120) return; if (V.intro.t < 1180) { V.intro.t = 1180; V.intro.t0 = undefined; } return; }
                 if (V.outro && !V.outro.done) {
+                    if (V.outro.t < 40) startMusicLoop(sadSegment, 3);
                     if (V.outro.t < FIN.creditsStart) V.outro.t = FIN.creditsStart;
-                    else if (V.outro.t < FIN.twist) V.outro.t = FIN.twist;
+                    else if (V.outro.t < FIN.twist - 20) V.outro.t = FIN.twist - 21;
                     else V.outro.t = FIN.end - 1;
+                    V.outro.t0 = undefined;
                 }
             }
 
