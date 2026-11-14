@@ -15,7 +15,7 @@
     "potencia_disparo": 1.1
   },
   "comida": 700,
-  "musica_victoria": "espacial",
+  "musica_victoria": "epica",
   "orbes_max": 3,
   "agujero_negro": {
     "vida": 12000,
@@ -56,7 +56,8 @@
       "daño_laser_dedos": 3,
       "qte_flechas": 6,
       "qte_rondas": 2,
-      "qte_tiempo_s": 7
+      "qte_tiempo_s": 4,
+      "qte_daño_error": 0.35
     },
     "nombre_furioso": "SOL FURIOSO"
   },
