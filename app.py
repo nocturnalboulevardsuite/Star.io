@@ -722,7 +722,7 @@ codigo_juego_template = """
             let currentFase = null;
             const DEFAULT_LEVEL = {
                 nombre: "Vía Láctea", descripcion: "",
-                mundo: { ancho: 3200, alto: 3200, color_fondo: "#06060E", color_borde: "#FF3366" },
+                mundo: { ancho: 3200, alto: 3200, color_fondo: "#06060E", color_borde: "#FF3366", claro: false },
                 bots: { cantidad: 28, vida: 200, velocidad: 1.0, espera_disparo_ms: 2500, potencia_disparo: 1.0 },
                 comida: 600, orbes_max: 3, musica_victoria: "",
                 fondo: { planeta: "" },
@@ -1003,6 +1003,7 @@ codigo_juego_template = """
 
                 if (abyssTimer % ABYSS_TICK === 0) {
                     let dmg = player.laserDamage;
+                    if (isVoid() && voidState) voidState.twins.forEach(t => { if (!t.dead && distToBeam(t.x, t.y, x1, y1, x2, y2) < w + t.r) voidTwinDamage(t, ABYSS_DMG_BOSS * dmg); });
                     bots.forEach(b => { if (!b.dead && distToBeam(b.x, b.y, x1, y1, x2, y2) < w + b.r) takeDamage(b, ABYSS_DMG_BOTS * dmg); });
                     if (meteor.isBoss && !meteor.dead && distToBeam(meteor.x, meteor.y, x1, y1, x2, y2) < w + meteor.r) {
                         meteor.hp -= ABYSS_DMG_BOSS * dmg;
@@ -1151,7 +1152,7 @@ codigo_juego_template = """
                 if (blackHole.dead) return;
                 blackHole.hp -= amount;
                 floatingTexts.push({ x: blackHole.x + (Math.random() - 0.5) * 60, y: blackHole.y - blackHole.r - 20, text: `-${Math.ceil(amount)}`, color: color || "#FF8C00", life: 40, size: 30 });
-                if (blackHole.hp <= 0 && !blackHole.dead) {
+                if (blackHole.hp <= 0 && !blackHole.dead && !voidInterceptBH()) {
                     blackHole.dead = true; unlockAbyssLaser();
                     playSfx("bh_death", 2.5);
                     meteor.isBoss = true; cinematicTimer = 180;
@@ -1278,6 +1279,7 @@ codigo_juego_template = """
                     // jefes: se detiene y hace 1/5 del porcentaje
                     if (!blackHole.dead && Math.hypot(blackHole.x - c.x, blackHole.y - c.y) < blackHole.r + c.r) { damageBlackHole(blackHole.maxHp * c.pct * 0.2); done = true; }
                     if (!done && meteor.isBoss && !meteor.dead && Math.hypot(meteor.x - c.x, meteor.y - c.y) < meteor.r + c.r) { damageMeteor(meteor.maxHp * c.pct * 0.2); done = true; }
+                    if (!done && isVoid() && voidState) for (const t of voidState.twins) if (!t.dead && Math.hypot(t.x - c.x, t.y - c.y) < t.r + c.r) { voidTwinDamage(t, t.maxHp * c.pct * 0.2); done = true; break; }
                     if (c.x < -c.r || c.y < -c.r || c.x > worldW + c.r || c.y > worldH + c.r) c.life = 0;
                     if (done || c.life <= 0) {
                         for (let k = 0; k < 30; k++) particles.push({ x: c.x, y: c.y, vx: (Math.random() - 0.5) * 12, vy: (Math.random() - 0.5) * 12, color: Math.random() > 0.5 ? "#FF8C00" : "#FFFFFF", life: 25 });
@@ -1480,6 +1482,11 @@ codigo_juego_template = """
                     if (player.nmCd <= 0) touchBoss(blackHole, 2, damageBlackHole, "TOQUE");
                     if (!blackHole.dead) bounceFrom(blackHole);
                 }
+                if (isVoid() && voidState) voidState.twins.forEach(t => {
+                    if (t.dead || Math.hypot(t.x - player.x, t.y - player.y) > player.r + t.r) return;
+                    if (player.nmCd <= 0) { voidTwinDamage(t, t.maxHp / 3 + 1); player.nmCd = 40; playAbilitySfx('boom'); }
+                    const a = Math.atan2(player.y - t.y, player.x - t.x); player.kbx = Math.cos(a) * 16; player.kby = Math.sin(a) * 16;
+                });
                 if (!meteor.dead && Math.hypot(meteor.x - player.x, meteor.y - player.y) < player.r + meteor.r * 0.85) {
                     if (meteor.isBoss && player.nmCd <= 0 && cinematicTimer <= 0) touchBoss(meteor, 3, damageMeteor, "TOQUE");
                     if (!meteor.dead) bounceFrom(meteor);
@@ -2682,6 +2689,219 @@ codigo_juego_template = """
                 if (S2.t < 20) { ctx.save(); ctx.fillStyle = `rgba(255,255,255,${1 - S2.t / 20})`; ctx.fillRect(S2.x - 6, S2.y - r * 1.4, 12, r * 2.8); ctx.restore(); }
             }
 
+            // ======================================================
+            // === JEFE "VACÍO" (niveles con jefe.tipo = "vacio") ===
+            // El agujero negro es el jefe: crece rápido, a la mitad abre los ojos y lanza
+            // mini agujeros negros, con poca vida te hace "ven acá" con las manos y te arrastra.
+            // Al morir se divide en dos: uno BLANCO y uno NEGRO que cada 10 s te embisten.
+            // ======================================================
+            const VOID_DEF = { minis_espera_s: 3, minis_cantidad: 3, "daño_mini": 2, gesto_en: 0.25, gesto_espera_s: 5, gesto_fuerza: 9,
+                               gemelos_vida: 5000, gemelos_radio: 70, embestida_espera_s: 10, embestida_aviso_s: 1.5, embestida_velocidad: 38 };
+            function voidCfg() { return Object.assign({}, VOID_DEF, LV.jefe.vacio || {}); }
+            let voidState = null;
+            function voidReset() { voidState = { miniT: 120, gestT: 60, gest: 0, twins: [], dashT: 0, dash: null, won: false }; }
+            const isVoid = () => LV.jefe.tipo === 'vacio';
+
+            // Se llama cuando el agujero negro muere. true = lo maneja el modo vacío
+            function voidInterceptBH() {
+                if (!isVoid()) return false;
+                const c = voidCfg();
+                blackHole.dead = true; unlockAbyssLaser();
+                playSfx("bh_death", 2.5); playAbilitySfx('boom');
+                const hp = Math.round(c.gemelos_vida * (DIFFS[difficulty].mult.agujero_vida || 1));
+                voidState.twins = [
+                    { color: 'blanco', x: blackHole.x - 10, y: blackHole.y, vx: -6, vy: -2, r: 10, rT: c.gemelos_radio, hp, maxHp: hp, dead: false, phase: 0 },
+                    { color: 'negro',  x: blackHole.x + 10, y: blackHole.y, vx: 6, vy: 2, r: 10, rT: c.gemelos_radio, hp, maxHp: hp, dead: false, phase: Math.PI }
+                ];
+                voidState.dashT = c.embestida_espera_s * 60;
+                floatingTexts.push({ x: blackHole.x, y: blackHole.y - 120, text: "¡SE DIVIDIÓ EN DOS!", icon: "vortex", iconBoth: true, color: "#6A0DAD", life: 200, size: 40 });
+                if (bgMusic && sfxData["luna_musica"] && sfxData["luna_musica"].length > 0) { bgMusic.pause(); bgMusic.src = sfxData["luna_musica"][0]; usingBossTrack = true; bgMusic.currentTime = 0; bgMusic.play().catch(e => console.log(e)); }
+                return true;
+            }
+
+            function voidTwinDamage(t, amount) {
+                if (t.dead) return;
+                t.hp -= amount; t.flash = 5;
+                if (t.hp <= 0) {
+                    t.dead = true;
+                    for (let i = 0; i < 40; i++) { const a = Math.random() * Math.PI * 2, sp = Math.random() * 10; particles.push({ x: t.x, y: t.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, color: t.color === 'blanco' ? "#C8C8D8" : "#111", life: 40 }); }
+                    floatingTexts.push({ x: t.x, y: t.y - t.r - 30, text: t.color === 'blanco' ? "¡AGUJERO BLANCO DESTRUIDO!" : "¡AGUJERO NEGRO DESTRUIDO!", color: "#6A0DAD", life: 120, size: 26 });
+                    playSfx("bh_death", 2); 
+                    if (voidState.twins.every(q => q.dead) && !voidState.won) {
+                        voidState.won = true;
+                        floatingTexts.push({ x: t.x, y: t.y, text: "VICTORIA GALÁCTICA", icon: "star", iconBoth: true, color: "#FFD700", life: 300, size: 50 });
+                        if (bgMusic && audioSrc) { bgMusic.pause(); bgMusic.src = audioSrc; usingBossTrack = false; bgMusic.currentTime = 0; bgMusic.play().catch(e => console.log(e)); }
+                        onBossDefeated();
+                    }
+                }
+            }
+            // Golpe de un proyectil del jugador: true si le pegó a un gemelo
+            function voidTwinsHitByLaser(l, dmg) {
+                if (!isVoid() || !voidState) return false;
+                for (const t of voidState.twins) if (!t.dead && l.owner !== t && Math.hypot(l.x - t.x, l.y - t.y) < t.r) { voidTwinDamage(t, dmg); return true; }
+                return false;
+            }
+
+            function updateVoidBoss() {
+                if (!isVoid() || !voidState) return;
+                const c = voidCfg(), V = voidState;
+                // --- Agujero negro vivo ---
+                if (!blackHole.dead) {
+                    const half = blackHole.hp <= blackHole.maxHp * 0.5, low = blackHole.hp <= blackHole.maxHp * c.gesto_en;
+                    if (half && !V.eyesOpen) { V.eyesOpen = true; floatingTexts.push({ x: blackHole.x, y: blackHole.y - blackHole.r - 60, text: "¡EL VACÍO ABRE LOS OJOS!", icon: "eye", iconBoth: true, color: "#6A0DAD", life: 160, size: 32 }); }
+                    if (half && !player.dead && (V.miniT -= 1) <= 0) {
+                        const a0 = Math.atan2(player.y - blackHole.y, player.x - blackHole.x), n = c.minis_cantidad;
+                        for (let i = 0; i < n; i++) {
+                            const a = a0 + (i - (n - 1) / 2) * 0.4;
+                            lasers.push({ x: blackHole.x + Math.cos(a) * (blackHole.r + 20), y: blackHole.y + Math.sin(a) * (blackHole.r + 20), vx: Math.cos(a) * 3.6, vy: Math.sin(a) * 3.6,
+                                          owner: blackHole, isStar: false, kind: 'mini_agujero', life: 320, r: 15, color: "#000", damageMult: c['daño_mini'] });
+                        }
+                        playAbilitySfx('whoosh');
+                        V.miniT = c.minis_espera_s * 60;
+                    }
+                    if (low && !player.dead) {
+                        if (V.gest > 0) {
+                            V.gest--;
+                            // "ven acá": te arrastra hacia él
+                            const dx = blackHole.x - player.x, dy = blackHole.y - player.y, d = Math.hypot(dx, dy) || 1;
+                            const pull = c.gesto_fuerza * Math.sin(Math.PI * (50 - V.gest) / 50) * 0.35;
+                            player.x += dx / d * pull; player.y += dy / d * pull;
+                            if (V.gest % 3 === 0) particles.push({ x: player.x, y: player.y, vx: dx / d * 4, vy: dy / d * 4, color: "#6A0DAD", life: 14 });
+                        } else if ((V.gestT -= 1) <= 0) {
+                            V.gest = 50; V.gestT = c.gesto_espera_s * 60;
+                            floatingTexts.push({ x: blackHole.x, y: blackHole.y - blackHole.r - 50, text: "VEN ACÁ...", color: "#6A0DAD", life: 50, size: 24 });
+                            playAbilitySfx('shield');
+                        }
+                    }
+                }
+                // Mini agujeros negros: te jalan un poco al pasar cerca
+                lasers.forEach(l => {
+                    if (l.kind !== 'mini_agujero' || player.dead) return;
+                    const dx = l.x - player.x, dy = l.y - player.y, d = Math.hypot(dx, dy);
+                    if (d < 170 && d > 1) { const f = (1 - d / 170) * 1.2; player.x += dx / d * f; player.y += dy / d * f; }
+                });
+                // --- Gemelos blanco y negro ---
+                const alive = V.twins.filter(t => !t.dead);
+                if (!alive.length) return;
+                alive.forEach(t => { t.r += (t.rT - t.r) * 0.05; if (t.flash > 0) t.flash--; });
+                if (V.dash) {
+                    const D = V.dash; D.t++;
+                    const AV = c.embestida_aviso_s * 60;
+                    if (D.t === AV) playAbilitySfx('boom');
+                    alive.forEach(t => {
+                        if (D.t <= AV) { t.x += (Math.random() - 0.5) * 3; t.y += (Math.random() - 0.5) * 3; return; }   // tiemblan antes de embestir
+                        if (!t.dashDir) { const a = Math.atan2(D.ty - t.y, D.tx - t.x); t.dashDir = { x: Math.cos(a), y: Math.sin(a) }; t.dashLeft = Math.hypot(D.tx - t.x, D.ty - t.y) + 500; }
+                        const st = Math.min(c.embestida_velocidad, t.dashLeft); t.x += t.dashDir.x * st; t.y += t.dashDir.y * st; t.dashLeft -= st;
+                        if (Math.random() < 0.8) particles.push({ x: t.x, y: t.y, vx: 0, vy: 0, color: t.color === 'blanco' ? "#B0B0C8" : "#222", life: 20 });
+                        // si te quedaste en el lugar marcado: muerte instantánea
+                        if (!player.dead && Math.hypot(player.x - t.x, player.y - t.y) < t.r + player.r && !(player.invulnTimer > 0) && !(player.rhinoTimer > 0)) {
+                            player.hp = 0; player.dead = true; player.shields = 0;
+                            floatingTexts.push({ x: player.x, y: player.y - 40, text: "¡ANIQUILADO POR EL VACÍO!", color: "#000", life: 90, size: 26 });
+                            playAbilitySfx('boom'); handlePlayerDeath();
+                        }
+                    });
+                    if (D.t > AV && alive.every(t => t.dashLeft <= 0)) { V.dash = null; alive.forEach(t => { t.dashDir = null; }); V.dashT = c.embestida_espera_s * 60; }
+                } else {
+                    // giran uno alrededor del otro y se acercan lento
+                    const cx = alive.reduce((a, t) => a + t.x, 0) / alive.length, cy = alive.reduce((a, t) => a + t.y, 0) / alive.length;
+                    const tx = player.dead ? cx : cx + (player.x - cx) * 0.006, ty = player.dead ? cy : cy + (player.y - cy) * 0.006;
+                    alive.forEach(t => {
+                        t.phase += 0.02;
+                        const R = alive.length > 1 ? 260 : 0;
+                        const gx = tx + Math.cos(t.phase) * R, gy = ty + Math.sin(t.phase) * R;
+                        t.x += (gx - t.x) * 0.05; t.y += (gy - t.y) * 0.05;
+                        t.x = Math.max(t.r, Math.min(worldW - t.r, t.x)); t.y = Math.max(t.r, Math.min(worldH - t.r, t.y));
+                        if (!player.dead && Math.hypot(player.x - t.x, player.y - t.y) < t.r + player.r) takeDamage(player, 3);
+                    });
+                    if (!player.dead && (V.dashT -= 1) <= 0) {
+                        V.dash = { t: 0, tx: player.x, ty: player.y };
+                        floatingTexts.push({ x: player.x, y: player.y - 70, text: "¡MUÉVETE!", color: "#FF0033", life: 70, size: 30 });
+                        playAbilitySfx('shield');
+                    }
+                }
+            }
+
+            function drawVoidBoss() {
+                if (!isVoid() || !voidState) return;
+                const V = voidState, c = voidCfg(), now = Date.now();
+                // ojos del agujero negro
+                if (!blackHole.dead && V.eyesOpen) {
+                    const r = blackHole.r, toP = Math.atan2(player.y - blackHole.y, player.x - blackHole.x);
+                    [-1, 1].forEach(sd => {
+                        const ex = blackHole.x + sd * r * 0.38, ey = blackHole.y - r * 0.15;
+                        ctx.fillStyle = "#FFFFFF"; ctx.beginPath(); ctx.ellipse(ex, ey, r * 0.24, r * 0.14, 0, 0, Math.PI * 2); ctx.fill();
+                        ctx.fillStyle = "#B026FF"; ctx.beginPath(); ctx.arc(ex + Math.cos(toP) * r * 0.08, ey + Math.sin(toP) * r * 0.05, r * 0.09, 0, Math.PI * 2); ctx.fill();
+                        ctx.fillStyle = "#000"; ctx.beginPath(); ctx.arc(ex + Math.cos(toP) * r * 0.08, ey + Math.sin(toP) * r * 0.05, r * 0.045, 0, Math.PI * 2); ctx.fill();
+                    });
+                }
+                // manos de sombra haciendo "ven acá"
+                if (!blackHole.dead && blackHole.hp <= blackHole.maxHp * c.gesto_en) {
+                    const r = blackHole.r, curl = V.gest > 0 ? Math.abs(Math.sin(now / 90)) : 0.1;
+                    [-1, 1].forEach(sd => {
+                        const hx = blackHole.x + sd * r * 1.45, hy = blackHole.y + r * 0.2 + Math.sin(now / 300 + sd) * 6;
+                        ctx.save(); ctx.translate(hx, hy); ctx.scale(sd, 1);
+                        ctx.fillStyle = "#1A0A2A"; ctx.strokeStyle = "#B026FF"; ctx.lineWidth = 3;
+                        ctx.beginPath(); ctx.ellipse(0, 0, r * 0.28, r * 0.24, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+                        for (let f = 0; f < 4; f++) {   // dedos que se doblan llamándote
+                            const fy = (-0.15 + f * 0.1) * r;
+                            ctx.save(); ctx.translate(-r * 0.22, fy); ctx.rotate(curl * 1.6);
+                            ctx.beginPath(); ctx.ellipse(-r * 0.12, 0, r * 0.13, r * 0.045, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); ctx.restore();
+                        }
+                        ctx.restore();
+                    });
+                }
+                // gemelos
+                const AV = c.embestida_aviso_s * 60;
+                if (V.dash && V.dash.t <= AV) {
+                    const D = V.dash, k = D.t / AV;
+                    ctx.save(); ctx.strokeStyle = "#FF0033"; ctx.lineWidth = 4; ctx.globalAlpha = 0.5 + 0.5 * (Math.floor(D.t / 6) % 2);
+                    ctx.beginPath(); ctx.arc(D.tx, D.ty, 90 - 40 * k, 0, Math.PI * 2); ctx.stroke();
+                    ctx.beginPath(); ctx.moveTo(D.tx - 120, D.ty); ctx.lineTo(D.tx + 120, D.ty); ctx.moveTo(D.tx, D.ty - 120); ctx.lineTo(D.tx, D.ty + 120); ctx.stroke();
+                    ctx.setLineDash([16, 12]);
+                    V.twins.forEach(t => { if (t.dead) return; ctx.beginPath(); ctx.moveTo(t.x, t.y); ctx.lineTo(D.tx, D.ty); ctx.stroke(); });
+                    ctx.setLineDash([]);
+                    ctx.fillStyle = "#FF0033"; ctx.font = "bold 22px sans-serif"; ctx.textAlign = "center"; ctx.fillText(Math.ceil((AV - D.t) / 60 * 10) / 10 + "s", D.tx, D.ty - 100);
+                    ctx.restore();
+                }
+                V.twins.forEach(t => {
+                    if (t.dead) return;
+                    const white = t.color === 'blanco';
+                    ctx.save(); ctx.translate(t.x, t.y);
+                    // disco de acreción girando
+                    ctx.save(); ctx.rotate(now / (white ? -500 : 500));
+                    ctx.strokeStyle = white ? "rgba(255, 200, 80, 0.8)" : "rgba(176, 38, 255, 0.8)"; ctx.lineWidth = t.r * 0.18;
+                    ctx.beginPath(); ctx.ellipse(0, 0, t.r * 1.7, t.r * 0.55, 0, 0, Math.PI * 2); ctx.stroke();
+                    ctx.restore();
+                    const g = ctx.createRadialGradient(0, 0, t.r * 0.3, 0, 0, t.r * 1.35);
+                    if (white) { g.addColorStop(0, "#FFFFFF"); g.addColorStop(0.7, "#E8E8F4"); g.addColorStop(1, "rgba(120, 120, 160, 0)"); }
+                    else { g.addColorStop(0, "#000"); g.addColorStop(0.7, "#2A0040"); g.addColorStop(1, "rgba(80, 0, 120, 0)"); }
+                    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, t.r * 1.35, 0, Math.PI * 2); ctx.fill();
+                    ctx.fillStyle = t.flash > 0 ? "#FF0033" : (white ? "#FFFFFF" : "#000000");
+                    ctx.beginPath(); ctx.arc(0, 0, t.r, 0, Math.PI * 2); ctx.fill();
+                    ctx.strokeStyle = white ? "#222" : "#B026FF"; ctx.lineWidth = 4; ctx.stroke();
+                    // ojos
+                    const toP = Math.atan2(player.y - t.y, player.x - t.x);
+                    [-1, 1].forEach(sd => {
+                        ctx.fillStyle = white ? "#111" : "#FFFFFF"; ctx.beginPath(); ctx.ellipse(sd * t.r * 0.35, -t.r * 0.1, t.r * 0.18, t.r * 0.1, 0, 0, Math.PI * 2); ctx.fill();
+                        ctx.fillStyle = "#FF0033"; ctx.beginPath(); ctx.arc(sd * t.r * 0.35 + Math.cos(toP) * t.r * 0.06, -t.r * 0.1 + Math.sin(toP) * t.r * 0.04, t.r * 0.06, 0, Math.PI * 2); ctx.fill();
+                    });
+                    // barra de vida
+                    const bw = 160, top = -t.r * 1.8 - 20;
+                    ctx.fillStyle = "rgba(0,0,0,0.7)"; ctx.fillRect(-bw / 2, top, bw, 12);
+                    ctx.fillStyle = white ? "#C8C8DC" : "#B026FF"; ctx.fillRect(-bw / 2 + 1, top + 1, (bw - 2) * Math.max(0, t.hp / t.maxHp), 10);
+                    ctx.fillStyle = "#222"; ctx.font = "bold 14px sans-serif"; ctx.textAlign = "center";
+                    ctx.fillText(`${white ? 'AGUJERO BLANCO' : 'AGUJERO NEGRO'}: ${Math.ceil(t.hp)}`, 0, top - 6);
+                    ctx.restore();
+                });
+            }
+            function drawMiniHole(l) {
+                ctx.save(); ctx.translate(l.x, l.y); ctx.rotate(Date.now() / 120);
+                ctx.strokeStyle = "rgba(176, 38, 255, 0.35)"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(0, 0, 170, 0, Math.PI * 2); ctx.stroke();   // zona que te jala
+                ctx.strokeStyle = "#B026FF"; ctx.lineWidth = 4; ctx.beginPath(); ctx.ellipse(0, 0, l.r * 1.8, l.r * 0.7, 0, 0, Math.PI * 2); ctx.stroke();
+                ctx.fillStyle = "#000"; ctx.beginPath(); ctx.arc(0, 0, l.r, 0, Math.PI * 2); ctx.fill();
+                ctx.restore();
+            }
+
             // === FONDO: PLANETA TIERRA (se dibuja una vez y se reutiliza) ===
             let earthImg = null;
             function getEarthImage() {
@@ -3041,6 +3261,7 @@ codigo_juego_template = """
                 };
                 meteor.rays = []; meteor.rayTimer = 0; meteor.bombTimer = 0; meteor.veins = makeVeins(); bossBombs = [];
                 sunReset(); sunSplit = null;
+                voidReset(); if (isVoid()) meteor.dead = true;   // en el vacío no hay luna: el jefe es el agujero negro
 
                 player = { 
                     x: Math.random() * worldW, y: Math.random() * worldH, r: 18, color: '#FFFFFF', name: playerName, speed: 3.5, dead: false,
@@ -3169,6 +3390,7 @@ codigo_juego_template = """
             function update() {
                 if (sunQteActive()) { updateSunQTE(); return; }
                 updateSunSplit();
+                updateVoidBoss();
                 if (victoryTimer > 0) { victoryTimer--; if (victoryTimer === 0 && !isGameOver) showVictory(); }
                 if(Math.random() < 0.003 && boxes.length < 5) spawnBox();
                 if(Math.random() < 0.0015 && redBoxes.length < 2) spawnRedBox();
@@ -3243,7 +3465,7 @@ codigo_juego_template = """
                 meteor.angle += 0.003;
 
                 if(!blackHole.dead) { 
-                    blackHole.r += LV.agujero_negro.crecimiento; blackHole.hp = Math.min(blackHole.maxHp, blackHole.hp + 0.02);
+                    blackHole.r = Math.min(LV.agujero_negro.radio_max || 99999, blackHole.r + LV.agujero_negro.crecimiento); blackHole.hp = Math.min(blackHole.maxHp, blackHole.hp + 0.02);
                     let pullRadius = blackHole.r * 5.5; let dPlayer = Math.hypot(blackHole.x - player.x, blackHole.y - player.y);
                     if(!player.dead && !(player.rhinoTimer > 0) && dPlayer < pullRadius && dPlayer > 0) {
                         let pullForce = (1 - dPlayer / pullRadius) * LV.agujero_negro.fuerza_atraccion;
@@ -3335,9 +3557,10 @@ codigo_juego_template = """
                 for(let i = lasers.length - 1; i >= 0; i--) {
                     let l = lasers[i]; l.x += l.vx; l.y += l.vy; l.life--; let hit = false; let dmg = 22 * (l.damageMult || 1);
 
-                    if(!blackHole.dead && Math.hypot(l.x - blackHole.x, l.y - blackHole.y) < blackHole.r) {
+                    if (voidTwinsHitByLaser(l, dmg)) hit = true;
+                    if(!blackHole.dead && l.owner !== blackHole && Math.hypot(l.x - blackHole.x, l.y - blackHole.y) < blackHole.r) {
                         blackHole.hp -= dmg; blackHole.r = Math.max(25, blackHole.r - 0.25);
-                        if(blackHole.hp <= 0 && !blackHole.dead) { 
+                        if(blackHole.hp <= 0 && !blackHole.dead && !voidInterceptBH()) { 
                             blackHole.dead = true; unlockAbyssLaser(); 
                             playSfx("bh_death", 2.5); 
                             meteor.isBoss = true; cinematicTimer = 180;
@@ -3402,7 +3625,7 @@ codigo_juego_template = """
                 if(!blackHole.dead) {
                     allStars.forEach(s => {
                         if(!(s === player && player.nightmare) && Math.hypot(s.x - blackHole.x, s.y - blackHole.y) < s.r + blackHole.r * 0.8) {
-                            if(s.r > blackHole.r * 1.25) { 
+                            if(s.r > blackHole.r * 1.25 && !voidInterceptBH()) { 
                                 blackHole.dead = true; unlockAbyssLaser(); s.r += 35; 
                                 playSfx("bh_death", 2.5);
                                 meteor.isBoss = true; cinematicTimer = 180;
@@ -3658,9 +3881,9 @@ codigo_juego_template = """
             function draw() {
                 ctx.fillStyle = LV.mundo.color_fondo; ctx.fillRect(0, 0, canvas.width, canvas.height);
                 if (difficulty === 'nightmare') { ctx.fillStyle = "rgba(255, 0, 40, 0.07)"; ctx.fillRect(0, 0, canvas.width, canvas.height); }
-                ctx.fillStyle = "rgba(255, 255, 255, 0.4)"; bgStarsLayer1.forEach(s => { let px = (s.x - camX * 0.08) % canvas.width; if (px < 0) px += canvas.width; let py = (s.y - camY * 0.08) % canvas.height; if (py < 0) py += canvas.height; ctx.beginPath(); ctx.arc(px, py, s.r, 0, Math.PI * 2); ctx.fill(); });
+                ctx.fillStyle = LV.mundo.claro ? "rgba(0, 0, 0, 0.18)" : "rgba(255, 255, 255, 0.4)"; bgStarsLayer1.forEach(s => { let px = (s.x - camX * 0.08) % canvas.width; if (px < 0) px += canvas.width; let py = (s.y - camY * 0.08) % canvas.height; if (py < 0) py += canvas.height; ctx.beginPath(); ctx.arc(px, py, s.r, 0, Math.PI * 2); ctx.fill(); });
                 drawPlanetBackground();
-                ctx.fillStyle = "rgba(180, 200, 255, 0.7)"; bgStarsLayer2.forEach(s => { let px = (s.x - camX * 0.2) % canvas.width; if (px < 0) px += canvas.width; let py = (s.y - camY * 0.2) % canvas.height; if (py < 0) py += canvas.height; ctx.beginPath(); ctx.arc(px, py, s.r, 0, Math.PI * 2); ctx.fill(); });
+                ctx.fillStyle = LV.mundo.claro ? "rgba(60, 40, 90, 0.25)" : "rgba(180, 200, 255, 0.7)"; bgStarsLayer2.forEach(s => { let px = (s.x - camX * 0.2) % canvas.width; if (px < 0) px += canvas.width; let py = (s.y - camY * 0.2) % canvas.height; if (py < 0) py += canvas.height; ctx.beginPath(); ctx.arc(px, py, s.r, 0, Math.PI * 2); ctx.fill(); });
 
                 let shakeX = 0, shakeY = 0; 
                 if(!player.dead && player.hp <= 40 && player.hp > 0) { shakeX = (Math.random() - 0.5) * 9; shakeY = (Math.random() - 0.5) * 9; }
@@ -3721,7 +3944,7 @@ codigo_juego_template = """
                     let grad = ctx.createRadialGradient(0, 0, blackHole.r * 0.4, 0, 0, blackHole.r * 1.5); grad.addColorStop(0, "#000"); grad.addColorStop(0.5, "#8A2BE2"); grad.addColorStop(1, "rgba(255, 0, 128, 0)");
                     ctx.beginPath(); ctx.arc(0, 0, blackHole.r * 1.5, 0, Math.PI * 2); ctx.fillStyle = grad; ctx.fill(); ctx.beginPath(); ctx.arc(0, 0, blackHole.r, 0, Math.PI * 2); ctx.fillStyle = "#05000A"; ctx.fill();
                     let bhHpPct = Math.max(0, blackHole.hp / blackHole.maxHp); let barW = 160, barH = 12; ctx.fillStyle = "rgba(0,0,0,0.7)"; ctx.fillRect(-barW/2, -blackHole.r * 1.5 - 28, barW, barH); ctx.fillStyle = "#CC33FF"; ctx.fillRect(-barW/2 + 1, -blackHole.r * 1.5 - 27, (barW - 2) * bhHpPct, barH - 2); ctx.strokeStyle = "#FFFFFF"; ctx.lineWidth = 1; ctx.strokeRect(-barW/2, -blackHole.r * 1.5 - 28, barW, barH);
-                    ctx.fillStyle = "#FFD700"; ctx.font = "bold 14px sans-serif"; ctx.textAlign = "center"; let bhLabel = `AGUJERO NEGRO: ${Math.ceil(blackHole.hp)} / ${blackHole.maxHp} HP`; ctx.fillText(bhLabel, 0, -blackHole.r * 1.5 - 35);
+                    ctx.fillStyle = LV.mundo.claro ? "#4A0A7A" : "#FFD700"; ctx.font = "bold 14px sans-serif"; ctx.textAlign = "center"; let bhLabel = `${isVoid() ? LV.jefe.nombre : 'AGUJERO NEGRO'}: ${Math.ceil(blackHole.hp)} / ${blackHole.maxHp} HP`; ctx.fillText(bhLabel, 0, -blackHole.r * 1.5 - 35);
                     let bhw = ctx.measureText(bhLabel).width; drawIcon(ctx, 'vortex', -bhw / 2 - 13, -blackHole.r * 1.5 - 40, 18); ctx.restore();
                 }
 
@@ -3733,7 +3956,9 @@ codigo_juego_template = """
                 ctx.textBaseline = "middle";
                 particles.forEach(p => { ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, Math.PI * 2); ctx.fillStyle = p.color; ctx.fill(); });
                 
+                drawVoidBoss();
                 lasers.forEach(l => { 
+                    if (l.kind === 'mini_agujero') { drawMiniHole(l); return; }
                     if (l.kind) { drawSunProjectile(l); return; }
                     if(l.isStar) {
                         ctx.save(); ctx.translate(l.x, l.y); ctx.rotate(Date.now() / 150); ctx.beginPath(); ctx.fillStyle = l.color;
@@ -3770,14 +3995,14 @@ codigo_juego_template = """
                     let starFill = s.color; if (s.r > 30) { let hue = (Date.now() / 20 + s.r * 6) % 360; starFill = `hsl(${hue}, 90%, 60%)`; }
                     for (let i = 0; i < 5; i++) { ctx.lineTo(0, -s.r); ctx.translate(0, -s.r); ctx.rotate((Math.PI * 2) / 10); ctx.lineTo(0, s.r / 2); ctx.translate(0, s.r / 2); ctx.rotate((Math.PI * 2) / 10); }
                     ctx.lineTo(0, -s.r); ctx.fillStyle = isFire ? "#FF4500" : starFill; ctx.fill(); ctx.lineWidth = Math.max(2, s.r * 0.08);
-                    if (s.r > 45) { ctx.strokeStyle = `hsl(${(Date.now() / 10) % 360}, 100%, 75%)`; ctx.shadowColor = starFill; ctx.shadowBlur = 12; } else { ctx.strokeStyle = s.r >= LARGE_THRESHOLD ? "#FFD700" : "rgba(0,0,0,0.3)"; }
+                    if (s.r > 45) { ctx.strokeStyle = `hsl(${(Date.now() / 10) % 360}, 100%, 75%)`; ctx.shadowColor = starFill; ctx.shadowBlur = 12; } else { ctx.strokeStyle = s.r >= LARGE_THRESHOLD ? "#FFD700" : (LV.mundo.claro ? "#222" : "rgba(0,0,0,0.3)"); }
                     ctx.stroke(); ctx.closePath(); ctx.restore();
 
                     if(s !== player) {
                         let hpP = Math.max(0, s.hp / s.maxHp); ctx.fillStyle = "rgba(0,0,0,0.5)"; ctx.fillRect(s.x - 15, s.y - s.r - 12, 30, 4);
                         ctx.fillStyle = s.hp > (s.maxHp*0.5) ? "#33FF66" : (s.hp > (s.maxHp*0.2) ? "#FFFF33" : "#FF3333"); ctx.fillRect(s.x - 15, s.y - s.r - 12, 30 * hpP, 4);
                     }
-                    ctx.fillStyle = "white"; ctx.font = "bold 12px sans-serif"; ctx.textAlign = "center"; ctx.fillText(s.name, s.x, s.y + s.r + 15);
+                    ctx.fillStyle = LV.mundo.claro ? "#222" : "white"; ctx.font = "bold 12px sans-serif"; ctx.textAlign = "center"; ctx.fillText(s.name, s.x, s.y + s.r + 15);
                     if (s.r >= LARGE_THRESHOLD) { let nw = ctx.measureText(s.name).width; drawIcon(ctx, 'crown', s.x + nw / 2 + 12, s.y + s.r + 14, 16); }
                 });
 
@@ -3797,6 +4022,7 @@ codigo_juego_template = """
                 });
                 ctx.restore();
 
+                if (LV.mundo.claro) { ctx.fillStyle = "rgba(10, 5, 20, 0.6)"; ctx.fillRect(0, canvas.height - 135, 360, 135); ctx.fillRect(canvas.width / 2 - 200, 0, 400, 48); }
                 ctx.save(); let x = 12, y = canvas.height - 45; ctx.fillStyle = "#FFF"; ctx.font = "bold 14px sans-serif"; ctx.textAlign = "left";
                 ctx.fillText("VIDAS:", x, y - 35); let vw = ctx.measureText("VIDAS: ").width;
                 for(let i = 0; i < 5; i++) { drawIcon(ctx, i < playerLives ? 'heart' : 'heartEmpty', x + vw + 10 + i * 22, y - 40, 18); }
