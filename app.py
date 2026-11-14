@@ -2661,7 +2661,7 @@ codigo_juego_template = """
                     const a = Math.random() * Math.PI - Math.PI / 2, rr = sunSplit.r * Math.random();
                     particles.push({ x: sunSplit.x + side * (off + Math.cos(a) * rr), y: sunSplit.y + Math.sin(a) * rr * 1.2, vx: side * (1 + Math.random() * 3), vy: (Math.random() - 0.5) * 3, color: ["#FFE600", "#FF8C00", "#FF3B30", "#FFFFFF"][i % 4], life: 40 });
                 }
-                if (sunSplit.t > 200) sunSplit = null;
+                if (sunSplit.t > 280) sunSplit = null;
             }
             function drawSunSplit() {
                 if (!sunSplit) return;
@@ -2732,7 +2732,7 @@ codigo_juego_template = """
                 let tipo = difficulty === 'nightmare' ? 'epica' : (LV.musica_victoria || (levelIndex >= LEVELS.length - 1 ? 'epica' : 'espacial'));
                 if (tipo === 'epica') setTimeout(playVictoryMusic, 120);
                 else if (tipo === 'espacial') setTimeout(playSpaceVictoryLoop, 120);
-                victoryTimer = 150;   // 2,5 s para ver la explosión antes del menú
+                victoryTimer = (LV.jefe.tipo === 'sol' && sunSplit) ? 270 : 150;   // con el sol: tiempo para el paneo
             }
             function startLevel(idx, diff) {
                 levelIndex = idx; difficulty = diff;
@@ -3320,6 +3320,11 @@ codigo_juego_template = """
                     zoom += (0.6 - zoom) * 0.05;
                     camX += (meteor.x - canvas.width / 2 - camX) * 0.06; 
                     camY += (meteor.y - canvas.height / 2 - camY) * 0.06;
+                } else if (sunSplit && LV.jefe.tipo === 'sol') {
+                    // paneo de cámara hacia el sol partiéndose por la mitad
+                    const zt = Math.min(0.9, canvas.height / (sunSplit.r * 3.4));
+                    zoom += (zt - zoom) * 0.04;
+                    camX += (sunSplit.x - canvas.width / 2 - camX) * 0.05; camY += (sunSplit.y - canvas.height / 2 - camY) * 0.05;
                 } else {
                     let focusTarget = (!player.dead) ? player : (allStars[0] || {x: worldW/2, y: worldH/2, r: 15});
                     let targetZoom = Math.max(0.25, 25 / Math.max(25, focusTarget.r * 0.6));
@@ -3820,6 +3825,10 @@ codigo_juego_template = """
                 ctx.restore();
                 drawAbilityBar();
                 drawSunQTEOverlay();
+                if (sunSplit && LV.jefe.tipo === 'sol') {
+                    const k = Math.min(1, sunSplit.t / 30), bar = canvas.height * 0.11 * k;
+                    ctx.fillStyle = "#000"; ctx.fillRect(0, 0, canvas.width, bar); ctx.fillRect(0, canvas.height - bar, canvas.width, bar);
+                }
                 ctx.save(); ctx.textAlign = "center"; ctx.font = "bold 14px sans-serif"; ctx.fillStyle = "#FFD700";
                 ctx.fillText(`NIVEL ${levelIndex + 1}/${LEVELS.length}: ${String(LV.nombre).toUpperCase()}`, canvas.width / 2, 22);
                 ctx.fillStyle = DIFFS[difficulty].color; ctx.font = "bold 12px sans-serif";
