@@ -724,10 +724,12 @@ codigo_juego_template = """
                 mundo: { ancho: 3200, alto: 3200, color_fondo: "#06060E", color_borde: "#FF3366" },
                 bots: { cantidad: 28, vida: 200, velocidad: 1.0, espera_disparo_ms: 2500, potencia_disparo: 1.0 },
                 comida: 600, orbes_max: 3, musica_victoria: "",
+                fondo: { planeta: "" },
                 agujero_negro: { vida: 10000, radio: 75, pos_x: 0.7, pos_y: 0.3, crecimiento: 0.012, fuerza_atraccion: 2.8 },
                 jefe: { nombre: "LUNA SANGRIENTA", nombre_fase2: "LUNA CÍCLOPE", vida: 15000, velocidad: 1.2, velocidad_fase2: 0.45,
                         color: "#FF6600", color_fase2: "#FF0033", potencia_balas: 1.5, espera_laser_frames: 1800, potencia_laser: 5,
                         color_crateres: "#990000", color_detalles: "", tamano: 1,
+                        tipo: "luna", texto_despertar: "LA LUNA DESPIERTA", nombre_fase3: "",
                         rayos: false, rayos_cantidad: 1, rayos_espera_frames: 210,
                         bombas: false, bombas_cantidad: 1, bombas_espera_frames: 240 }
             };
@@ -1155,7 +1157,7 @@ codigo_juego_template = """
                     if (bgMusic && sfxData["luna_musica"] && sfxData["luna_musica"].length > 0) {
                         bgMusic.pause(); bgMusic.src = sfxData["luna_musica"][0]; usingBossTrack = true; bgMusic.currentTime = 0; bgMusic.play().catch(e => console.log(e));
                     }
-                    floatingTexts.push({ x: meteor.x, y: meteor.y - 120, text: "LA LUNA DESPIERTA", icon: "warning", iconBoth: true, color: "#FF4500", life: 180, size: 40 });
+                    floatingTexts.push({ x: meteor.x, y: meteor.y - 120, text: LV.jefe.texto_despertar, icon: "warning", iconBoth: true, color: "#FF4500", life: 180, size: 40 });
                 }
             }
 
@@ -1932,6 +1934,332 @@ codigo_juego_template = """
                 });
             }
 
+            // ======================================================
+            // === JEFE "SOL SONRIENTE" (niveles con jefe.tipo = "sol") ===
+            // Fase 1: gestos con las manos y bolas de fuego giratorias
+            // Fase 2 (mitad de vida): lentes abajo, serio, estrellas cósmicas verdes
+            // Fase 3 (poca vida): sombrero de sheriff, dos revólveres, 10 balas y 10 s de recarga
+            // ======================================================
+            const SUN_DEF = { gesto_espera_s: 10, fuego_cantidad: 3, estrellas_espera_s: 7, estrellas_cantidad: 8, sheriff_en: 0.25, balas: 10, recarga_s: 10, "daño_bala": 4 };
+            function sunCfg() { return Object.assign({}, SUN_DEF, LV.jefe.sol || {}); }
+            function sunReset() {
+                meteor.sun = { gestT: 300, gest: 0, gestKind: '', starT: 200, sheriff: false, sheriffAnim: 0, ammo: 0, reload: 0, shotT: 0, hand: 0, flash: [0, 0], glassesOff: 0 };
+            }
+            function sunGunSfx() {
+                if (!isUserInteracted || sfxVolume === 0) return;
+                try {
+                    const ac = getAudioCtx(), t = ac.currentTime, v = Math.min(1, sfxVolume);
+                    const len = Math.ceil(ac.sampleRate * 0.3), buf = ac.createBuffer(1, len, ac.sampleRate), d = buf.getChannelData(0);
+                    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3);
+                    const n = ac.createBufferSource(); n.buffer = buf;
+                    const f = ac.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 2000;
+                    const g = ac.createGain(); g.gain.value = v; n.connect(f); f.connect(g); g.connect(ac.destination); n.start(t);
+                    const o = ac.createOscillator(); o.type = 'sine'; o.frequency.setValueAtTime(140, t); o.frequency.exponentialRampToValueAtTime(35, t + 0.2);
+                    const og = ac.createGain(); og.gain.setValueAtTime(v, t); og.gain.exponentialRampToValueAtTime(0.0001, t + 0.22);
+                    o.connect(og); og.connect(ac.destination); o.start(t); o.stop(t + 0.25);
+                } catch (e) {}
+            }
+            // posición de cada mano (lado -1 izquierda, 1 derecha)
+            function sunHandPos(side) {
+                const s = meteor.sun, r = meteor.r, t = Date.now() / 300;
+                let x = meteor.x + side * r * 1.3, y = meteor.y + r * 0.35 + Math.sin(t + side) * r * 0.06;
+                if (s && s.gest > 0) {   // gesto: las manos se juntan al frente y giran
+                    const k = Math.min(1, (60 - s.gest) / 20), a = (60 - s.gest) * 0.25;
+                    x = meteor.x + side * r * (1.3 - 0.85 * k) + Math.cos(a) * r * 0.15 * k * side;
+                    y = meteor.y + r * (0.35 + 0.25 * k) + Math.sin(a) * r * 0.15 * k;
+                }
+                if (s && s.sheriff && s.sheriffAnim <= 0 && !player.dead) {   // apunta al jugador
+                    const ang = Math.atan2(player.y - meteor.y, player.x - meteor.x);
+                    x = meteor.x + side * r * 1.15 + Math.cos(ang) * r * 0.35; y = meteor.y + r * 0.25 + Math.sin(ang) * r * 0.35;
+                }
+                return { x, y };
+            }
+            function sunShoot(kind, x, y, ang, speed) {
+                const c = sunCfg();
+                const base = { x, y, vx: Math.cos(ang) * speed, vy: Math.sin(ang) * speed, owner: meteor, isStar: false, kind };
+                if (kind === 'fuego') lasers.push(Object.assign(base, { life: 240, r: 22, color: "#FF8C00", damageMult: LV.jefe.potencia_balas * 1.3 }));
+                if (kind === 'estrella_verde') lasers.push(Object.assign(base, { life: 260, r: 16, color: "#39FF7A", damageMult: LV.jefe.potencia_balas, homing: 70 }));
+                if (kind === 'bala_sol') lasers.push(Object.assign(base, { life: 120, r: 8, color: "#FFE38A", damageMult: c['daño_bala'] }));
+            }
+
+            function updateSunBoss() {
+                const c = sunCfg(), s = meteor.sun || (sunReset(), meteor.sun);
+                // Fases
+                if (!meteor.isPhase2 && meteor.hp <= meteor.maxHp * 0.5) {
+                    meteor.isPhase2 = true; s.gest = 0; s.starT = 120;
+                    floatingTexts.push({ x: meteor.x, y: meteor.y - meteor.r - 80, text: `FASE 2: ${LV.jefe.nombre_fase2}`, icon: "warning", iconBoth: true, color: "#39FF7A", life: 180, size: 34 });
+                }
+                if (!s.sheriff && meteor.hp <= meteor.maxHp * c.sheriff_en) {
+                    s.sheriff = true; s.sheriffAnim = 150; s.gest = 0; s.ammo = c.balas; s.reload = 0;
+                    floatingTexts.push({ x: meteor.x, y: meteor.y - meteor.r - 80, text: `¡${LV.jefe.nombre_fase3 || 'SHERIFF SOLAR'}!`, icon: "star", iconBoth: true, color: "#FFD700", life: 200, size: 40 });
+                    playAbilitySfx('metal');
+                }
+                if (s.flash[0] > 0) s.flash[0]--; if (s.flash[1] > 0) s.flash[1]--;
+
+                // Movimiento: persigue lento (quieto durante el cambio de sombrero)
+                const speed = s.sheriffAnim > 0 ? 0 : (meteor.isPhase2 ? LV.jefe.velocidad_fase2 : LV.jefe.velocidad);
+                if (!player.dead && speed > 0) {
+                    const dx = player.x - meteor.x, dy = player.y - meteor.y, d = Math.hypot(dx, dy);
+                    if (d > meteor.r * 2.2) { meteor.x += dx / d * speed; meteor.y += dy / d * speed; }
+                }
+
+                // Estrellas verdes que te persiguen un rato
+                lasers.forEach(l => {
+                    if (l.kind === 'estrella_verde' && l.homing > 0 && l.owner === meteor && !player.dead) {
+                        l.homing--;
+                        const a = Math.atan2(player.y - l.y, player.x - l.x), sp = Math.hypot(l.vx, l.vy);
+                        l.vx += (Math.cos(a) * sp - l.vx) * 0.04; l.vy += (Math.sin(a) * sp - l.vy) * 0.04;
+                    }
+                });
+
+                if (player.dead) return;
+                const toP = Math.atan2(player.y - meteor.y, player.x - meteor.x);
+
+                // FASE 3: sheriff con dos revólveres
+                if (s.sheriff) {
+                    if (s.sheriffAnim > 0) { s.sheriffAnim--; s.glassesOff = Math.min(1, s.glassesOff + 0.02); return; }
+                    if (s.reload > 0) {
+                        s.reload--;
+                        if (s.reload === 0) { s.ammo = c.balas; floatingTexts.push({ x: meteor.x, y: meteor.y - meteor.r - 40, text: "¡RECARGADO!", color: "#FFD700", life: 50, size: 22 }); playAbilitySfx('metal'); }
+                        return;
+                    }
+                    if ((s.shotT -= 1) <= 0 && s.ammo > 0) {
+                        const side = s.hand === 0 ? -1 : 1; s.hand = 1 - s.hand;
+                        const hp = sunHandPos(side), a = Math.atan2(player.y - hp.y, player.x - hp.x);
+                        sunShoot('bala_sol', hp.x, hp.y, a, 14);
+                        s.flash[side < 0 ? 0 : 1] = 6; s.ammo--; s.shotT = 14;
+                        sunGunSfx();
+                        if (s.ammo === 0) { s.reload = c.recarga_s * 60; floatingTexts.push({ x: meteor.x, y: meteor.y - meteor.r - 40, text: "RECARGANDO...", color: "#FFB257", life: 60, size: 20 }); }
+                    }
+                    return;
+                }
+
+                // FASES 1 y 2: gesto con las manos y luego lanza
+                if (s.gest > 0) {
+                    s.gest--;
+                    if (s.gest % 8 === 0) particles.push({ x: meteor.x + (Math.random() - 0.5) * meteor.r, y: meteor.y + meteor.r * 0.6, vx: 0, vy: -1, color: meteor.isPhase2 ? "#39FF7A" : "#FFB300", life: 20 });
+                    if (s.gest === 0) {
+                        const hp = sunHandPos(0);
+                        if (s.gestKind === 'fuego') {
+                            const n = c.fuego_cantidad;
+                            for (let i = 0; i < n; i++) sunShoot('fuego', meteor.x, meteor.y + meteor.r * 0.5, toP + (i - (n - 1) / 2) * 0.28, 6.5);
+                            playAbilitySfx('whoosh');
+                        } else {
+                            const n = c.estrellas_cantidad;
+                            for (let i = 0; i < n; i++) sunShoot('estrella_verde', meteor.x, meteor.y, toP + (i / n) * Math.PI * 2, 4.5);
+                            playAbilitySfx('shield');
+                        }
+                    }
+                    return;
+                }
+                if (!meteor.isPhase2) {
+                    if ((s.gestT -= 1) <= 0) { s.gest = 60; s.gestKind = 'fuego'; s.gestT = c.gesto_espera_s * 60; }
+                } else {
+                    if ((s.starT -= 1) <= 0) { s.gest = 60; s.gestKind = 'estrella'; s.starT = c.estrellas_espera_s * 60; }
+                    if ((s.gestT -= 1) <= 0) { s.gest = 60; s.gestKind = 'fuego'; s.gestT = c.gesto_espera_s * 60; }
+                }
+            }
+
+            function drawGlove(x, y, r, ang, gun, flash) {
+                ctx.save(); ctx.translate(x, y); ctx.rotate(ang);
+                const k = r / 40;
+                ctx.lineWidth = 3 * k; ctx.strokeStyle = "#2A1A0A";
+                ctx.fillStyle = "#FFFFFF";
+                ctx.beginPath(); ctx.ellipse(0, 0, 26 * k, 22 * k, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+                ctx.beginPath(); ctx.ellipse(-24 * k, 0, 10 * k, 14 * k, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();   // puño del guante
+                if (gun) {
+                    ctx.fillStyle = "#6B4423"; ctx.fillRect(4 * k, 6 * k, 12 * k, 22 * k);
+                    ctx.fillStyle = "#5E6773"; ctx.fillRect(4 * k, -6 * k, 20 * k, 14 * k);
+                    ctx.fillStyle = "#A9B3C1"; ctx.fillRect(20 * k, -3 * k, 38 * k, 8 * k);
+                    ctx.strokeRect(20 * k, -3 * k, 38 * k, 8 * k);
+                    if (flash > 0) { ctx.fillStyle = "#FFE38A"; ctx.beginPath(); ctx.arc(64 * k, 1 * k, 14 * k, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = "#FFFFFF"; ctx.beginPath(); ctx.arc(64 * k, 1 * k, 7 * k, 0, Math.PI * 2); ctx.fill(); }
+                } else {
+                    ctx.fillStyle = "#FFFFFF";
+                    for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.ellipse(22 * k, (-12 + i * 12) * k, 10 * k, 6 * k, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); }
+                }
+                ctx.restore();
+            }
+
+            function drawSunBoss() {
+                const r = meteor.r, x = meteor.x, y = meteor.y, s = meteor.sun, now = Date.now();
+                const awake = meteor.isBoss, sheriff = s && s.sheriff, serious = meteor.isPhase2;
+                ctx.save(); ctx.translate(x, y);
+                // halo
+                const halo = ctx.createRadialGradient(0, 0, r * 0.8, 0, 0, r * 1.9);
+                halo.addColorStop(0, "rgba(255, 200, 40, 0.55)"); halo.addColorStop(1, "rgba(255, 140, 0, 0)");
+                ctx.fillStyle = halo; ctx.beginPath(); ctx.arc(0, 0, r * 1.9, 0, Math.PI * 2); ctx.fill();
+                // rayos de la corona
+                ctx.save(); ctx.rotate(now / (awake ? 1500 : 4000));
+                ctx.fillStyle = serious ? "#FF7A00" : "#FFB300";
+                for (let i = 0; i < 14; i++) {
+                    const a = i * Math.PI * 2 / 14, len = r * (i % 2 ? 1.35 : 1.55) + Math.sin(now / 200 + i) * r * 0.04;
+                    ctx.beginPath(); ctx.moveTo(Math.cos(a - 0.13) * r * 0.95, Math.sin(a - 0.13) * r * 0.95); ctx.lineTo(Math.cos(a) * len, Math.sin(a) * len); ctx.lineTo(Math.cos(a + 0.13) * r * 0.95, Math.sin(a + 0.13) * r * 0.95); ctx.fill();
+                }
+                ctx.restore();
+                // cuerpo
+                const body = ctx.createRadialGradient(-r * 0.3, -r * 0.3, r * 0.1, 0, 0, r);
+                body.addColorStop(0, "#FFF8C4"); body.addColorStop(0.55, "#FFD23F"); body.addColorStop(1, serious ? "#FF7A00" : "#FFA000");
+                ctx.fillStyle = body; ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill();
+                ctx.strokeStyle = "#E07B00"; ctx.lineWidth = Math.max(3, r * 0.025); ctx.stroke();
+                // mejillas
+                ctx.fillStyle = "rgba(255, 110, 90, 0.45)";
+                ctx.beginPath(); ctx.ellipse(-r * 0.52, r * 0.2, r * 0.16, r * 0.1, 0, 0, Math.PI * 2); ctx.ellipse(r * 0.52, r * 0.2, r * 0.16, r * 0.1, 0, 0, Math.PI * 2); ctx.fill();
+                // ojos (se ven si los lentes bajan o se los saca)
+                const glassesDrop = sheriff ? 0 : (serious ? r * 0.13 : 0);
+                const gOff = s ? s.glassesOff : 0;
+                const eyeY = -r * 0.18, toP = Math.atan2(player.y - y, player.x - x);
+                if (!awake) {
+                    ctx.strokeStyle = "#5A2A00"; ctx.lineWidth = r * 0.04; ctx.lineCap = "round";
+                    [-1, 1].forEach(sd => { ctx.beginPath(); ctx.arc(sd * r * 0.3, eyeY, r * 0.12, 0.2, Math.PI - 0.2); ctx.stroke(); });
+                    ctx.fillStyle = "#FFFFFF"; ctx.font = `bold ${Math.round(r * 0.3)}px sans-serif`; ctx.textAlign = "center";
+                    ctx.fillText("Z", r * 0.75, -r * 0.8 + Math.sin(now / 400) * 6); ctx.font = `bold ${Math.round(r * 0.2)}px sans-serif`; ctx.fillText("z", r * 1.0, -r * 1.05 + Math.sin(now / 400 + 1) * 6);
+                } else if (serious || sheriff) {
+                    [-1, 1].forEach(sd => {
+                        const ex = sd * r * 0.3;
+                        ctx.fillStyle = "#FFFFFF"; ctx.beginPath(); ctx.ellipse(ex, eyeY, r * 0.13, sheriff ? r * 0.07 : r * 0.1, 0, 0, Math.PI * 2); ctx.fill();
+                        ctx.fillStyle = "#3A1A00"; ctx.beginPath(); ctx.arc(ex + Math.cos(toP) * r * 0.05, eyeY + Math.sin(toP) * r * 0.03, r * 0.05, 0, Math.PI * 2); ctx.fill();
+                        // cejas serias
+                        ctx.strokeStyle = "#5A2A00"; ctx.lineWidth = r * 0.04; ctx.lineCap = "round";
+                        ctx.beginPath(); ctx.moveTo(ex - sd * r * 0.16, eyeY - r * 0.2); ctx.lineTo(ex + sd * r * 0.14, eyeY - r * 0.13); ctx.stroke();
+                    });
+                }
+                // lentes de sol
+                if (awake && gOff < 1) {
+                    ctx.save();
+                    if (gOff > 0) { ctx.translate(gOff * r * 1.6, -gOff * r * 0.9); ctx.rotate(gOff * 2.5); ctx.globalAlpha = 1 - gOff; }
+                    const gy = eyeY + glassesDrop;
+                    ctx.fillStyle = "#111"; ctx.strokeStyle = "#111"; ctx.lineWidth = r * 0.035;
+                    [-1, 1].forEach(sd => { ctx.beginPath(); ctx.ellipse(sd * r * 0.3, gy, r * 0.2, serious ? r * 0.1 : r * 0.14, 0, 0, Math.PI * 2); ctx.fill(); });
+                    ctx.beginPath(); ctx.moveTo(-r * 0.12, gy - r * 0.03); ctx.lineTo(r * 0.12, gy - r * 0.03); ctx.stroke();
+                    ctx.beginPath(); ctx.moveTo(-r * 0.5, gy - r * 0.04); ctx.lineTo(-r * 0.78, gy - r * 0.12); ctx.moveTo(r * 0.5, gy - r * 0.04); ctx.lineTo(r * 0.78, gy - r * 0.12); ctx.stroke();
+                    ctx.fillStyle = "rgba(255, 255, 255, 0.55)";
+                    [-1, 1].forEach(sd => { ctx.beginPath(); ctx.ellipse(sd * r * 0.3 - r * 0.07, gy - r * 0.04, r * 0.05, r * 0.025, -0.5, 0, Math.PI * 2); ctx.fill(); });
+                    ctx.restore();
+                }
+                // boca
+                ctx.strokeStyle = "#5A2A00"; ctx.lineWidth = r * 0.045; ctx.lineCap = "round";
+                if (!awake) { ctx.beginPath(); ctx.arc(0, r * 0.25, r * 0.14, 0.3, Math.PI - 0.3); ctx.stroke(); }
+                else if (sheriff) { ctx.beginPath(); ctx.moveTo(-r * 0.25, r * 0.33); ctx.quadraticCurveTo(r * 0.05, r * 0.4, r * 0.3, r * 0.26); ctx.stroke(); }   // sonrisa ladeada
+                else if (serious) { ctx.beginPath(); ctx.moveTo(-r * 0.25, r * 0.35); ctx.lineTo(r * 0.25, r * 0.35); ctx.stroke(); }
+                else {
+                    ctx.fillStyle = "#7A1F00"; ctx.beginPath(); ctx.moveTo(-r * 0.4, r * 0.18); ctx.quadraticCurveTo(0, r * 0.75, r * 0.4, r * 0.18); ctx.closePath(); ctx.fill();
+                    ctx.fillStyle = "#FFFFFF"; ctx.fillRect(-r * 0.3, r * 0.19, r * 0.6, r * 0.08);
+                    ctx.fillStyle = "#FF6F61"; ctx.beginPath(); ctx.ellipse(0, r * 0.4, r * 0.15, r * 0.07, 0, 0, Math.PI * 2); ctx.fill();
+                }
+                // sombrero de sheriff
+                if (sheriff) {
+                    const drop = s.sheriffAnim > 90 ? (s.sheriffAnim - 90) / 60 : 0;
+                    ctx.save(); ctx.translate(0, -r * 0.82 - drop * r * 2);
+                    ctx.fillStyle = "#7A4A1E"; ctx.strokeStyle = "#3A2210"; ctx.lineWidth = r * 0.025;
+                    ctx.beginPath(); ctx.ellipse(0, r * 0.12, r * 1.05, r * 0.2, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();   // ala
+                    ctx.beginPath(); ctx.moveTo(-r * 0.55, r * 0.1); ctx.quadraticCurveTo(-r * 0.6, -r * 0.45, -r * 0.2, -r * 0.4); ctx.quadraticCurveTo(0, -r * 0.3, r * 0.2, -r * 0.4); ctx.quadraticCurveTo(r * 0.6, -r * 0.45, r * 0.55, r * 0.1); ctx.closePath(); ctx.fill(); ctx.stroke();
+                    ctx.fillStyle = "#3A2210"; ctx.fillRect(-r * 0.55, -r * 0.02, r * 1.1, r * 0.1);
+                    // estrella de sheriff
+                    ctx.fillStyle = "#FFD700"; ctx.beginPath();
+                    for (let i = 0; i < 10; i++) { const rr = i % 2 ? r * 0.06 : r * 0.14, a = -Math.PI / 2 + i * Math.PI / 5; ctx.lineTo(Math.cos(a) * rr, -r * 0.18 + Math.sin(a) * rr); }
+                    ctx.closePath(); ctx.fill();
+                    ctx.restore();
+                }
+                ctx.restore();
+                // manos con guantes
+                if (awake) {
+                    [-1, 1].forEach((sd, i) => {
+                        const hp = sunHandPos(sd);
+                        let ang = sd < 0 ? Math.PI : 0;
+                        if (sheriff && s.sheriffAnim <= 0) ang = Math.atan2(player.y - hp.y, player.x - hp.x);
+                        else if (s && s.gest > 0) ang = (sd < 0 ? 0 : Math.PI) + Math.sin(now / 60) * 0.5;
+                        if (!(sheriff && s.sheriffAnim <= 0) && Math.cos(ang) < 0) { ctx.save(); ctx.translate(hp.x, hp.y); ctx.scale(1, -1); ctx.translate(-hp.x, -hp.y); drawGlove(hp.x, hp.y, r * 0.3, ang, false, 0); ctx.restore(); }
+                        else drawGlove(hp.x, hp.y, r * 0.3, ang, sheriff && s.sheriffAnim < 60, s ? s.flash[i] : 0);
+                    });
+                    if (s && s.gest > 0) {   // energía entre las manos durante el gesto
+                        const k = (60 - s.gest) / 60, col = s.gestKind === 'fuego' ? "rgba(255, 140, 0, " : "rgba(57, 255, 122, ";
+                        ctx.fillStyle = col + (0.25 + 0.4 * k) + ")"; ctx.beginPath(); ctx.arc(x, y + r * 0.6, r * (0.1 + 0.2 * k), 0, Math.PI * 2); ctx.fill();
+                    }
+                    if (sheriff && s.reload > 0) {
+                        ctx.fillStyle = "#FFB257"; ctx.font = "bold 18px sans-serif"; ctx.textAlign = "center";
+                        ctx.fillText(`RECARGANDO ${Math.ceil(s.reload / 60)}s`, x, y + r * 1.5);
+                    }
+                }
+                // barra de vida
+                if (meteor.isBoss) {
+                    ctx.save(); ctx.translate(x, y);
+                    const pct = Math.max(0, meteor.hp / meteor.maxHp), barW = 260, barH = 14, top = -r * 1.6 - 40;
+                    ctx.fillStyle = "rgba(0,0,0,0.7)"; ctx.fillRect(-barW / 2, top, barW, barH);
+                    ctx.fillStyle = sheriff ? "#FFD700" : (serious ? "#39FF7A" : "#FFB300"); ctx.fillRect(-barW / 2 + 1, top + 1, (barW - 2) * pct, barH - 2);
+                    ctx.strokeStyle = "#FFFFFF"; ctx.lineWidth = 2; ctx.strokeRect(-barW / 2, top, barW, barH);
+                    ctx.fillStyle = "#FFD700"; ctx.font = "bold 16px sans-serif"; ctx.textAlign = "center";
+                    const nm = sheriff ? (LV.jefe.nombre_fase3 || 'SHERIFF SOLAR') : (serious ? LV.jefe.nombre_fase2 : LV.jefe.nombre);
+                    ctx.fillText(`${nm}: ${Math.ceil(meteor.hp)} / ${meteor.maxHp} HP`, 0, top - 8);
+                    ctx.restore();
+                }
+            }
+
+            // Dibujo de los proyectiles del sol
+            function drawSunProjectile(l) {
+                const t = Date.now();
+                if (l.kind === 'fuego') {
+                    ctx.save(); ctx.translate(l.x, l.y);
+                    ctx.fillStyle = "rgba(255, 120, 0, 0.35)"; ctx.beginPath(); ctx.arc(0, 0, l.r * 1.5, 0, Math.PI * 2); ctx.fill();
+                    ctx.fillStyle = "#FF8C00"; ctx.beginPath(); ctx.arc(0, 0, l.r, 0, Math.PI * 2); ctx.fill();
+                    ctx.rotate(t / 60); ctx.strokeStyle = "#FFE38A"; ctx.lineWidth = 3;    // espiral giratoria
+                    for (let i = 0; i < 3; i++) { ctx.rotate(Math.PI * 2 / 3); ctx.beginPath(); ctx.arc(l.r * 0.3, 0, l.r * 0.6, -1.2, 1.2); ctx.stroke(); }
+                    ctx.fillStyle = "#FFFFFF"; ctx.beginPath(); ctx.arc(0, 0, l.r * 0.3, 0, Math.PI * 2); ctx.fill();
+                    ctx.restore();
+                } else if (l.kind === 'estrella_verde') {
+                    ctx.save(); ctx.translate(l.x, l.y); ctx.rotate(t / 120);
+                    ctx.fillStyle = "rgba(57, 255, 122, 0.3)"; ctx.beginPath(); ctx.arc(0, 0, l.r * 1.6, 0, Math.PI * 2); ctx.fill();
+                    ctx.fillStyle = l.color; ctx.beginPath();
+                    for (let i = 0; i < 10; i++) { const rr = i % 2 ? l.r * 0.45 : l.r, a = i * Math.PI / 5; ctx.lineTo(Math.cos(a) * rr, Math.sin(a) * rr); }
+                    ctx.closePath(); ctx.fill();
+                    ctx.fillStyle = "#EAFFF0"; ctx.beginPath(); ctx.arc(0, 0, l.r * 0.25, 0, Math.PI * 2); ctx.fill();
+                    ctx.restore();
+                } else {
+                    const a = Math.atan2(l.vy, l.vx);
+                    ctx.save(); ctx.translate(l.x, l.y); ctx.rotate(a);
+                    ctx.fillStyle = "rgba(255, 227, 138, 0.4)"; ctx.fillRect(-34, -4, 34, 8);
+                    ctx.fillStyle = "#C9A227"; ctx.fillRect(-6, -5, 14, 10); ctx.fillStyle = "#FFE38A"; ctx.beginPath(); ctx.arc(8, 0, 5, -Math.PI / 2, Math.PI / 2); ctx.fill();
+                    ctx.restore();
+                }
+            }
+
+            // === FONDO: PLANETA TIERRA (se dibuja una vez y se reutiliza) ===
+            let earthImg = null;
+            function getEarthImage() {
+                if (earthImg) return earthImg;
+                const S = 512, cv = document.createElement('canvas'); cv.width = S; cv.height = S;
+                const c = cv.getContext('2d'); if (!c) return null;
+                const R = S * 0.42, cx = S / 2, cy = S / 2;
+                const atm = c.createRadialGradient(cx, cy, R * 0.95, cx, cy, R * 1.18);
+                atm.addColorStop(0, "rgba(120, 190, 255, 0.55)"); atm.addColorStop(1, "rgba(120, 190, 255, 0)");
+                c.fillStyle = atm; c.beginPath(); c.arc(cx, cy, R * 1.18, 0, Math.PI * 2); c.fill();
+                c.save(); c.beginPath(); c.arc(cx, cy, R, 0, Math.PI * 2); c.clip();
+                const sea = c.createRadialGradient(cx - R * 0.4, cy - R * 0.4, R * 0.1, cx, cy, R);
+                sea.addColorStop(0, "#4FA3FF"); sea.addColorStop(1, "#0B3D91"); c.fillStyle = sea; c.fillRect(0, 0, S, S);
+                // continentes
+                const land = [[-0.35, -0.25, 0.32, 0.22, 0.4], [-0.15, 0.25, 0.2, 0.35, -0.3], [0.3, -0.2, 0.28, 0.18, 0.2], [0.35, 0.2, 0.18, 0.25, 0.6], [0.0, -0.6, 0.4, 0.1, 0]];
+                land.forEach(([x, y, w, h, rot], i) => {
+                    c.fillStyle = i === 4 ? "#F2F6FF" : (i % 2 ? "#3E8E41" : "#5BA84A");
+                    c.beginPath(); c.ellipse(cx + x * R, cy + y * R, w * R, h * R, rot, 0, Math.PI * 2); c.fill();
+                    if (i !== 4) { c.fillStyle = "#B8975A"; c.beginPath(); c.ellipse(cx + x * R + w * R * 0.2, cy + y * R, w * R * 0.35, h * R * 0.3, rot, 0, Math.PI * 2); c.fill(); }
+                });
+                // nubes
+                c.fillStyle = "rgba(255, 255, 255, 0.55)";
+                for (let i = 0; i < 14; i++) { const a = i * 2.4, d = (i % 5) / 5 * R * 0.85; c.beginPath(); c.ellipse(cx + Math.cos(a) * d, cy + Math.sin(a) * d, R * 0.18, R * 0.04, a, 0, Math.PI * 2); c.fill(); }
+                // lado de noche
+                const night = c.createLinearGradient(cx - R, cy - R, cx + R, cy + R);
+                night.addColorStop(0.45, "rgba(0, 0, 20, 0)"); night.addColorStop(1, "rgba(0, 0, 20, 0.75)");
+                c.fillStyle = night; c.fillRect(0, 0, S, S);
+                c.restore();
+                earthImg = cv; return earthImg;
+            }
+            function drawPlanetBackground() {
+                if (!LV.fondo || LV.fondo.planeta !== 'tierra') return;
+                const img = getEarthImage(); if (!img) return;
+                const size = Math.min(canvas.width, canvas.height) * 0.95;
+                const px = canvas.width * 0.84 - camX * 0.02, py = canvas.height * 0.8 - camY * 0.02;
+                ctx.drawImage(img, px - size / 2, py - size / 2, size, size);
+            }
+
             // === PANTALLA DE VICTORIA ===
             const victoryModal = document.getElementById('victory-modal');
             const vicBtns = document.getElementById('vic-btns');
@@ -2252,6 +2580,7 @@ codigo_juego_template = """
                     craters: [ {x: -35, y: -25, r: 20}, {x: 35, y: -35, r: 16}, {x: 10, y: 30, r: 25}, {x: -40, y: 25, r: 14}, {x: 0, y: 0, r: 18} ] 
                 };
                 meteor.rays = []; meteor.rayTimer = 0; meteor.bombTimer = 0; meteor.veins = makeVeins(); bossBombs = [];
+                sunReset();
 
                 player = { 
                     x: Math.random() * worldW, y: Math.random() * worldH, r: 18, color: '#FFFFFF', name: playerName, speed: 3.5, dead: false,
@@ -2402,6 +2731,7 @@ codigo_juego_template = """
                     meteor.x = (worldW / 2) + Math.cos(meteor.orbitAngle) * meteor.orbitRadius; 
                     meteor.y = (worldH / 2) + Math.sin(meteor.orbitAngle) * meteor.orbitRadius;
                 } else if (!meteor.dead && cinematicTimer <= 0) {
+                    if (LV.jefe.tipo === 'sol') { updateSunBoss(); } else {
                     if (meteor.hp <= meteor.maxHp * 0.5 && !meteor.isPhase2) {
                         meteor.isPhase2 = true;
                         floatingTexts.push({ x: meteor.x, y: meteor.y - 140, text: `FASE 2: ${LV.jefe.nombre_fase2} ACTIVADA`, icon: "eye", iconBoth: true, color: "#FF0000", life: 180, size: 36 });
@@ -2446,6 +2776,7 @@ codigo_juego_template = """
                             }
                         }
                     }
+                    } // fin jefe luna
                 }
                 meteor.angle += 0.003;
 
@@ -2546,7 +2877,7 @@ codigo_juego_template = """
                             if (bgMusic && sfxData["luna_musica"] && sfxData["luna_musica"].length > 0) {
                                 bgMusic.pause(); bgMusic.src = sfxData["luna_musica"][0]; usingBossTrack = true; bgMusic.currentTime = 0; bgMusic.play().catch(e => console.log(e));
                             }
-                            floatingTexts.push({ x: meteor.x, y: meteor.y - 120, text: "LA LUNA DESPIERTA", icon: "warning", iconBoth: true, color: "#FF4500", life: 180, size: 40 });
+                            floatingTexts.push({ x: meteor.x, y: meteor.y - 120, text: LV.jefe.texto_despertar, icon: "warning", iconBoth: true, color: "#FF4500", life: 180, size: 40 });
                         } 
                         hit = true;
                     }
@@ -2861,6 +3192,7 @@ codigo_juego_template = """
                 ctx.fillStyle = LV.mundo.color_fondo; ctx.fillRect(0, 0, canvas.width, canvas.height);
                 if (difficulty === 'nightmare') { ctx.fillStyle = "rgba(255, 0, 40, 0.07)"; ctx.fillRect(0, 0, canvas.width, canvas.height); }
                 ctx.fillStyle = "rgba(255, 255, 255, 0.4)"; bgStarsLayer1.forEach(s => { let px = (s.x - camX * 0.08) % canvas.width; if (px < 0) px += canvas.width; let py = (s.y - camY * 0.08) % canvas.height; if (py < 0) py += canvas.height; ctx.beginPath(); ctx.arc(px, py, s.r, 0, Math.PI * 2); ctx.fill(); });
+                drawPlanetBackground();
                 ctx.fillStyle = "rgba(180, 200, 255, 0.7)"; bgStarsLayer2.forEach(s => { let px = (s.x - camX * 0.2) % canvas.width; if (px < 0) px += canvas.width; let py = (s.y - camY * 0.2) % canvas.height; if (py < 0) py += canvas.height; ctx.beginPath(); ctx.arc(px, py, s.r, 0, Math.PI * 2); ctx.fill(); });
 
                 let shakeX = 0, shakeY = 0; 
@@ -2883,7 +3215,8 @@ codigo_juego_template = """
                     }
                 }
 
-                if(!meteor.dead) {
+                if(!meteor.dead && LV.jefe.tipo === 'sol') { drawSunBoss(); }
+                else if(!meteor.dead) {
                     ctx.save(); ctx.translate(meteor.x, meteor.y); ctx.rotate(meteor.angle); ctx.beginPath(); ctx.arc(0, 0, meteor.r, 0, Math.PI * 2); 
                     ctx.fillStyle = meteor.isBoss ? (meteor.isPhase2 ? LV.jefe.color_fase2 : LV.jefe.color) : "#A9A9A9"; 
                     if(meteor.isBoss) { ctx.shadowColor = meteor.isPhase2 ? LV.jefe.color_fase2 : LV.jefe.color; ctx.shadowBlur = 40; }
@@ -2933,6 +3266,7 @@ codigo_juego_template = """
                 particles.forEach(p => { ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, Math.PI * 2); ctx.fillStyle = p.color; ctx.fill(); });
                 
                 lasers.forEach(l => { 
+                    if (l.kind) { drawSunProjectile(l); return; }
                     if(l.isStar) {
                         ctx.save(); ctx.translate(l.x, l.y); ctx.rotate(Date.now() / 150); ctx.beginPath(); ctx.fillStyle = l.color;
                         for (let i = 0; i < 5; i++) { ctx.lineTo(0, -l.r); ctx.translate(0, -l.r); ctx.rotate((Math.PI * 2) / 10); ctx.lineTo(0, l.r / 2); ctx.translate(0, l.r / 2); ctx.rotate((Math.PI * 2) / 10); }
