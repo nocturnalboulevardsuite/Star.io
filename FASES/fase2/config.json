@@ -18,6 +18,20 @@
     "rollos_espera_min": 100,
     "rollos_espera_max": 160
   },
+  "tutankamon": {
+    "nombre": "TUTANKAMÓN",
+    "vida": 1000,
+    "fase2_en": 0.5,
+    "laser_espera_min": 140,
+    "laser_espera_max": 220,
+    "laser_aviso": 40,
+    "laser_duracion": 35,
+    "manos_espera_min": 120,
+    "manos_espera_max": 190,
+    "manos_aviso": 60,
+    "daño_manos": 3,
+    "daño_ola": 2
+  },
   "momias": {
     "vida": 20,
     "daño_golpe": 2,
@@ -33,7 +47,11 @@
     "salto_min": 7,
     "salto_max": 19,
     "carga_frames": 40,
-    "golpes": [8, 10, 18]
+    "golpes": [
+      8,
+      10,
+      18
+    ]
   },
   "espada": {
     "duracion_s": 15,
