@@ -1,6 +1,6 @@
 {
   "nombre": "Sol Sonriente",
-  "descripcion": "En el espacio, cerca de la Tierra. El Sol Sonriente lanza bolas de fuego, luego estrellas cósmicas verdes y al final saca sus revólveres de sheriff.",
+  "descripcion": "En el espacio, cerca de la Tierra. El Sol Sonriente lanza bolas de fuego, estrellas verdes, se vuelve sheriff con dos revólveres y, al final, se enfurece y explota como supernova.",
   "mundo": {
     "ancho": 3600,
     "alto": 3600,
@@ -46,8 +46,19 @@
       "sheriff_en": 0.25,
       "balas": 10,
       "recarga_s": 10,
-      "daño_bala": 4
-    }
+      "daño_bala": 4,
+      "furioso_vida": 0.6,
+      "planetas_espera_s": 2.5,
+      "planetas_cantidad": 3,
+      "daño_planeta": 3,
+      "laser_dedos_espera_s": 5,
+      "laser_dedos_duracion_s": 2,
+      "daño_laser_dedos": 3,
+      "qte_flechas": 6,
+      "qte_rondas": 2,
+      "qte_tiempo_s": 7
+    },
+    "nombre_furioso": "SOL FURIOSO"
   },
   "fondo": {
     "planeta": "tierra"
