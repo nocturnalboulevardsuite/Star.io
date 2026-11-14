@@ -1,0 +1,18 @@
+{
+  "nombre": "La Pirámide",
+  "duracion_s": 90,
+  "momia_aparece_s": 30,
+  "vidas": 3,
+  "velocidad_inicial": 11,
+  "velocidad_max": 22,
+  "aceleracion": 0.09,
+  "separacion_s": 1.05,
+  "momia": {
+    "agarre_espera_min_s": 5,
+    "agarre_espera_max_s": 8,
+    "agarre_aviso_s": 1.1,
+    "acercamiento_golpe": 35,
+    "acercamiento_agarre": 45,
+    "recuperacion_por_s": 4
+  }
+}
