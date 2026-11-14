@@ -1,6 +1,6 @@
 {
   "nombre": "Vacío Final",
-  "descripcion": "Todo en blanco. El agujero negro es el jefe: empieza chico y crece rápido, abre los ojos, lanza mini agujeros negros y te llama con las manos. Al morir se divide en un agujero blanco y uno negro.",
+  "descripcion": "Todo en blanco. El agujero negro es el jefe: empieza chico y crece rápido, abre los ojos, lanza mini agujeros negros y te llama con las manos. Al morir se divide en un agujero blanco y uno negro. Después aparece el Dios Omnipotente: el jefe final del juego.",
   "mundo": {
     "ancho": 4000,
     "alto": 4000,
@@ -51,6 +51,15 @@
       "embestida_espera_s": 10,
       "embestida_aviso_s": 1.5,
       "embestida_velocidad": 38
+    },
+    "dios": {
+      "vida": 8000,
+      "daño_puño": 0.5,
+      "rafaga_espera_s": 5,
+      "tp_espera_s": 6,
+      "tp_aviso_s": 1.2,
+      "palabras_espera_s": 1.5,
+      "daño_palabra": 1.5
     }
   }
 }
