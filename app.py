@@ -3039,6 +3039,7 @@ codigo_juego_template = """
                         if (O.t === FIN.twist - 20) startMusicLoop(horrorSegment, 2.2);   // "tú eras el villano": suspenso
                         if (O.t === 2240) playAbilitySfx('boom');
                         if (O.t === LAUGH_START) evilLaughSfx();
+                        if (O.t === FIN.glitch) startMusicLoop(glitchLaughSegment, 2.2);   // la risa se traba en loop
                         if (O.t >= FIN.end) { O.done = true; V.ending = true; onBossDefeated(); victoryTimer = 1; }
                     }
                 }
@@ -3386,7 +3387,7 @@ codigo_juego_template = """
                 ['sheriff', 'SHERIFF SOLAR'], ['rollos', 'VENDAS DE LA MOMIA'], ['laser', 'OJOS DEL FARAÓN'], ['minis', 'MINI AGUJEROS'],
                 ['embestida', 'EMBESTIDA DEL VACÍO'], ['ora', 'ORA ORA'], ['palabras', '死ね']
             ];
-            const FIN = { lineupStart: 330, godJoin: 520, fin: 720, creditsStart: 900, creditsEnd: 1500, twist: 1520, end: 2360 };
+            const FIN = { lineupStart: 330, godJoin: 520, fin: 720, creditsStart: 900, creditsEnd: 1500, twist: 1520, glitch: 2330, end: 2780 };
             const CREDITS = [
                 ["STARZ.IO", ""], ["MÚSICA", "Rissos Anghell"], ["CREATIVIDAD", "Benjamín Espinoza"], ["HISTORIA", "Riso"],
                 ["DIÁLOGO", "Rissos Anghell"], ["JEFES", "Luna · Sol · Faraón · Momia · Tutankamón · El Vacío · Dios"], ["GRACIAS POR JUGAR", "♥"]
@@ -3405,6 +3406,7 @@ codigo_juego_template = """
                     if (V.outro.t < 40) startMusicLoop(sadSegment, 3);
                     if (V.outro.t < FIN.creditsStart) V.outro.t = FIN.creditsStart;
                     else if (V.outro.t < FIN.twist - 20) V.outro.t = FIN.twist - 21;
+                    else if (V.outro.t < FIN.glitch - 1) V.outro.t = FIN.glitch - 1;
                     else V.outro.t = FIN.end - 1;
                     V.outro.t0 = undefined;
                 }
@@ -3594,8 +3596,11 @@ codigo_juego_template = """
                     });
                 } catch (e) {}
             }
-            function drawEvilFace(t) {
-                if (t < LAUGH_START - 40 || t > 2235) return;
+            function drawEvilFace(t, force) {
+                if (!force && (t < LAUGH_START - 40 || t > 2235)) return;
+                drawEvilFaceInner(t, force);
+            }
+            function drawEvilFaceInner(t, force) {
                 const W = canvas.width, H = canvas.height, now = Date.now();
                 const k = Math.min(1, (t - (LAUGH_START - 40)) / 40), fadeOut = t > 2205 ? (2235 - t) / 30 : 1;
                 const laughing = t >= LAUGH_START && t < LAUGH_START + 160;
@@ -3638,6 +3643,71 @@ codigo_juego_template = """
                 ctx.restore();
             }
 
+            // ---------- Final con bug: la risa se traba en loop y todo se llena de letras rojas ----------
+            const GLITCH_CHARS = ["ハハハ", "ハ", "死", "悪", "化物", "悪魔", "笑", "殺", "闇", "呪", "終", "アハハ", "お前だ", "悪党", "怪物"];
+            // una sílaba "JA" de la risa
+            function laughSyllable(ac, dest, t, hz, dur, vol) {
+                const f1 = ac.createBiquadFilter(); f1.type = 'bandpass'; f1.frequency.value = 650; f1.Q.value = 6;
+                const f2 = ac.createBiquadFilter(); f2.type = 'bandpass'; f2.frequency.value = 1100; f2.Q.value = 8;
+                const g = ac.createGain();
+                g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + Math.min(0.03, dur * 0.3)); g.gain.exponentialRampToValueAtTime(0.0001, t + dur * 0.95);
+                f1.connect(g); f2.connect(g); g.connect(dest);
+                [0, 9].forEach(det => {
+                    const o = ac.createOscillator(); o.type = 'sawtooth'; o.detune.value = det;
+                    o.frequency.setValueAtTime(hz * 1.08, t); o.frequency.exponentialRampToValueAtTime(hz * 0.9, t + dur);
+                    o.connect(f1); o.connect(f2); o.start(t); o.stop(t + dur);
+                });
+                mNoise(ac, f2, t, Math.min(0.05, dur * 0.5), 0.2, 800);
+            }
+            // segmento en loop: la risa "bugeada" (se repite, salta de tono, se corta) + dron grave
+            function glitchLaughSegment(ac, out, t0) {
+                const len = 2.4;
+                const crush = ac.createWaveShaper(); crush.curve = makeDistortion(900); crush.connect(out);
+                const dr = ac.createOscillator(); dr.type = 'sawtooth'; dr.frequency.value = midiHz(31);
+                const df = ac.createBiquadFilter(); df.type = 'lowpass'; df.frequency.value = 160;
+                const dg = ac.createGain(); dg.gain.setValueAtTime(0.18, t0); dg.gain.setValueAtTime(0.18, t0 + len);
+                dr.connect(df); df.connect(dg); dg.connect(out); dr.start(t0); dr.stop(t0 + len + 0.05);
+                let t = t0;
+                while (t < t0 + len - 0.1) {
+                    const r = Math.random();
+                    if (r < 0.15) { t += 0.05 + Math.random() * 0.12; continue; }                  // corte (silencio)
+                    const hz = 95 * (0.55 + Math.random() * 1.2);
+                    if (r < 0.55) {                                                                 // tartamudeo: la misma sílaba repetida rapidísimo
+                        const reps = 3 + Math.floor(Math.random() * 4), d = 0.04 + Math.random() * 0.05;
+                        for (let i = 0; i < reps && t < t0 + len; i++) { laughSyllable(ac, crush, t, hz, d, 0.45); t += d; }
+                    } else { const d = 0.15 + Math.random() * 0.15; laughSyllable(ac, crush, t, hz, d, 0.5); t += d; }
+                }
+                return len;
+            }
+            function drawGlitchEnding(t) {
+                if (t < FIN.glitch) return;
+                const W = canvas.width, H = canvas.height, O = voidState.outro, p = Math.min(1, (t - FIN.glitch) / (FIN.end - FIN.glitch));
+                O.glyphs = O.glyphs || [];
+                // aparecen cada vez más letras hasta saturar la pantalla
+                const want = Math.floor(Math.pow(p, 1.6) * 700);
+                while (O.glyphs.length < want) O.glyphs.push({ x: Math.random() * W, y: Math.random() * H, s: 18 + Math.random() * 110 * (0.3 + p), c: GLITCH_CHARS[Math.floor(Math.random() * GLITCH_CHARS.length)], r: (Math.random() - 0.5) * 0.5, a: 0.4 + Math.random() * 0.6 });
+                ctx.save();
+                ctx.fillStyle = `rgba(80, 0, 0, ${p * 0.6})`; ctx.fillRect(0, 0, W, H);
+                // la cara vuelve, rota en pedazos
+                if (Math.random() < 0.85) drawEvilFace(Math.max(LAUGH_START, LAUGH_START + ((t * 7) % 150)), true);
+                ctx.textAlign = "center"; ctx.textBaseline = "middle";
+                O.glyphs.forEach(g => {
+                    ctx.save(); ctx.translate(g.x + (Math.random() - 0.5) * 4 * p, g.y + (Math.random() - 0.5) * 4 * p); ctx.rotate(g.r);
+                    ctx.globalAlpha = g.a * (Math.random() < 0.05 ? 0.2 : 1);
+                    ctx.font = `bold ${Math.round(g.s)}px 'Hiragino Sans', 'Yu Gothic', 'Noto Sans JP', sans-serif`;
+                    ctx.fillStyle = Math.random() < 0.08 ? "#FFFFFF" : "#FF0022"; ctx.fillText(g.c, 0, 0);
+                    ctx.restore();
+                });
+                ctx.restore();
+                // franjas desplazadas (efecto de pantalla con bug)
+                const n = 2 + Math.floor(p * 10);
+                for (let i = 0; i < n; i++) {
+                    const y = Math.random() * H, h = 4 + Math.random() * 40, dx = (Math.random() - 0.5) * 80 * (0.3 + p);
+                    try { ctx.drawImage(canvas, 0, y, W, h, dx, y, W, h); } catch (e) {}
+                }
+                if (Math.random() < 0.06 + p * 0.1) { ctx.fillStyle = Math.random() < 0.5 ? "rgba(255,0,0,0.35)" : "rgba(0,0,0,0.6)"; ctx.fillRect(0, 0, W, H); }
+            }
+
             function drawTwist(t) {
                 const W = canvas.width, H = canvas.height;
                 ctx.fillStyle = "#000"; ctx.fillRect(0, 0, W, H);
@@ -3656,6 +3726,7 @@ codigo_juego_template = """
                     ctx.fillText("CONTINUARÁ...", W / 2, H / 2 + 10); ctx.fillStyle = "#FFFFFF"; ctx.font = "bold 28px 'Hiragino Sans', 'Yu Gothic', sans-serif"; ctx.fillText("つづく", W / 2, H / 2 + 56);
                     ctx.restore();
                 }
+                drawGlitchEnding(t);
             }
 
             // === FONDO: PLANETA TIERRA (se dibuja una vez y se reutiliza) ===
