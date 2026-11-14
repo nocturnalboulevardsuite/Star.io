@@ -28,6 +28,7 @@
         momias: { vida: 20, "daño_golpe": 2, "daño_espada": 4, velocidad: 1.2, espera_min: 480, espera_max: 720, max: 2, prob_ankh: 0.25 },
         jugador: { vida: 6, salto_min: 7, salto_max: 19, carga_frames: 40, golpes: [8, 10, 18] },
         espada: { duracion_s: 15, cooldown_s: 60, multiplicador: 2.5 },
+        revolver: { balas: 5, recarga_s: 10, "daño": 25, "daño_momias": 10 },
         guardia: { max: 100, costo_golpe: 34, costo_laser: 1.5, recarga: 0.6 },
         arena: { segundos_para_subir: 8, velocidad_subida: 0.5, altura_max: 1380, segundos_para_hundirse: 3 }
     };
@@ -193,7 +194,8 @@
                 hitCombo: 0, hitComboTimer: 0,
                 sword: 0, swordCd: 0, kbx: 0,
                 guarding: false, guard: C.guardia.max, guardDelay: 0, guardBroken: 0, blockFlash: 0,
-                sink: 0
+                sink: 0,
+                gun: false, ammo: 0, reload: 0, aimUp: 0, flash: 0, jumpLock: false
             },
             boss: {
                 stage: 'faraon', t: 0,
@@ -203,7 +205,7 @@
                 flyOff: 0, rise: 0, armAnim: 0
             },
             sandY: FLOOR + 30, lowTime: 0, sandWarned: false,
-            mummies: [], mummyT: 240, objects: [], rolls: [], pickups: [], particles: [], texts: [], hands: [], waves: [],
+            mummies: [], mummyT: 240, objects: [], rolls: [], pickups: [], particles: [], texts: [], hands: [], waves: [], bullets: [],
             dust: Array.from({ length: 40 }, () => ({ x: rand(0, W), y: rand(0, H), s: rand(0.4, 1.4) })),
             rissos
         };
@@ -238,6 +240,7 @@
         window.addEventListener('mouseup', e => { if (e.button === 2 && S) S.player.guarding = false; });
     }
     const jumpHeld = () => keys.has('Space') || keys.has('KeyW') || keys.has('ArrowUp');
+    const upHeld = () => keys.has('KeyW') || keys.has('ArrowUp');
     const left = () => keys.has('KeyA') || keys.has('ArrowLeft');
     const right = () => keys.has('KeyD') || keys.has('ArrowRight');
     function mouseWorld() { return { x: (mouse.x - S.offX) / S.scale, y: mouse.y / S.scale + S.camY }; }
@@ -269,6 +272,7 @@
     // ---------- Acciones del jugador ----------
     function releaseJump() {
         const p = S.player;
+        if (p.jumpLock) { if (!jumpHeld()) p.jumpLock = false; p.charging = false; p.charge = 0; return; }
         if (!p.charging) return;
         const J = C.jugador;
         const c = Math.min(1, p.charge / J.carga_frames);
@@ -284,6 +288,7 @@
     function attack() {
         const p = S.player;
         if (isGuarding()) return;
+        if (p.gun && upHeld()) { shootUp(); return; }
         if (p.atk > 0) { p.queued = true; return; }
         const m = mouseWorld();
         p.atkDir = Math.atan2(m.y - p.y, m.x - p.x);
@@ -291,6 +296,78 @@
         p.combo = p.comboWindow > 0 ? (p.combo % 3) + 1 : 1;
         p.atk = 14; p.hitThisSwing = new Set();
         api.playAbilitySfx(p.sword > 0 ? 'whoosh' : 'ping');
+    }
+
+    // ---------- Revólver (se desbloquea cuando aparece Tutankamón) ----------
+    function unlockGun() {
+        const p = S.player;
+        if (p.gun) return;
+        p.gun = true; p.ammo = C.revolver.balas; p.reload = 0;
+        text(p.x, p.y - 100, '¡REVÓLVER DESBLOQUEADO!', '#FFD700', 26);
+        text(p.x, p.y - 72, 'W + CLICK IZQ = DISPARAR ARRIBA', '#FFF2D0', 16);
+        api.playAbilitySfx('metal');
+    }
+    function gunSfx() {
+        if (!api.interacted() || api.sfxVol() === 0) return;
+        try {
+            const ac = api.getAudioCtx(), t = ac.currentTime, v = Math.min(1, api.sfxVol());
+            const len = Math.ceil(ac.sampleRate * 0.25), buf = ac.createBuffer(1, len, ac.sampleRate), d = buf.getChannelData(0);
+            for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3);
+            const n = ac.createBufferSource(); n.buffer = buf;
+            const f = ac.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 2400;
+            const g = ac.createGain(); g.gain.value = v * 0.9; n.connect(f); f.connect(g); g.connect(ac.destination); n.start(t);
+            const o = ac.createOscillator(); o.type = 'sine'; o.frequency.setValueAtTime(160, t); o.frequency.exponentialRampToValueAtTime(40, t + 0.15);
+            const og = ac.createGain(); og.gain.setValueAtTime(v * 0.8, t); og.gain.exponentialRampToValueAtTime(0.0001, t + 0.18);
+            o.connect(og); og.connect(ac.destination); o.start(t); o.stop(t + 0.2);
+        } catch (e) {}
+    }
+    function shootUp() {
+        const p = S.player;
+        p.jumpLock = true; p.charging = false; p.charge = 0;
+        p.aimUp = 20;
+        if (p.reload > 0) { text(p.x, p.y - 70, `RECARGANDO ${Math.ceil(p.reload / 60)}s`, '#999', 14); return; }
+        if (p.ammo <= 0) return;
+        p.ammo--; p.flash = 5;
+        const gx = p.x + p.facing * 14, gy = p.y - 70;
+        S.bullets.push({ x: gx, y: gy, vy: -24, life: 70, hit: new Set() });
+        gunSfx();
+        p.vy = Math.max(p.vy, p.onGround ? 0 : 1.5);   // pequeño retroceso en el aire
+        for (let i = 0; i < 5; i++) puff(gx, gy, i % 2 ? '#FFE38A' : '#FFFFFF');
+        if (p.ammo === 0) { p.reload = C.revolver.recarga_s * 60; text(p.x, p.y - 70, 'SIN BALAS: RECARGANDO', '#FFB257', 15); }
+    }
+    function updateGun() {
+        const p = S.player;
+        if (p.aimUp > 0 && !upHeld()) p.aimUp--;
+        if (upHeld() && p.gun) p.aimUp = Math.max(p.aimUp, 2);
+        if (!jumpHeld()) p.jumpLock = false;
+        if (p.flash > 0) p.flash--;
+        if (p.reload > 0) { p.reload--; if (p.reload === 0) { p.ammo = C.revolver.balas; text(p.x, p.y - 70, '¡RECARGADO!', '#FFD700', 16); api.playAbilitySfx('metal'); } }
+        const b = S.boss, R = C.revolver;
+        S.bullets.forEach(u => {
+            u.y += u.vy; u.life--;
+            // Tutankamón: las balas le llegan aunque esté lejos (¡para eso es el revólver!)
+            if (b.stage === 'tut' && !u.dead) {
+                const P = pose();
+                const dx = (u.x - P.x) / (HEAD.rx * P.s), dy = (u.y - P.y) / (HEAD.ry * P.s);
+                if (dx * dx + dy * dy < 1) {
+                    u.dead = true; b.hp -= R['daño']; b.flash = 6; registerHit();
+                    text(u.x, u.y, `-${R['daño']}`, '#FFE38A', 22);
+                    for (let i = 0; i < 8; i++) puff(u.x, u.y, '#FFD700');
+                    if (!b.phase2 && b.hp > 0 && b.hp <= b.maxHp * C.tutankamon.fase2_en) { b.phase2 = true; text(P.x, P.y - 300 * P.s, '¡TUTANKAMÓN ESTÁ FURIOSO!', '#FF3355', 30); }
+                    if (b.hp <= 0) tutDefeated();
+                }
+            }
+            S.mummies.forEach(m => {
+                if (u.dead || m.dead || m.rise > 0 || u.hit.has(m)) return;
+                if (Math.abs(m.x - u.x) < 20 && Math.abs(m.y - u.y) < 40) {
+                    u.dead = true; m.hp -= R['daño_momias']; m.flash = 6; text(m.x, m.y - 40, `-${R['daño_momias']}`, '#FFE38A', 18);
+                    if (m.hp <= 0) killMummy(m);
+                }
+            });
+            S.rolls.forEach(o => { if (!u.dead && !o.dead && Math.hypot(o.x - u.x, o.y - u.y) < 22) { u.dead = true; breakRoll(o); } });
+            if (u.y < S.camY - 120) u.dead = true;
+        });
+        S.bullets = S.bullets.filter(u => !u.dead && u.life > 0);
     }
 
     function activateSword() {
@@ -363,6 +440,7 @@
         const dir = (left() ? -1 : 0) + (right() ? 1 : 0);
         if (p.onGround) {
             if (guarding) { p.vx = 0; p.charging = false; p.charge = 0; }
+            else if (jumpHeld() && p.jumpLock) { p.vx = 0; p.charging = false; p.charge = 0; }      // apuntando arriba con el revólver
             else if (jumpHeld()) { p.charging = true; p.charge = Math.min(J.carga_frames, p.charge + 1); p.vx = 0; }
             else { p.vx = dir * 4.2 * (sand ? 0.4 : 1); if (dir) p.facing = dir; }
         } else {
@@ -480,7 +558,7 @@
     function pose() {
         const top = topCam(), bottom = Math.max(top + 1, H - S.viewH);
         const k = Math.max(0, Math.min(1, (S.camY - top) / (bottom - top)));
-        const screenY = (HEAD.y - S.camY) + (150 - (HEAD.y - S.camY)) * k;
+        const screenY = Math.max(HEAD.y - S.camY, 150);     // nunca se sale por arriba de la pantalla
         const sc = 1 - 0.45 * k;
         return { x: HEAD.x, y: S.camY + screenY + S.boss.flyOff, s: sc, k, hittable: k < 0.22 };
     }
@@ -534,6 +612,7 @@
                 const T = C.tutankamon;
                 b.stage = 'tut'; b.t = 0; b.hp = T.vida; b.maxHp = T.vida; b.phase2 = false;
                 b.laserT = 90; b.handT = 60; b.laser = null;
+                unlockGun();
                 text(HEAD.x, pose().y + 260 * pose().s, '¡TUTANKAMÓN!', '#FFD200', 44);
             }
             return;
@@ -942,7 +1021,7 @@
         S.viewH = canvas.height / S.scale;
         if (S.hintT > 0) S.hintT--;
         if (S.shake > 0) S.shake--;
-        if (!S.over) { updatePlayer(); updateSand(); updateProjectiles(); updateMummies(); updatePickups(); updateHands(); }
+        if (!S.over) { updatePlayer(); updateSand(); updateProjectiles(); updateMummies(); updatePickups(); updateHands(); updateGun(); }
         updateBoss();
         const close = Math.max(0, Math.min(1, (1150 - S.player.y) / 400));
         const ratio = 0.58 + 0.27 * close;
@@ -988,6 +1067,11 @@
         S.rolls.forEach(drawRoll);
         S.pickups.forEach(drawAnkh);
         S.mummies.forEach(drawMummy);
+        for (const u of S.bullets) {
+            ctx.fillStyle = 'rgba(255, 227, 138, 0.45)'; ctx.fillRect(u.x - 3, u.y, 6, 36);
+            ctx.fillStyle = '#FFE38A'; ctx.fillRect(u.x - 2, u.y, 4, 14);
+            ctx.fillStyle = '#FFFFFF'; ctx.fillRect(u.x - 1, u.y, 2, 6);
+        }
         drawPlayer();
         drawHands();
         drawSand();
@@ -1273,6 +1357,8 @@
         let hx, hy;
         if (isGuarding()) {
             hx = shX + f * 18; hy = shY - 6;
+        } else if (p.gun && p.aimUp > 0) {
+            hx = shX + f * 4; hy = shY - 26;                    // brazo arriba con el revólver
         } else if (p.atk > 0) {
             const ext = p.atk > 7 ? (14 - p.atk) / 7 : p.atk / 7;
             hx = shX + Math.cos(p.atkDir) * (12 + 24 * ext); hy = shY + Math.sin(p.atkDir) * (12 + 24 * ext);
@@ -1281,6 +1367,19 @@
         pixelLine(shX, shY, hx, hy, PAL.M, 6);
         ctx.fillStyle = PAL.K; ctx.fillRect(Math.round(hx / PX) * PX - 7, Math.round(hy / PX) * PX - 7, 14, 14);
         ctx.fillStyle = PAL.m; ctx.fillRect(Math.round(hx / PX) * PX - 4, Math.round(hy / PX) * PX - 4, 8, 8);
+        // revólver apuntando arriba
+        if (p.gun && p.aimUp > 0 && !isGuarding()) {
+            const gx = Math.round(hx / PX) * PX, gy = Math.round(hy / PX) * PX;
+            ctx.fillStyle = PAL.K; ctx.fillRect(gx - 6, gy - 34, 12, 30);              // contorno cañón
+            ctx.fillStyle = '#8994A3'; ctx.fillRect(gx - 3, gy - 31, 6, 26);          // cañón
+            ctx.fillStyle = '#5E6773'; ctx.fillRect(gx - 8, gy - 12, 16, 10);         // tambor
+            ctx.fillStyle = PAL.K; ctx.fillRect(gx - 8, gy - 8, 16, 2);
+            ctx.fillStyle = '#6B4423'; ctx.fillRect(gx - 4, gy - 2, 8, 12);           // culata
+            if (p.flash > 0) {
+                ctx.fillStyle = '#FFFFFF'; ctx.fillRect(gx - 6, gy - 48, 12, 14);
+                ctx.fillStyle = '#FFE38A'; ctx.fillRect(gx - 10, gy - 44, 20, 6); ctx.fillRect(gx - 3, gy - 58, 6, 12);
+            }
+        }
         // katana en la mano
         if (p.sword > 0) {
             const a = p.atk > 0 ? p.atkDir : (isGuarding() ? -Math.PI / 2 : (f > 0 ? -0.6 : Math.PI + 0.6));
@@ -1367,6 +1466,18 @@
         ctx.fillStyle = p.sword > 0 ? '#FF8FB8' : (p.swordCd > 0 ? '#999' : '#FFD700');
         ctx.fillText(swTxt, 14, canvas.height - 66);
         if (p.hitCombo >= 2) { ctx.fillStyle = '#FFD700'; ctx.font = 'bold 20px sans-serif'; ctx.fillText(`COMBO x${p.hitCombo}`, 14, canvas.height - 90); }
+        // Revólver
+        if (p.gun) {
+            const gx = 200, gy = canvas.height - 78;
+            ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'left';
+            for (let i = 0; i < C.revolver.balas; i++) {
+                ctx.fillStyle = i < p.ammo ? '#FFD700' : 'rgba(255,255,255,0.2)';
+                ctx.fillRect(gx + i * 12, gy - 12, 7, 14); ctx.fillStyle = i < p.ammo ? '#B8860B' : 'rgba(255,255,255,0.1)'; ctx.fillRect(gx + i * 12, gy - 12, 7, 4);
+            }
+            ctx.fillStyle = p.reload > 0 ? '#FFB257' : '#FFF2D0';
+            ctx.fillText(p.reload > 0 ? `RECARGANDO ${Math.ceil(p.reload / 60)}s` : 'REVÓLVER [W + CLICK]', gx + C.revolver.balas * 12 + 8, gy);
+            if (p.reload > 0) { ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(gx, gy + 6, 60, 4); ctx.fillStyle = '#FFB257'; ctx.fillRect(gx, gy + 6, 60 * (1 - p.reload / (C.revolver.recarga_s * 60)), 4); }
+        }
         // Aviso de arena
         if (S.lowTime > C.arena.segundos_para_subir * 60 * 0.7 && !S.over) {
             ctx.textAlign = 'center'; ctx.font = 'bold 16px sans-serif';
