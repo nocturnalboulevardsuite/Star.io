@@ -3948,6 +3948,7 @@ codigo_juego_template = """
             function isFaseBeaten(id) { return !!(progress['FASE:' + id] && progress['FASE:' + id].completada); }
             function isFaseUnlocked(k) {
                 if (isRissos()) return true;
+                if (isFaseBeaten(FASES_DATA[k].id)) return true;     // si ya la ganaste, sigue abierta
                 // solo cuentan las fases jugables (las carpetas sin fase.js no bloquean a las demás)
                 const jugables = FASES_DATA.filter(f => f.jugable);
                 const pos = jugables.indexOf(FASES_DATA[k]);
