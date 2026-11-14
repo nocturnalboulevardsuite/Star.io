@@ -59,7 +59,10 @@
       "tp_espera_s": 6,
       "tp_aviso_s": 1.2,
       "palabras_espera_s": 1.5,
-      "daño_palabra": 1.5
+      "daño_palabra": 1.5,
+      "radio": 190,
+      "omega_vida": 2500,
+      "omega_espera_s": 2.5
     }
   }
 }
