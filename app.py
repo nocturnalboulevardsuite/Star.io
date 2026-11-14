@@ -813,6 +813,7 @@ codigo_juego_template = """
             const FIRE_RATE = 7; // frames entre disparos (~8 disparos por segundo)
 
             canvas.addEventListener('mousedown', (e) => {
+                if (typeof voidCinematicActive === 'function' && voidCinematicActive()) { skipVoidCinematic(); return; }
                 if(gameState !== 'playing' || isPaused) return;
                 if(player.dead) { if (playerLives > 0) respawnPlayer(); else goToMenu(); return; }
                 if(e.button === 0) { isFiring = true; if (fireCooldown <= 0) { shootLaser(); fireCooldown = FIRE_RATE; } }
@@ -2728,7 +2729,7 @@ codigo_juego_template = """
             }
             function voidTwinDamage(t, amount) {
                 if (t.dead) return;
-                if (t.isGod && (voidCinematicActive())) return;
+                if (t.isGod && (voidCinematicActive() || t.omegaAnim > 0)) return;
                 t.hp -= amount; t.flash = 5;
                 if (t.isGod) { if (t.hp <= 0) godDefeated(); return; }
                 if (t.hp <= 0) {
@@ -2916,7 +2917,7 @@ codigo_juego_template = """
             //  · Ráfaga de palmadas "ORA ORA"   · Mitad de vida: teletransporte detrás tuyo, empujón y marca mortal
             //  · Poca vida: lanza palabras en japonés   · Al ganar: final triste con todos los jefes
             // ======================================================
-            const GOD_DEF = { vida: 8000, "daño_puño": 0.5, rafaga_espera_s: 5, tp_espera_s: 6, tp_aviso_s: 1.2, palabras_espera_s: 1.5, "daño_palabra": 1.5 };
+            const GOD_DEF = { vida: 8000, radio: 190, "daño_puño": 0.5, rafaga_espera_s: 5, tp_espera_s: 6, tp_aviso_s: 1.2, palabras_espera_s: 1.5, "daño_palabra": 1.5, omega_vida: 2500, omega_espera_s: 2.5 };
             function godCfg() { return Object.assign({}, GOD_DEF, LV.jefe.dios || {}); }
             const KANJI_WORDS = ["死ね", "死", "無駄", "消えろ", "神", "終わりだ"];
 
@@ -3007,12 +3008,12 @@ codigo_juego_template = """
                 if (V.intro && !V.intro.done) {
                     const I = V.intro; I.t++;
                     if (I.t === 60) { LV.mundo.color_fondo = "#000000"; LV.mundo.claro = false; LV.mundo.color_borde = "#FF0033"; }
-                    if (I.t === 300) playAbilitySfx('boom');
-                    if (I.t >= 440) {
+                    if (I.t === 900 || I.t === 1200) playAbilitySfx('boom');
+                    if (I.t >= INTRO_END) {
                         I.done = true;
                         const c = godCfg(), hp = Math.round(c.vida * (DIFFS[difficulty].mult.jefe_vida || 1));
                         const cx = camX + canvas.width / 2, cy = camY + canvas.height / 2 - 120 / zoom;
-                        V.god = { x: Math.max(150, Math.min(worldW - 150, cx)), y: Math.max(150, Math.min(worldH - 150, cy)), r: 110, hp, maxHp: hp, dead: false, isGod: true, flash: 0,
+                        V.god = { x: Math.max(250, Math.min(worldW - 250, cx)), y: Math.max(250, Math.min(worldH - 250, cy)), r: c.radio, hp, maxHp: hp, dead: false, isGod: true, flash: 0,
                                   barrageT: 120, barrage: 0, hand: 0, tpT: 0, tp: null, wordT: 0, half: false, low: false };
                         floatingTexts.push({ x: V.god.x, y: V.god.y - 200, text: "DIOS OMNIPOTENTE", color: "#FF0033", life: 160, size: 44 });
                     }
@@ -3021,7 +3022,9 @@ codigo_juego_template = """
                 if (V.outro && !V.outro.done) {
                     const O = V.outro; O.t++;
                     if (O.t === 40) startMusicLoop(sadSegment, 3);
-                    if (O.t >= 900) {
+                    if (O.t === FIN.twist - 20) stopMusicLoop();
+                    if (O.t === 2240) playAbilitySfx('boom');
+                    if (O.t >= FIN.end) {
                         O.done = true; V.ending = true;
                         onBossDefeated(); victoryTimer = 1;
                     }
@@ -3029,6 +3032,7 @@ codigo_juego_template = """
             }
             function godDefeated() {
                 const V = voidState, g = V.god;
+                if (!g.omega) { startOmega(g); return; }
                 g.dead = true;
                 for (let i = 0; i < 80; i++) { const a = Math.random() * Math.PI * 2, sp = Math.random() * 14; particles.push({ x: g.x, y: g.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, color: i % 2 ? "#FFFFFF" : "#FF0033", life: 60 }); }
                 playSfx("bh_death", 2.5); playAbilitySfx('boom');
@@ -3043,6 +3047,10 @@ codigo_juego_template = """
                 if (!g || g.dead) return;
                 const c = godCfg();
                 if (g.flash > 0) g.flash--;
+                lasers.forEach(l => {
+                    if ((l.kind === 'kanji' || l.kind === 'estrella_verde') && l.homing > 0 && l.owner === g && !player.dead) { l.homing--; const a = Math.atan2(player.y - l.y, player.x - l.x), sp = Math.hypot(l.vx, l.vy); l.vx += (Math.cos(a) * sp - l.vx) * 0.05; l.vy += (Math.sin(a) * sp - l.vy) * 0.05; }
+                });
+                if (g.omega) { if (!player.dead) updateOmega(g); return; }
                 if (!g.half && g.hp <= g.maxHp * 0.5) { g.half = true; g.tpT = 90; floatingTexts.push({ x: g.x, y: g.y - g.r - 80, text: "¡¿ES ESO UNA REFERENCIA A JOJO?!", color: "#FF66CC", life: 180, size: 34 }); }
                 if (!g.low && g.hp <= g.maxHp * 0.25) { g.low = true; g.wordT = 60; floatingTexts.push({ x: g.x, y: g.y - g.r - 80, text: "死ね", color: "#FFFFFF", life: 150, size: 60 }); }
                 if (player.dead) return;
@@ -3145,7 +3153,9 @@ codigo_juego_template = """
                     ctx.fillStyle = "rgba(255, 0, 51, " + Math.min(0.45, k * 0.45) + ")"; ctx.beginPath(); ctx.arc(T.mx, T.my, 120 * Math.min(1, k), 0, Math.PI * 2); ctx.fill();
                     ctx.restore();
                 }
+                if (g.omega) drawOmegaExtras(g);
                 drawGodBody(g.x, g.y, g.r, now);
+                if (g.omega) drawOmegaFace(g);
                 if (g.flash > 0) { ctx.fillStyle = "rgba(255,0,51,0.4)"; ctx.beginPath(); ctx.arc(g.x, g.y, g.r, 0, Math.PI * 2); ctx.fill(); }
                 // manos: en la ráfaga golpean muy rápido (con "fantasmas" de los golpes)
                 [-1, 1].forEach((sd, i) => {
@@ -3165,10 +3175,11 @@ codigo_juego_template = """
                 ctx.fillStyle = g.low ? "#FFFFFF" : "#FF0033"; ctx.fillRect(g.x - bw / 2 + 1, top + 1, (bw - 2) * Math.max(0, g.hp / g.maxHp), 14);
                 ctx.strokeStyle = "#FF0033"; ctx.lineWidth = 2; ctx.strokeRect(g.x - bw / 2, top, bw, 16);
                 ctx.fillStyle = "#FFFFFF"; ctx.font = "bold 18px sans-serif"; ctx.textAlign = "center";
-                ctx.fillText(`DIOS OMNIPOTENTE: ${Math.ceil(g.hp)} / ${g.maxHp}`, g.x, top - 8);
+                ctx.fillText(`${g.omega ? 'DIOS OMNIPOTENTE · FORMA FINAL' : 'DIOS OMNIPOTENTE'}: ${Math.ceil(g.hp)} / ${g.maxHp}`, g.x, top - 8);
             }
             function drawGodProjectile(l) {
                 if (l.kind === 'puño') { drawGodHand(l.x, l.y, 16, Math.atan2(l.vy, l.vx), true); return; }
+                if (l.kind === 'rollo') { drawRollProjectile(l); return; }
                 ctx.save(); ctx.translate(l.x, l.y); ctx.rotate(Math.sin(Date.now() / 150 + l.r) * 0.2);
                 ctx.font = "bold 40px 'Hiragino Sans', 'Yu Gothic', 'Noto Sans JP', sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
                 ctx.lineWidth = 8; ctx.strokeStyle = "rgba(255, 0, 51, 0.7)"; ctx.strokeText(l.word, 0, 0);
@@ -3225,6 +3236,7 @@ codigo_juego_template = """
                 ];
                 const names = ["LUNA", "SOL", "FARAÓN", "MOMIA", "TUTANKAMÓN", "EL VACÍO", "DIOS"];
                 draws.forEach((fn, i) => {
+                    if (i === 6) return;   // el Dios llega después a reencontrarse con ellos
                     const appear = start + i * 25; if (t < appear) return;
                     const k = Math.min(1, (t - appear) / 20), x = x0 + i * gap, yy = y - Math.sin(now / 400 + i) * 4 + (1 - k) * 40;
                     ctx.save(); ctx.globalAlpha = k; fn(x, yy, gap * 0.28);
@@ -3238,13 +3250,16 @@ codigo_juego_template = """
                 if (V.intro && !V.intro.done) {
                     const t = V.intro.t;
                     ctx.save(); ctx.fillStyle = `rgba(0,0,0,${Math.min(1, t / 60)})`; ctx.fillRect(0, 0, W, H);
-                    if (t > 280) {   // aparece desde la oscuridad
-                        const k = Math.min(1, (t - 280) / 120), r = Math.min(W, H) * 0.16 * k;
-                        ctx.globalAlpha = k; drawGodBody(W / 2, H * 0.42, Math.max(1, r), now);
+                    if (t > 720) {   // aparece desde la oscuridad... y al gritar se vuelve enorme
+                        const k = Math.min(1, (t - 720) / 200);
+                        const grow = t > 1200 ? 1 + Math.min(1.6, (t - 1200) / 120) : 1;
+                        const r = Math.min(W, H) * 0.12 * k * grow;
+                        const shake = t > 1200 ? 10 : 0;
+                        ctx.globalAlpha = k; drawGodBody(W / 2 + (Math.random() - 0.5) * shake, H * 0.42 + (Math.random() - 0.5) * shake, Math.max(1, r), now);
                     }
                     ctx.restore();
-                    subtitle("Yo no soy tú... insecto...", "我はお前ではない……虫けらめ……", t, 70, 200);
-                    subtitle("¡¡¡Soy un Dios Omnipotenteeee!!!", "我は全知全能の神なりィィィ！！！", t, 210, 430);
+                    INTRO_LINES.forEach(([es, ja, a, b]) => subtitle(es, ja, t, a, b));
+                    ctx.save(); ctx.fillStyle = "rgba(255,255,255,0.4)"; ctx.font = "12px sans-serif"; ctx.textAlign = "right"; ctx.fillText("click para saltar", W - 16, H - 16); ctx.restore();
                     return;
                 }
                 if (V.outro) {
@@ -3252,16 +3267,227 @@ codigo_juego_template = """
                     if (t < 50) { ctx.fillStyle = `rgba(255,255,255,${t < 15 ? t / 15 : 1})`; ctx.fillRect(0, 0, W, H); return; }
                     drawAnimeBackground(t);
                     if (t < 80) { ctx.fillStyle = `rgba(255,255,255,${1 - (t - 50) / 30})`; ctx.fillRect(0, 0, W, H); }
+                    if (t >= FIN.twist) { drawTwist(t); return; }
+                    if (t >= FIN.creditsStart - 20) { drawAnimeBackground(t); drawCredits(t); return; }
                     subtitle("No logré ganar...", "勝てなかった……", t, 110, 300);
                     subtitle("...pero lo intenté por todos ustedes.", "……でも、みんなのために戦ったんだ。", t, 310, 560);
-                    drawLineup(t, 330);
-                    if (t > 620) {
-                        const k = Math.min(1, (t - 620) / 60);
+                    drawLineup(t, FIN.lineupStart);
+                    drawReunion(t);
+                    if (t > FIN.fin) {
+                        const k = Math.min(1, (t - FIN.fin) / 60);
                         ctx.save(); ctx.globalAlpha = k; ctx.textAlign = "center";
                         ctx.font = "bold 96px serif"; ctx.lineWidth = 8; ctx.strokeStyle = "#2E1A5C"; ctx.strokeText("FIN", W / 2, H * 0.32); ctx.fillStyle = "#FFFFFF"; ctx.fillText("FIN", W / 2, H * 0.32);
                         ctx.font = "bold 40px 'Hiragino Sans', 'Yu Gothic', 'Noto Sans JP', sans-serif"; ctx.fillStyle = "#FFE600"; ctx.fillText("終", W / 2, H * 0.32 + 56);
                         ctx.restore();
                     }
+                }
+            }
+
+            // ======================================================
+            // === FORMA FINAL (todas las habilidades de los jefes) Y FINAL EXTENDIDO ===
+            // ======================================================
+            const INTRO_LINES = [
+                ["¿Quién te crees que eres...?", "貴様は……何者のつもりだ……？", 80, 290],
+                ["...como para invadir el sistema solar...", "……太陽系に攻め込むとは……", 300, 510],
+                ["Ya verás... simple insecto asqueroso...", "思い知るがいい……汚らわしい虫けらめ……", 520, 730],
+                ["Nosotros somos uno...", "我らは……一つなのだ……", 740, 950],
+                ["Yo soy el Dios Omnipotente de este sistema solar...", "我こそが……この太陽系の全能の神なり……", 960, 1190],
+                ["¡¡¡WAAAAAAAAAA!!!!!!", "ウオオオオオオオ！！！！！！", 1200, 1440]
+            ];
+            const INTRO_END = 1460;
+            const OMEGA_ATTACKS = [
+                ['luna', 'PODER DE LA LUNA'], ['fuego', 'PODER DEL SOL'], ['estrellas', 'ESTRELLAS CÓSMICAS'], ['planetas', 'PLANETAS'],
+                ['sheriff', 'SHERIFF SOLAR'], ['rollos', 'VENDAS DE LA MOMIA'], ['laser', 'OJOS DEL FARAÓN'], ['minis', 'MINI AGUJEROS'],
+                ['embestida', 'EMBESTIDA DEL VACÍO'], ['ora', 'ORA ORA'], ['palabras', '死ね']
+            ];
+            const FIN = { lineupStart: 330, godJoin: 520, fin: 720, creditsStart: 900, creditsEnd: 1500, twist: 1520, end: 2360 };
+            const CREDITS = [
+                ["STARZ.IO", ""], ["MÚSICA", "Rissos Anghell"], ["CREATIVIDAD", "Benjamín Espinoza"], ["HISTORIA", "Riso"],
+                ["DIÁLOGO", "Rissos Anghell"], ["JEFES", "Luna · Sol · Faraón · Momia · Tutankamón · El Vacío · Dios"], ["GRACIAS POR JUGAR", "♥"]
+            ];
+            const TWIST = [
+                ["En realidad...", "実は……", 1540, 1720],
+                ["...tú siempre fuiste el malo de la historia.", "……物語の悪役は、ずっとお前だったのだ。", 1730, 1950],
+                ["El villano...", "悪党……", 1960, 2080],
+                ["El monstruo...", "怪物……", 2090, 2220]
+            ];
+
+            function skipVoidCinematic() {
+                const V = voidState; if (!V) return;
+                if (V.intro && !V.intro.done) { if (V.intro.t < 1180) V.intro.t = 1180; return; }
+                if (V.outro && !V.outro.done) {
+                    if (V.outro.t < FIN.creditsStart) V.outro.t = FIN.creditsStart;
+                    else if (V.outro.t < FIN.twist) V.outro.t = FIN.twist;
+                    else V.outro.t = FIN.end - 1;
+                }
+            }
+
+            function startOmega(g) {
+                const c = godCfg();
+                g.omega = true; g.omegaAnim = 120; g.omegaT = 60; g.barrage = 0; g.tp = null; g.beams = null; g.dash = null;
+                g.maxHp = Math.round(c.omega_vida * (DIFFS[difficulty].mult.jefe_vida || 1)); g.hp = g.maxHp;
+                lasers = lasers.filter(l => l.owner === player);
+                floatingTexts.push({ x: g.x, y: g.y - g.r - 120, text: "¡FORMA FINAL: TODOS LOS PODERES!", color: "#FFD700", life: 200, size: 40 });
+                floatingTexts.push({ x: g.x, y: g.y - g.r - 70, text: "全ての力を一つに", color: "#FFFFFF", life: 200, size: 28 });
+                playSfx("bh_death", 2.5); playAbilitySfx('boom');
+            }
+
+            function omegaAttack(g, kind) {
+                const c = godCfg(), toP = Math.atan2(player.y - g.y, player.x - g.x), sp = (x, y, a, v, extra) => lasers.push(Object.assign({ x: x + Math.cos(a) * g.r * 0.9, y: y + Math.sin(a) * g.r * 0.9, vx: Math.cos(a) * v, vy: Math.sin(a) * v, owner: g, isStar: false }, extra));
+                if (kind === 'luna') for (let i = 0; i < 16; i++) sp(g.x, g.y, i * Math.PI / 8 + Math.random() * 0.2, 5, { isStar: true, life: 200, r: 10, color: "#FFA500", damageMult: 1.5 });
+                if (kind === 'fuego') for (let i = 0; i < 5; i++) sp(g.x, g.y, toP + (i - 2) * 0.25, 6.5, { kind: 'fuego', life: 240, r: 22, color: "#FF8C00", damageMult: 2 });
+                if (kind === 'estrellas') for (let i = 0; i < 8; i++) sp(g.x, g.y, toP + i * Math.PI / 4, 4.5, { kind: 'estrella_verde', life: 260, r: 16, color: "#39FF7A", damageMult: 1.5, homing: 70 });
+                if (kind === 'planetas') for (let i = 0; i < 3; i++) { const col = PLANET_COLORS[Math.floor(Math.random() * PLANET_COLORS.length)]; sp(g.x, g.y, toP + (i - 1) * 0.35, 4.2, { kind: 'planeta', life: 320, r: 34 + Math.random() * 12, color: col[0], dark: col[1], ring: Math.random() < 0.5, spin: Math.random() * 6, damageMult: 3 }); }
+                if (kind === 'sheriff') { g.shots = 8; g.shotT = 0; }
+                if (kind === 'rollos') for (let i = 0; i < 5; i++) sp(g.x, g.y, toP + (i - 2) * 0.3, 7, { kind: 'rollo', life: 200, r: 16, color: "#F4ECD8", damageMult: 1.5 });
+                if (kind === 'laser') g.beams = { t: 0, base: toP };
+                if (kind === 'minis') for (let i = 0; i < 4; i++) sp(g.x, g.y, toP + (i - 1.5) * 0.4, 3.6, { kind: 'mini_agujero', life: 320, r: 15, color: "#000", damageMult: 2 });
+                if (kind === 'embestida') { g.dash = { t: 0, tx: player.x, ty: player.y }; floatingTexts.push({ x: player.x, y: player.y - 70, text: "¡MUÉVETE!", color: "#FF0033", life: 70, size: 30 }); }
+                if (kind === 'ora') g.barrage = 75;
+                if (kind === 'palabras') for (let i = 0; i < 5; i++) sp(g.x, g.y, toP + (i - 2) * 0.3, 5, { kind: 'kanji', word: KANJI_WORDS[Math.floor(Math.random() * KANJI_WORDS.length)], life: 260, r: 24, color: "#FFF", damageMult: c['daño_palabra'], homing: 60 });
+            }
+            function godBeamList(g) {
+                if (!g.beams) return [];
+                const out = [], cols = ["#FF2244", "#FF8C00", "#FFE600", "#33FF66", "#00C8FF"];
+                for (let i = 0; i < 5; i++) { const a = g.beams.base + (i - 2) * 0.12; out.push({ x1: g.x, y1: g.y, x2: g.x + Math.cos(a) * 2600, y2: g.y + Math.sin(a) * 2600, col: cols[i] }); }
+                return out;
+            }
+            function updateOmega(g) {
+                const c = godCfg();
+                if (g.omegaAnim > 0) { g.omegaAnim--; g.r += (c.radio * 1.15 - g.r) * 0.05; return; }
+                const toP = Math.atan2(player.y - g.y, player.x - g.x), d = Math.hypot(player.x - g.x, player.y - g.y);
+                if (!g.dash && !g.beams && d > g.r * 2.2) { g.x += Math.cos(toP) * 1.4; g.y += Math.sin(toP) * 1.4; }
+                if (d < g.r + player.r) takeDamage(player, 5);
+                // ráfaga, sheriff
+                if (g.barrage > 0) { g.barrage--; if (g.barrage % 3 === 0) { const a = toP + (Math.random() - 0.5) * 0.55; lasers.push({ x: g.x + Math.cos(a) * g.r, y: g.y + Math.sin(a) * g.r, vx: Math.cos(a) * 17, vy: Math.sin(a) * 17, owner: g, isStar: false, kind: 'puño', life: 34, r: 18, color: "#FFF", damageMult: c['daño_puño'] }); } if (g.barrage % 12 === 0) floatingTexts.push({ x: g.x + (Math.random() - 0.5) * g.r * 3, y: g.y + (Math.random() - 0.5) * g.r * 2, text: "ORA", color: "#FFD700", life: 30, size: 28 }); }
+                if (g.shots > 0 && (g.shotT -= 1) <= 0) { g.shots--; g.shotT = 10; const a = toP + (Math.random() - 0.5) * 0.1; lasers.push({ x: g.x, y: g.y, vx: Math.cos(a) * 14, vy: Math.sin(a) * 14, owner: g, isStar: false, kind: 'bala_sol', life: 120, r: 8, color: "#FFE38A", damageMult: 3 }); sunGunSfx(); }
+                // láser arcoíris (ojos del faraón + dedos del sol)
+                if (g.beams) {
+                    const B = g.beams; B.t++;
+                    if (B.t > 40) {
+                        B.base += Math.sign(Math.sin(toP - B.base)) * 0.004;
+                        for (const b of godBeamList(g)) if (distToBeam(player.x, player.y, b.x1, b.y1, b.x2, b.y2) < 12 + player.r) { takeDamage(player, 3); break; }
+                    }
+                    if (B.t > 40 + 100) g.beams = null;
+                }
+                // embestida mortal (gemelos)
+                if (g.dash) {
+                    const D = g.dash; D.t++;
+                    if (D.t > 80) {
+                        if (!D.dir) { const a = Math.atan2(D.ty - g.y, D.tx - g.x); D.dir = { x: Math.cos(a), y: Math.sin(a) }; D.left = Math.hypot(D.tx - g.x, D.ty - g.y) + 400; }
+                        const st = Math.min(36, D.left); g.x += D.dir.x * st; g.y += D.dir.y * st; D.left -= st;
+                        g.x = Math.max(g.r, Math.min(worldW - g.r, g.x)); g.y = Math.max(g.r, Math.min(worldH - g.r, g.y));
+                        if (!player.dead && Math.hypot(player.x - g.x, player.y - g.y) < g.r + player.r && !(player.invulnTimer > 0) && !(player.rhinoTimer > 0)) {
+                            player.hp = 0; player.dead = true; player.shields = 0; floatingTexts.push({ x: player.x, y: player.y - 40, text: "¡ANIQUILADO!", color: "#FFF", life: 90, size: 26 }); handlePlayerDeath();
+                        }
+                        if (D.left <= 0) g.dash = null;
+                    }
+                }
+                // "ven acá" del vacío, siempre un poco
+                if (!player.dead && d > 1) { player.x += (g.x - player.x) / d * 0.35; player.y += (g.y - player.y) / d * 0.35; }
+                // elige un poder distinto cada pocos segundos
+                if (!g.dash && !g.beams && g.barrage <= 0 && (g.omegaT -= 1) <= 0) {
+                    const [kind, name] = OMEGA_ATTACKS[Math.floor(Math.random() * OMEGA_ATTACKS.length)];
+                    floatingTexts.push({ x: g.x, y: g.y - g.r - 60, text: name, color: "#FFD700", life: 60, size: 26 });
+                    omegaAttack(g, kind);
+                    g.omegaT = c.omega_espera_s * 60;
+                }
+            }
+            function drawOmegaExtras(g) {
+                const now = Date.now();
+                // aura arcoíris girando
+                ctx.save(); ctx.translate(g.x, g.y); ctx.rotate(now / 500);
+                const cols = ["#FF2244", "#FF8C00", "#FFE600", "#33FF66", "#00C8FF", "#B026FF"];
+                for (let i = 0; i < 18; i++) { const a = i * Math.PI / 9, len = g.r * (1.5 + 0.2 * Math.sin(now / 100 + i)); ctx.fillStyle = cols[i % 6]; ctx.globalAlpha = 0.55; ctx.beginPath(); ctx.moveTo(Math.cos(a - 0.08) * g.r, Math.sin(a - 0.08) * g.r); ctx.lineTo(Math.cos(a) * len, Math.sin(a) * len); ctx.lineTo(Math.cos(a + 0.08) * g.r, Math.sin(a + 0.08) * g.r); ctx.fill(); }
+                ctx.restore();
+                // láser arcoíris y marca de embestida se dibujan aquí; lentes y corona en drawOmegaFace
+                drawOmegaAttacks(g);
+            }
+            function drawOmegaFace(g) {
+                // lentes oscuros + corona dorada
+                const r = g.r;
+                ctx.fillStyle = "#0A0A0F"; ctx.beginPath();
+                ctx.moveTo(g.x - r * 0.72, g.y - r * 0.32); ctx.lineTo(g.x + r * 0.72, g.y - r * 0.32); ctx.lineTo(g.x + r * 0.62, g.y - r * 0.08); ctx.lineTo(g.x + r * 0.12, g.y - r * 0.1); ctx.lineTo(g.x, g.y - r * 0.2); ctx.lineTo(g.x - r * 0.12, g.y - r * 0.1); ctx.lineTo(g.x - r * 0.62, g.y - r * 0.08); ctx.closePath(); ctx.fill();
+                ctx.fillStyle = "#FF0033"; ctx.fillRect(g.x - r * 0.5, g.y - r * 0.24, r * 0.12, r * 0.06); ctx.fillRect(g.x + r * 0.38, g.y - r * 0.24, r * 0.12, r * 0.06);
+                ctx.fillStyle = "#F5C542"; ctx.beginPath(); ctx.moveTo(g.x - r * 0.5, g.y - r * 0.85);
+                for (let i = 0; i <= 4; i++) { ctx.lineTo(g.x - r * 0.5 + i * r * 0.25, g.y - r * (i % 2 ? 1.05 : 1.3)); }
+                ctx.lineTo(g.x + r * 0.5, g.y - r * 0.85); ctx.closePath(); ctx.fill();
+                ctx.fillStyle = "#1F4FA8"; ctx.beginPath(); ctx.arc(g.x, g.y - r * 1.02, r * 0.07, 0, Math.PI * 2); ctx.fill();
+            }
+            function drawOmegaAttacks(g) {
+                // láser arcoíris
+                if (g.beams) {
+                    ctx.save(); ctx.lineCap = "round";
+                    godBeamList(g).forEach(b => {
+                        if (g.beams.t <= 40) { ctx.globalAlpha = 0.35 + 0.45 * (Math.floor(g.beams.t / 5) % 2); ctx.strokeStyle = b.col; ctx.lineWidth = 3; ctx.setLineDash([14, 10]); ctx.beginPath(); ctx.moveTo(b.x1, b.y1); ctx.lineTo(b.x2, b.y2); ctx.stroke(); ctx.setLineDash([]); }
+                        else { ctx.globalAlpha = 0.3; ctx.strokeStyle = b.col; ctx.lineWidth = 34; ctx.beginPath(); ctx.moveTo(b.x1, b.y1); ctx.lineTo(b.x2, b.y2); ctx.stroke(); ctx.globalAlpha = 1; ctx.lineWidth = 14; ctx.stroke(); ctx.strokeStyle = "#FFF"; ctx.lineWidth = 4; ctx.stroke(); }
+                    });
+                    ctx.restore();
+                }
+                // marca de la embestida
+                if (g.dash && g.dash.t <= 80) {
+                    const D = g.dash; ctx.save(); ctx.strokeStyle = "#FF0033"; ctx.lineWidth = 4; ctx.globalAlpha = 0.5 + 0.5 * (Math.floor(D.t / 6) % 2);
+                    ctx.beginPath(); ctx.arc(D.tx, D.ty, 90, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([16, 12]); ctx.beginPath(); ctx.moveTo(g.x, g.y); ctx.lineTo(D.tx, D.ty); ctx.stroke(); ctx.restore();
+                }
+            }
+            function drawRollProjectile(l) {
+                ctx.save(); ctx.translate(l.x, l.y); ctx.rotate(Date.now() / 80);
+                ctx.fillStyle = "#F4ECD8"; ctx.fillRect(-16, -12, 32, 24); ctx.strokeStyle = "#CDBF9A"; ctx.lineWidth = 2; ctx.strokeRect(-16, -12, 32, 24);
+                ctx.fillStyle = "#8B7355"; ctx.beginPath(); ctx.ellipse(16, 0, 3, 7, 0, 0, Math.PI * 2); ctx.fill();
+                ctx.restore();
+            }
+
+            // ---------- Final: reencuentro, créditos y giro ----------
+            function drawReunion(t) {
+                // el agujero blanco baja y se une a sus amigos
+                if (t < FIN.godJoin) return;
+                const W = canvas.width, H = canvas.height, n = 7, gap = Math.min(150, W / (n + 1)), x0 = W / 2 - gap * (n - 1) / 2, y = H * 0.74;
+                const k = Math.min(1, (t - FIN.godJoin) / 120), ease = 1 - Math.pow(1 - k, 3);
+                const tx = x0 + 6 * gap, ty = y, sx = W / 2, sy = H * 0.15;
+                const x = sx + (tx - sx) * ease, yy = sy + (ty - sy) * ease + Math.sin(t / 8) * (1 - k) * 10;
+                const s = gap * 0.28;
+                ctx.save();
+                ctx.fillStyle = "#FFFFFF"; ctx.beginPath(); ctx.arc(x, yy, s, 0, Math.PI * 2); ctx.fill(); ctx.strokeStyle = "#FF8FB8"; ctx.lineWidth = 3; ctx.stroke();
+                // ojos ahora felices
+                ctx.strokeStyle = "#FF0033"; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(x - s * 0.35, yy - s * 0.05, s * 0.14, Math.PI + 0.3, -0.3); ctx.arc(x + s * 0.35, yy - s * 0.05, s * 0.14, Math.PI + 0.3, -0.3); ctx.stroke();
+                ctx.fillStyle = "#FFFFFF"; ctx.font = "bold 13px sans-serif"; ctx.textAlign = "center"; ctx.fillText("DIOS", x, yy + s + 22);
+                // corazones al reencontrarse
+                if (k >= 1) {
+                    for (let i = 0; i < 6; i++) { const ph = (t - FIN.godJoin - 120 + i * 20) % 120; if (ph < 0) continue; const hx = x0 + (i % 7) * gap + Math.sin(i * 3) * 10, hy = y - s - 10 - ph * 0.8; ctx.globalAlpha = Math.max(0, 1 - ph / 120); drawIcon(ctx, 'heart', hx, hy, 18); }
+                    ctx.globalAlpha = 1;
+                }
+                ctx.restore();
+            }
+            function drawCredits(t) {
+                const W = canvas.width, H = canvas.height;
+                ctx.fillStyle = `rgba(0,0,0,${Math.min(1, (t - FIN.creditsStart + 20) / 40)})`; ctx.fillRect(0, 0, W, H);
+                const p = (t - FIN.creditsStart) / (FIN.creditsEnd - FIN.creditsStart), total = CREDITS.length * 110 + H;
+                const offset = H - p * total;
+                ctx.save(); ctx.textAlign = "center";
+                CREDITS.forEach(([role, name], i) => {
+                    const y = offset + i * 110;
+                    if (y < -60 || y > H + 60) return;
+                    ctx.fillStyle = i === 0 ? "#FFD700" : "#FF8FB8"; ctx.font = i === 0 ? "bold 54px sans-serif" : "bold 22px sans-serif"; ctx.fillText(role, W / 2, y);
+                    if (name) { ctx.fillStyle = "#FFFFFF"; ctx.font = "bold 30px sans-serif"; ctx.fillText(name, W / 2, y + 38); }
+                });
+                ctx.restore();
+            }
+            function drawTwist(t) {
+                const W = canvas.width, H = canvas.height;
+                ctx.fillStyle = "#000"; ctx.fillRect(0, 0, W, H);
+                TWIST.forEach(([es, ja, a, b]) => {
+                    if (t < a || t > b) return;
+                    const k = Math.min(1, (t - a) / ((b - a) * 0.6)), fade = Math.min(1, (b - t) / 20);
+                    ctx.save(); ctx.globalAlpha = fade; ctx.textAlign = "center";
+                    ctx.font = "bold 24px 'Hiragino Sans', 'Yu Gothic', 'Noto Sans JP', sans-serif"; ctx.fillStyle = "#FFFFFF"; ctx.fillText(ja.slice(0, Math.ceil(ja.length * k)), W / 2, H / 2 - 30);
+                    ctx.font = "bold 36px sans-serif"; ctx.fillStyle = "#FFE600"; ctx.fillText(es.slice(0, Math.ceil(es.length * k)), W / 2, H / 2 + 20);
+                    ctx.restore();
+                });
+                if (t > 2240) {
+                    const k = Math.min(1, (t - 2240) / 60);
+                    ctx.save(); ctx.globalAlpha = k; ctx.textAlign = "center"; ctx.fillStyle = "#FF0033"; ctx.font = "bold 64px serif";
+                    ctx.fillText("CONTINUARÁ...", W / 2, H / 2 + 10); ctx.fillStyle = "#FFFFFF"; ctx.font = "bold 28px 'Hiragino Sans', 'Yu Gothic', sans-serif"; ctx.fillText("つづく", W / 2, H / 2 + 56);
+                    ctx.restore();
                 }
             }
 
@@ -4326,7 +4552,7 @@ codigo_juego_template = """
                 drawGod();
                 lasers.forEach(l => { 
                     if (l.kind === 'mini_agujero') { drawMiniHole(l); return; }
-                    if (l.kind === 'puño' || l.kind === 'kanji') { drawGodProjectile(l); return; }
+                    if (l.kind === 'puño' || l.kind === 'kanji' || l.kind === 'rollo') { drawGodProjectile(l); return; }
                     if (l.kind) { drawSunProjectile(l); return; }
                     if(l.isStar) {
                         ctx.save(); ctx.translate(l.x, l.y); ctx.rotate(Date.now() / 150); ctx.beginPath(); ctx.fillStyle = l.color;
@@ -4419,7 +4645,6 @@ codigo_juego_template = """
                 ctx.restore();
                 drawAbilityBar();
                 drawSunQTEOverlay();
-                drawVoidCinematics();
                 if (sunSplit && LV.jefe.tipo === 'sol') {
                     const k = Math.min(1, sunSplit.t / 30), bar = canvas.height * 0.11 * k;
                     ctx.fillStyle = "#000"; ctx.fillRect(0, 0, canvas.width, bar); ctx.fillRect(0, canvas.height - bar, canvas.width, bar);
@@ -4429,6 +4654,7 @@ codigo_juego_template = """
                 ctx.fillStyle = DIFFS[difficulty].color; ctx.font = "bold 12px sans-serif";
                 ctx.fillText(`${DIFFS[difficulty].label}${freeMode ? '  ·  MODO LIBRE' : ''}`, canvas.width / 2, 40);
                 ctx.restore();
+                drawVoidCinematics();   // encima de todo el HUD
             }
 
             // === MENÚ PRINCIPAL ===
