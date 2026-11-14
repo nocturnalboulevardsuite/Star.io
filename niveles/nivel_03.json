@@ -1,11 +1,12 @@
 {
   "nombre": "Vacío Final",
-  "descripcion": "El vacío con la Luna del Vacío. Por ahora usa las mismas mecánicas que el nivel 1, con otro aspecto y un poco más de dificultad.",
+  "descripcion": "Todo en blanco. El agujero negro es el jefe: empieza chico y crece rápido, abre los ojos, lanza mini agujeros negros y te llama con las manos. Al morir se divide en un agujero blanco y uno negro.",
   "mundo": {
     "ancho": 4000,
     "alto": 4000,
-    "color_fondo": "#02020A",
-    "color_borde": "#00E5FF"
+    "color_fondo": "#FFFFFF",
+    "color_borde": "#000000",
+    "claro": true
   },
   "bots": {
     "cantidad": 32,
@@ -18,15 +19,16 @@
   "musica_victoria": "epica",
   "orbes_max": 3,
   "agujero_negro": {
-    "vida": 13000,
-    "radio": 85,
+    "vida": 16000,
+    "radio": 30,
     "pos_x": 0.5,
-    "pos_y": 0.2,
-    "crecimiento": 0.015,
-    "fuerza_atraccion": 3.1
+    "pos_y": 0.4,
+    "crecimiento": 0.06,
+    "fuerza_atraccion": 3.1,
+    "radio_max": 420
   },
   "jefe": {
-    "nombre": "LUNA DEL VACÍO",
+    "nombre": "EL VACÍO",
     "nombre_fase2": "OJO DEL VACÍO",
     "vida": 20000,
     "velocidad": 1.35,
@@ -35,6 +37,20 @@
     "color_fase2": "#00E5FF",
     "potencia_balas": 1.7,
     "espera_laser_frames": 1550,
-    "potencia_laser": 6
+    "potencia_laser": 6,
+    "tipo": "vacio",
+    "vacio": {
+      "minis_espera_s": 3,
+      "minis_cantidad": 3,
+      "daño_mini": 2,
+      "gesto_en": 0.25,
+      "gesto_espera_s": 5,
+      "gesto_fuerza": 9,
+      "gemelos_vida": 5000,
+      "gemelos_radio": 70,
+      "embestida_espera_s": 10,
+      "embestida_aviso_s": 1.5,
+      "embestida_velocidad": 38
+    }
   }
 }
