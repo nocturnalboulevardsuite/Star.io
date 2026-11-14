@@ -58,6 +58,12 @@
     "cooldown_s": 60,
     "multiplicador": 2.5
   },
+  "revolver": {
+    "balas": 5,
+    "recarga_s": 10,
+    "daño": 25,
+    "daño_momias": 10
+  },
   "guardia": {
     "max": 100,
     "costo_golpe": 34,
