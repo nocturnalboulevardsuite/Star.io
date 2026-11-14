@@ -3038,6 +3038,7 @@ codigo_juego_template = """
                         if (O.t === 40) startMusicLoop(sadSegment, 3);
                         if (O.t === FIN.twist - 20) startMusicLoop(horrorSegment, 2.2);   // "tú eras el villano": suspenso
                         if (O.t === 2240) playAbilitySfx('boom');
+                        if (O.t === LAUGH_START) evilLaughSfx();
                         if (O.t >= FIN.end) { O.done = true; V.ending = true; onBossDefeated(); victoryTimer = 1; }
                     }
                 }
@@ -3559,9 +3560,88 @@ codigo_juego_template = """
                 });
                 ctx.restore();
             }
+            // ---------- Risa malvada + ojos rojos + sonrisa (cuando dice que tú eras el villano) ----------
+            const LAUGH_START = 1760, LAUGH_SYL = 0.2;   // "MUA-HA-HA-HA..." cada sílaba 0,2 s
+            function evilLaughSfx() {
+                if (!isUserInteracted || sfxVolume === 0) return;
+                try {
+                    const ac = getAudioCtx(), t0 = ac.currentTime + 0.05, v = Math.min(1, sfxVolume * 1.4);
+                    const out = ac.createGain(); out.gain.value = v;
+                    const comp = ac.createDynamicsCompressor(); comp.threshold.value = -18; comp.ratio.value = 6;
+                    const rev = makeReverb(ac, 3, 2), rg = ac.createGain(); rg.gain.value = 0.45;
+                    out.connect(comp); comp.connect(ac.destination); out.connect(rev); rev.connect(rg); rg.connect(comp);
+                    const drive = ac.createWaveShaper(); drive.curve = makeDistortion(60); drive.connect(out);
+                    // dos formantes de voz ("a") sobre una sierra grave = voz de villano
+                    const f1 = ac.createBiquadFilter(); f1.type = 'bandpass'; f1.frequency.value = 650; f1.Q.value = 6;
+                    const f2 = ac.createBiquadFilter(); f2.type = 'bandpass'; f2.frequency.value = 1100; f2.Q.value = 8;
+                    const g2 = ac.createGain(); g2.gain.value = 0.6;
+                    f1.connect(drive); f2.connect(g2); g2.connect(drive);
+                    const syl = [[95, 0.45, 'm'], [120, 0.22], [112, 0.2], [105, 0.2], [98, 0.2], [92, 0.2], [86, 0.22], [80, 0.25], [72, 0.6]];   // MUA-HA-HA-HA-HA-HA-HA-HAAA
+                    let t = t0;
+                    syl.forEach(([hz, dur, kind]) => {
+                        [0, 7].forEach(det => {
+                            const o = ac.createOscillator(); o.type = 'sawtooth'; o.detune.value = det;
+                            o.frequency.setValueAtTime(hz * (kind === 'm' ? 0.9 : 1.08), t); o.frequency.exponentialRampToValueAtTime(hz * 0.92, t + dur);
+                            const vib = ac.createOscillator(); vib.frequency.value = 7; const vd = ac.createGain(); vd.gain.value = hz * 0.03; vib.connect(vd); vd.connect(o.frequency);
+                            const g = ac.createGain();
+                            g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.5, t + (kind === 'm' ? 0.12 : 0.03)); g.gain.exponentialRampToValueAtTime(0.0001, t + dur * 0.95);
+                            o.connect(g); g.connect(f1); g.connect(f2);
+                            o.start(t); o.stop(t + dur); vib.start(t); vib.stop(t + dur);
+                        });
+                        // aire de la "H"
+                        if (kind !== 'm') mNoise(ac, f2, t, 0.06, 0.25, 800);
+                        t += dur;
+                    });
+                } catch (e) {}
+            }
+            function drawEvilFace(t) {
+                if (t < LAUGH_START - 40 || t > 2235) return;
+                const W = canvas.width, H = canvas.height, now = Date.now();
+                const k = Math.min(1, (t - (LAUGH_START - 40)) / 40), fadeOut = t > 2205 ? (2235 - t) / 30 : 1;
+                const laughing = t >= LAUGH_START && t < LAUGH_START + 160;
+                const shake = laughing ? 6 : 1.5;
+                const cx = W / 2 + (Math.random() - 0.5) * shake, cy = H * 0.24 + (Math.random() - 0.5) * shake;
+                const S = Math.min(W, H) * 0.18;
+                ctx.save(); ctx.globalAlpha = k * fadeOut;
+                // ojos rojos brillantes
+                [-1, 1].forEach(sd => {
+                    const ex = cx + sd * S * 0.75, ey = cy - S * 0.25;
+                    const glow = ctx.createRadialGradient(ex, ey, 2, ex, ey, S * 0.55);
+                    glow.addColorStop(0, "rgba(255, 0, 40, 0.75)"); glow.addColorStop(1, "rgba(255, 0, 40, 0)");
+                    ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(ex, ey, S * 0.55, 0, Math.PI * 2); ctx.fill();
+                    ctx.fillStyle = "#FF1133"; ctx.beginPath();
+                    ctx.moveTo(ex - sd * S * 0.42, ey - S * 0.12); ctx.quadraticCurveTo(ex, ey - S * 0.2, ex + sd * S * 0.36, ey + S * 0.05); ctx.quadraticCurveTo(ex, ey + S * 0.1, ex - sd * S * 0.42, ey - S * 0.12); ctx.fill();
+                    ctx.fillStyle = "#FFE0E0"; ctx.beginPath(); ctx.arc(ex + sd * S * 0.02, ey - S * 0.04, S * 0.04, 0, Math.PI * 2); ctx.fill();
+                });
+                // sonrisa enorme que se abre al reír
+                const open = laughing ? S * (0.18 + 0.14 * Math.abs(Math.sin((t - LAUGH_START) / 60 * Math.PI / LAUGH_SYL))) : S * 0.14;
+                const mw = S * 1.5, my = cy + S * 0.45;
+                ctx.fillStyle = "#1A0003";
+                ctx.beginPath(); ctx.moveTo(cx - mw, my - S * 0.15); ctx.quadraticCurveTo(cx, my + open * 2.2, cx + mw, my - S * 0.15); ctx.quadraticCurveTo(cx, my + open * 0.4, cx - mw, my - S * 0.15); ctx.fill();
+                ctx.strokeStyle = "#FF1133"; ctx.lineWidth = 3; ctx.stroke();
+                // dientes afilados arriba y abajo
+                ctx.fillStyle = "#F4F0E8";
+                const n = 13;
+                for (let i = 1; i < n; i++) {
+                    const u = i / n, x = cx - mw + u * mw * 2;
+                    const yTop = my - S * 0.15 + (1 - Math.pow(2 * u - 1, 2)) * (open * 0.4 * 0.5 + S * 0.0);
+                    const yBot = my - S * 0.15 + (1 - Math.pow(2 * u - 1, 2)) * (open * 2.2 * 0.5);
+                    const tw = mw * 2 / n * 0.42;
+                    ctx.beginPath(); ctx.moveTo(x - tw, yTop); ctx.lineTo(x + tw, yTop); ctx.lineTo(x, yTop + S * 0.1); ctx.fill();
+                    ctx.beginPath(); ctx.moveTo(x - tw, yBot); ctx.lineTo(x + tw, yBot); ctx.lineTo(x, yBot - S * 0.1); ctx.fill();
+                }
+                // "JAJAJA" flotando mientras se ríe
+                if (laughing) {
+                    ctx.font = "bold 28px sans-serif"; ctx.textAlign = "center"; ctx.fillStyle = "#FF1133";
+                    for (let i = 0; i < 3; i++) { const a = now / 300 + i * 2.1; ctx.fillText(i % 2 ? "ハハハ" : "JAJAJA", cx + Math.cos(a) * S * 2.1, cy + Math.sin(a) * S * 0.6); }
+                }
+                ctx.restore();
+            }
+
             function drawTwist(t) {
                 const W = canvas.width, H = canvas.height;
                 ctx.fillStyle = "#000"; ctx.fillRect(0, 0, W, H);
+                drawEvilFace(t);
                 TWIST.forEach(([es, ja, a, b]) => {
                     if (t < a || t > b) return;
                     const k = Math.min(1, (t - a) / ((b - a) * 0.6)), fade = Math.min(1, (b - t) / 20);
