@@ -711,6 +711,7 @@ codigo_juego_template = """
             window.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
             window.addEventListener('keydown', (e) => {
                 if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'PageUp', 'PageDown', 'Home', 'End'].includes(e.code)) e.preventDefault();
+                if (typeof sunQteActive === 'function' && sunQteActive() && !e.repeat) handleQteKey(e.code);
             });
 
             // ======================================================
@@ -1006,7 +1007,7 @@ codigo_juego_template = """
                     if (meteor.isBoss && !meteor.dead && distToBeam(meteor.x, meteor.y, x1, y1, x2, y2) < w + meteor.r) {
                         meteor.hp -= ABYSS_DMG_BOSS * dmg;
                         floatingTexts.push({ x: meteor.x + (Math.random() - 0.5) * 80, y: meteor.y - meteor.r - 20, text: `-${Math.ceil(ABYSS_DMG_BOSS * dmg)}`, color: "#B266FF", life: 30, size: 26 });
-                        if (meteor.hp <= 0 && !meteor.dead) {
+                        if (meteor.hp <= 0 && !meteor.dead && !sunInterceptDeath()) {
                             meteor.dead = true; playSfx("bh_death", 2.5);
                             floatingTexts.push({ x: meteor.x, y: meteor.y, text: "VICTORIA GALÁCTICA", icon: "star", iconBoth: true, color: "#FFD700", life: 300, size: 50 }); onBossDefeated();
                             if (bgMusic && audioSrc) { bgMusic.pause(); bgMusic.src = audioSrc; usingBossTrack = false; bgMusic.currentTime = 0; bgMusic.play().catch(e => console.log(e)); }
@@ -1140,7 +1141,7 @@ codigo_juego_template = """
                 if (!meteor.isBoss || meteor.dead) return;
                 meteor.hp -= amount;
                 floatingTexts.push({ x: meteor.x + (Math.random() - 0.5) * 80, y: meteor.y - meteor.r - 20, text: `-${Math.ceil(amount)}`, color: color || "#FF8C00", life: 40, size: 30 });
-                if (meteor.hp <= 0 && !meteor.dead) {
+                if (meteor.hp <= 0 && !meteor.dead && !sunInterceptDeath()) {
                     meteor.dead = true; playSfx("bh_death", 2.5);
                     floatingTexts.push({ x: meteor.x, y: meteor.y, text: "VICTORIA GALÁCTICA", icon: "star", iconBoth: true, color: "#FFD700", life: 300, size: 50 }); onBossDefeated();
                     if (bgMusic && audioSrc) { bgMusic.pause(); bgMusic.src = audioSrc; usingBossTrack = false; bgMusic.currentTime = 0; bgMusic.play().catch(e => console.log(e)); }
@@ -1940,10 +1941,14 @@ codigo_juego_template = """
             // Fase 2 (mitad de vida): lentes abajo, serio, estrellas cósmicas verdes
             // Fase 3 (poca vida): sombrero de sheriff, dos revólveres, 10 balas y 10 s de recarga
             // ======================================================
-            const SUN_DEF = { gesto_espera_s: 10, fuego_cantidad: 3, estrellas_espera_s: 7, estrellas_cantidad: 8, sheriff_en: 0.25, balas: 10, recarga_s: 10, "daño_bala": 4 };
+            const SUN_DEF = { gesto_espera_s: 10, fuego_cantidad: 3, estrellas_espera_s: 7, estrellas_cantidad: 8, sheriff_en: 0.25, balas: 10, recarga_s: 10, "daño_bala": 4,
+                furioso_vida: 0.6, planetas_espera_s: 2.5, planetas_cantidad: 3, "daño_planeta": 3,
+                laser_dedos_espera_s: 5, laser_dedos_duracion_s: 2, "daño_laser_dedos": 3,
+                qte_flechas: 6, qte_rondas: 2, qte_tiempo_s: 7 };
             function sunCfg() { return Object.assign({}, SUN_DEF, LV.jefe.sol || {}); }
             function sunReset() {
-                meteor.sun = { gestT: 300, gest: 0, gestKind: '', starT: 200, sheriff: false, sheriffAnim: 0, ammo: 0, reload: 0, shotT: 0, hand: 0, flash: [0, 0], glassesOff: 0 };
+                meteor.sun = { gestT: 300, gest: 0, gestKind: '', starT: 200, sheriff: false, sheriffAnim: 0, ammo: 0, reload: 0, shotT: 0, hand: 0, flash: [0, 0], glassesOff: 0, spinT: [0, 0],
+                               furioso: false, furyAnim: 0, furyHalf: false, planetT: 0, fingerT: 0, finger: null, qte: null, qteDone: false, r0: 0 };
             }
             function sunGunSfx() {
                 if (!isUserInteracted || sfxVolume === 0) return;
@@ -1968,9 +1973,10 @@ codigo_juego_template = """
                     x = meteor.x + side * r * (1.3 - 0.85 * k) + Math.cos(a) * r * 0.15 * k * side;
                     y = meteor.y + r * (0.35 + 0.25 * k) + Math.sin(a) * r * 0.15 * k;
                 }
+                if (s && s.furioso) return { x: meteor.x + side * r * 1.3, y: meteor.y + r * 0.3 + Math.sin(t + side) * r * 0.05 };
                 if (s && s.sheriff && s.sheriffAnim <= 0 && !player.dead) {   // apunta al jugador
                     const ang = Math.atan2(player.y - meteor.y, player.x - meteor.x);
-                    x = meteor.x + side * r * 1.15 + Math.cos(ang) * r * 0.35; y = meteor.y + r * 0.25 + Math.sin(ang) * r * 0.35;
+                    x = meteor.x + side * r * 1.2 + Math.cos(ang) * r * 0.3; y = meteor.y + r * 0.78 + Math.sin(ang) * r * 0.2;
                 }
                 return { x, y };
             }
@@ -1984,6 +1990,8 @@ codigo_juego_template = """
 
             function updateSunBoss() {
                 const c = sunCfg(), s = meteor.sun || (sunReset(), meteor.sun);
+                if (s.spinT[0] > 0) s.spinT[0]--; if (s.spinT[1] > 0) s.spinT[1]--;
+                if (s.furioso) { updateSunFury(); return; }
                 // Fases
                 if (!meteor.isPhase2 && meteor.hp <= meteor.maxHp * 0.5) {
                     meteor.isPhase2 = true; s.gest = 0; s.starT = 120;
@@ -2027,7 +2035,7 @@ codigo_juego_template = """
                         const side = s.hand === 0 ? -1 : 1; s.hand = 1 - s.hand;
                         const hp = sunHandPos(side), a = Math.atan2(player.y - hp.y, player.x - hp.x);
                         sunShoot('bala_sol', hp.x, hp.y, a, 14);
-                        s.flash[side < 0 ? 0 : 1] = 6; s.ammo--; s.shotT = 14;
+                        s.flash[side < 0 ? 0 : 1] = 6; s.spinT[side < 0 ? 0 : 1] = 18; s.ammo--; s.shotT = 14;
                         sunGunSfx();
                         if (s.ammo === 0) { s.reload = c.recarga_s * 60; floatingTexts.push({ x: meteor.x, y: meteor.y - meteor.r - 40, text: "RECARGANDO...", color: "#FFB257", life: 60, size: 20 }); }
                     }
@@ -2060,7 +2068,7 @@ codigo_juego_template = """
                 }
             }
 
-            function drawGlove(x, y, r, ang, gun, flash) {
+            function drawGlove(x, y, r, ang, gun, flash, spin) {
                 ctx.save(); ctx.translate(x, y); ctx.rotate(ang);
                 const k = r / 40;
                 ctx.lineWidth = 3 * k; ctx.strokeStyle = "#2A1A0A";
@@ -2068,11 +2076,11 @@ codigo_juego_template = """
                 ctx.beginPath(); ctx.ellipse(0, 0, 26 * k, 22 * k, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
                 ctx.beginPath(); ctx.ellipse(-24 * k, 0, 10 * k, 14 * k, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();   // puño del guante
                 if (gun) {
-                    ctx.fillStyle = "#6B4423"; ctx.fillRect(4 * k, 6 * k, 12 * k, 22 * k);
-                    ctx.fillStyle = "#5E6773"; ctx.fillRect(4 * k, -6 * k, 20 * k, 14 * k);
-                    ctx.fillStyle = "#A9B3C1"; ctx.fillRect(20 * k, -3 * k, 38 * k, 8 * k);
-                    ctx.strokeRect(20 * k, -3 * k, 38 * k, 8 * k);
-                    if (flash > 0) { ctx.fillStyle = "#FFE38A"; ctx.beginPath(); ctx.arc(64 * k, 1 * k, 14 * k, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = "#FFFFFF"; ctx.beginPath(); ctx.arc(64 * k, 1 * k, 7 * k, 0, Math.PI * 2); ctx.fill(); }
+                    // revólver gigante; gira alrededor del dedo (estilo western)
+                    ctx.save(); ctx.translate(10 * k, 4 * k); ctx.rotate(spin || 0);
+                    drawRevolver(k * 1.55, (spin || 0) === 0 ? flash : 0);
+                    ctx.restore();
+                    ctx.fillStyle = "#FFFFFF"; ctx.beginPath(); ctx.ellipse(10 * k, 6 * k, 9 * k, 7 * k, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
                 } else {
                     ctx.fillStyle = "#FFFFFF";
                     for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.ellipse(22 * k, (-12 + i * 12) * k, 10 * k, 6 * k, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); }
@@ -2082,6 +2090,7 @@ codigo_juego_template = """
 
             function drawSunBoss() {
                 const r = meteor.r, x = meteor.x, y = meteor.y, s = meteor.sun, now = Date.now();
+                if (s && s.furioso) { drawFuriousSun(); return; }
                 const awake = meteor.isBoss, sheriff = s && s.sheriff, serious = meteor.isPhase2;
                 ctx.save(); ctx.translate(x, y);
                 // halo
@@ -2169,7 +2178,13 @@ codigo_juego_template = """
                         if (sheriff && s.sheriffAnim <= 0) ang = Math.atan2(player.y - hp.y, player.x - hp.x);
                         else if (s && s.gest > 0) ang = (sd < 0 ? 0 : Math.PI) + Math.sin(now / 60) * 0.5;
                         if (!(sheriff && s.sheriffAnim <= 0) && Math.cos(ang) < 0) { ctx.save(); ctx.translate(hp.x, hp.y); ctx.scale(1, -1); ctx.translate(-hp.x, -hp.y); drawGlove(hp.x, hp.y, r * 0.3, ang, false, 0); ctx.restore(); }
-                        else drawGlove(hp.x, hp.y, r * 0.3, ang, sheriff && s.sheriffAnim < 60, s ? s.flash[i] : 0);
+                        else {
+                            let spin = 0;
+                            if (s.sheriffAnim > 0) spin = now / 45;                                  // las saca girando
+                            else if (s.reload > 0) spin = now / 70 * (i ? 1 : -1);                  // giran mientras recarga
+                            else if (s.spinT[i] > 0) spin = (1 - s.spinT[i] / 18) * Math.PI * 2 * (i ? 1 : -1);   // giro tras disparar
+                            drawGlove(hp.x, hp.y, r * 0.3, ang, sheriff && s.sheriffAnim < 60, s ? s.flash[i] : 0, spin % (Math.PI * 2));
+                        }
                     });
                     if (s && s.gest > 0) {   // energía entre las manos durante el gesto
                         const k = (60 - s.gest) / 60, col = s.gestKind === 'fuego' ? "rgba(255, 140, 0, " : "rgba(57, 255, 122, ";
@@ -2197,6 +2212,7 @@ codigo_juego_template = """
             // Dibujo de los proyectiles del sol
             function drawSunProjectile(l) {
                 const t = Date.now();
+                if (l.kind === 'planeta') { drawPlanetProjectile(l); return; }
                 if (l.kind === 'fuego') {
                     ctx.save(); ctx.translate(l.x, l.y);
                     ctx.fillStyle = "rgba(255, 120, 0, 0.35)"; ctx.beginPath(); ctx.arc(0, 0, l.r * 1.5, 0, Math.PI * 2); ctx.fill();
@@ -2218,6 +2234,328 @@ codigo_juego_template = """
                     ctx.save(); ctx.translate(l.x, l.y); ctx.rotate(a);
                     ctx.fillStyle = "rgba(255, 227, 138, 0.4)"; ctx.fillRect(-34, -4, 34, 8);
                     ctx.fillStyle = "#C9A227"; ctx.fillRect(-6, -5, 14, 10); ctx.fillStyle = "#FFE38A"; ctx.beginPath(); ctx.arc(8, 0, 5, -Math.PI / 2, Math.PI / 2); ctx.fill();
+                    ctx.restore();
+                }
+            }
+
+            // ======================================================
+            // === SOL: REVÓLVER DETALLADO, SOL FURIOSO Y SUPERNOVA ===
+            // ======================================================
+            // Revólver western grande (apunta hacia +x, pivote en el gatillo)
+            function drawRevolver(k, flash) {
+                ctx.save(); ctx.lineJoin = "round"; ctx.lineWidth = 2.5 * k; ctx.strokeStyle = "#1A1410";
+                // culata de madera
+                ctx.fillStyle = "#7A4520";
+                ctx.beginPath(); ctx.moveTo(-14 * k, -4 * k); ctx.quadraticCurveTo(-22 * k, 14 * k, -34 * k, 34 * k); ctx.lineTo(-20 * k, 40 * k); ctx.quadraticCurveTo(-8 * k, 22 * k, -2 * k, 6 * k); ctx.closePath(); ctx.fill(); ctx.stroke();
+                ctx.strokeStyle = "#4A2810"; ctx.lineWidth = 1.5 * k;
+                for (let i = 0; i < 4; i++) { ctx.beginPath(); ctx.moveTo((-12 - i * 4) * k, (6 + i * 7) * k); ctx.lineTo((-4 - i * 4) * k, (6 + i * 7) * k); ctx.stroke(); }
+                ctx.fillStyle = "#E8B934"; ctx.beginPath(); ctx.arc(-16 * k, 18 * k, 2.5 * k, 0, Math.PI * 2); ctx.fill();
+                ctx.strokeStyle = "#1A1410"; ctx.lineWidth = 2.5 * k;
+                // guardamonte y gatillo
+                ctx.beginPath(); ctx.arc(2 * k, 8 * k, 9 * k, 0, Math.PI); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(0, 2 * k); ctx.lineTo(-2 * k, 11 * k); ctx.stroke();
+                // armazón
+                ctx.fillStyle = "#3A4250"; ctx.fillRect(-16 * k, -12 * k, 40 * k, 16 * k); ctx.strokeRect(-16 * k, -12 * k, 40 * k, 16 * k);
+                // martillo
+                ctx.fillStyle = "#2A3038"; ctx.beginPath(); ctx.moveTo(-16 * k, -10 * k); ctx.lineTo(-26 * k, -20 * k); ctx.lineTo(-20 * k, -22 * k); ctx.lineTo(-10 * k, -12 * k); ctx.closePath(); ctx.fill(); ctx.stroke();
+                // tambor con estrías
+                ctx.fillStyle = "#6B7584"; ctx.fillRect(-4 * k, -16 * k, 26 * k, 22 * k); ctx.strokeRect(-4 * k, -16 * k, 26 * k, 22 * k);
+                ctx.strokeStyle = "#3A4250"; ctx.lineWidth = 2 * k;
+                for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.moveTo(-1 * k, (-11 + i * 7) * k); ctx.lineTo(19 * k, (-11 + i * 7) * k); ctx.stroke(); }
+                ctx.fillStyle = "rgba(255,255,255,0.35)"; ctx.fillRect(-2 * k, -15 * k, 22 * k, 3 * k);
+                ctx.fillStyle = "#E8B934"; ctx.beginPath(); ctx.arc(9 * k, -5 * k, 2.5 * k, 0, Math.PI * 2); ctx.fill();
+                ctx.strokeStyle = "#1A1410"; ctx.lineWidth = 2.5 * k;
+                // cañón largo
+                ctx.fillStyle = "#A9B3C1"; ctx.fillRect(22 * k, -12 * k, 78 * k, 10 * k); ctx.strokeRect(22 * k, -12 * k, 78 * k, 10 * k);
+                ctx.fillStyle = "#E6ECF2"; ctx.fillRect(24 * k, -11 * k, 74 * k, 2.5 * k);
+                ctx.fillStyle = "#6B7584"; ctx.fillRect(22 * k, -2 * k, 60 * k, 5 * k); ctx.strokeRect(22 * k, -2 * k, 60 * k, 5 * k);
+                ctx.fillStyle = "#1A1410"; ctx.fillRect(94 * k, -17 * k, 4 * k, 5 * k);
+                ctx.fillStyle = "#E8B934"; ctx.fillRect(20 * k, -12 * k, 3 * k, 15 * k);
+                if (flash > 0) {
+                    ctx.fillStyle = "rgba(255, 227, 138, 0.8)"; ctx.beginPath(); ctx.moveTo(100 * k, -7 * k); ctx.lineTo(140 * k, -22 * k); ctx.lineTo(128 * k, -7 * k); ctx.lineTo(146 * k, 6 * k); ctx.closePath(); ctx.fill();
+                    ctx.fillStyle = "#FFFFFF"; ctx.beginPath(); ctx.arc(108 * k, -7 * k, 9 * k, 0, Math.PI * 2); ctx.fill();
+                }
+                ctx.restore();
+            }
+
+            // Mano abierta con 5 dedos (sol furioso)
+            function drawOpenHand(x, y, r, ang) {
+                ctx.save(); ctx.translate(x, y); ctx.rotate(ang);
+                const k = r / 40;
+                ctx.lineWidth = 3 * k; ctx.strokeStyle = "#2A1A0A"; ctx.fillStyle = "#FFFFFF";
+                for (let f = 0; f < 5; f++) {
+                    const a = (f - 2) * 0.32;
+                    ctx.save(); ctx.rotate(a); ctx.beginPath(); ctx.ellipse(30 * k, 0, 16 * k, 6.5 * k, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); ctx.restore();
+                }
+                ctx.beginPath(); ctx.ellipse(0, 0, 24 * k, 22 * k, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+                ctx.beginPath(); ctx.ellipse(-24 * k, 0, 10 * k, 14 * k, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+                ctx.restore();
+            }
+            const FINGER_COLORS = ["#FF2244", "#FF8C00", "#FFE600", "#33FF66", "#00C8FF"];
+            const PLANET_COLORS = [["#FF3B30", "#7A0A05"], ["#FF9500", "#7A3A00"], ["#2F80FF", "#0A1F6B"], ["#34C759", "#0A4A1A"], ["#AF52DE", "#3A0A5A"]];
+            // 10 rayos: 5 dedos por mano
+            function fingerBeams() {
+                const s = meteor.sun, f = s.finger, out = [];
+                if (!f) return out;
+                [-1, 1].forEach(side => {
+                    const hp = sunHandPos(side);
+                    for (let i = 0; i < 5; i++) {
+                        const a = f.base + side * 0.06 + (i - 2) * 0.1;
+                        const tipX = hp.x + Math.cos(a) * meteor.r * 0.28, tipY = hp.y + Math.sin(a) * meteor.r * 0.28;
+                        out.push({ x1: tipX, y1: tipY, x2: tipX + Math.cos(a) * 2600, y2: tipY + Math.sin(a) * 2600, col: FINGER_COLORS[i] });
+                    }
+                });
+                return out;
+            }
+
+            function sunTransformToFury() {
+                const s = meteor.sun, c = sunCfg();
+                s.furioso = true; s.furyAnim = 150; s.r0 = meteor.r; s.furyHalf = false; s.planetT = 90; s.fingerT = 120; s.finger = null;
+                meteor.maxHp = Math.round(LV.jefe.vida * c.furioso_vida); meteor.hp = meteor.maxHp; meteor.nmHits = 0;
+                lasers = lasers.filter(l => l.owner !== meteor);
+                floatingTexts.push({ x: meteor.x, y: meteor.y - meteor.r - 100, text: "¡EL SOL SE ENFURECE!", icon: "fire", iconBoth: true, color: "#FF3B30", life: 200, size: 44 });
+                playSfx("bh_death", 2); playAbilitySfx('boom');
+            }
+
+            // Se llama antes de que el jefe muera. true = la muerte se cancela (transformación o supernova)
+            function sunInterceptDeath() {
+                if (LV.jefe.tipo !== 'sol' || !meteor.sun) return false;
+                const s = meteor.sun;
+                if (!s.furioso) { sunTransformToFury(); return true; }
+                if (s.qteDone) return false;
+                if (!s.qte) startSunQTE();
+                meteor.hp = 1; return true;
+            }
+
+            function updateSunFury() {
+                const s = meteor.sun, c = sunCfg();
+                if (s.furyAnim > 0) { s.furyAnim--; meteor.r = s.r0 * (1 + 0.45 * (1 - s.furyAnim / 150)); if (s.furyAnim % 5 === 0) particles.push({ x: meteor.x + (Math.random() - 0.5) * meteor.r * 2, y: meteor.y + (Math.random() - 0.5) * meteor.r * 2, vx: 0, vy: -2, color: "#FF3B30", life: 25 }); return; }
+                if (!s.furyHalf && meteor.hp <= meteor.maxHp * 0.5) {
+                    s.furyHalf = true; s.fingerT = 60;
+                    floatingTexts.push({ x: meteor.x, y: meteor.y - meteor.r - 100, text: "¡LÁSERES DE LOS DEDOS!", icon: "warning", iconBoth: true, color: "#FFE600", life: 160, size: 34 });
+                }
+                if (!player.dead) {
+                    const dx = player.x - meteor.x, dy = player.y - meteor.y, d = Math.hypot(dx, dy), sp = s.finger ? 0.3 : LV.jefe.velocidad_fase2;
+                    if (d > meteor.r * 2) { meteor.x += dx / d * sp; meteor.y += dy / d * sp; }
+                }
+                if (player.dead) return;
+                const toP = Math.atan2(player.y - meteor.y, player.x - meteor.x);
+                // planetas cósmicos
+                if ((s.planetT -= 1) <= 0) {
+                    const n = c.planetas_cantidad;
+                    for (let i = 0; i < n; i++) {
+                        const col = PLANET_COLORS[Math.floor(Math.random() * PLANET_COLORS.length)], a = toP + (i - (n - 1) / 2) * 0.35;
+                        lasers.push({ x: meteor.x + Math.cos(a) * meteor.r, y: meteor.y + Math.sin(a) * meteor.r, vx: Math.cos(a) * 4.2, vy: Math.sin(a) * 4.2, owner: meteor, isStar: false, kind: 'planeta',
+                            life: 320, r: 34 + Math.random() * 14, color: col[0], dark: col[1], ring: Math.random() < 0.5, spin: Math.random() * 6, damageMult: c['daño_planeta'] });
+                    }
+                    playAbilitySfx('whoosh');
+                    s.planetT = c.planetas_espera_s * 60 * (s.furyHalf ? 1.4 : 1);
+                }
+                // láseres de colores desde cada dedo
+                if (s.furyHalf) {
+                    const AV = 40, DUR = c.laser_dedos_duracion_s * 60;
+                    if (!s.finger && (s.fingerT -= 1) <= 0) { s.finger = { t: 0, base: toP }; playAbilitySfx('shield'); }
+                    if (s.finger) {
+                        const f = s.finger; f.t++;
+                        if (f.t === AV) playSfx("laser", 1.2);
+                        if (f.t > AV) {
+                            f.base += Math.sign(Math.sin(Math.atan2(player.y - meteor.y, player.x - meteor.x) - f.base)) * 0.004;   // sigue lento al jugador
+                            for (const b of fingerBeams()) { if (distToBeam(player.x, player.y, b.x1, b.y1, b.x2, b.y2) < 12 + player.r) { takeDamage(player, c['daño_laser_dedos']); break; } }
+                        }
+                        if (f.t >= AV + DUR) { s.finger = null; s.fingerT = Math.max(30, c.laser_dedos_espera_s * 60 - AV - DUR); }
+                    }
+                }
+            }
+
+            // ---------- SUPERNOVA: secuencia de flechas ----------
+            const QTE_DIRS = ['up', 'down', 'left', 'right'];
+            function newQteSeq(n) { return Array.from({ length: n }, () => QTE_DIRS[Math.floor(Math.random() * 4)]); }
+            function startSunQTE() {
+                const s = meteor.sun, c = sunCfg();
+                s.qte = { round: 0, rounds: c.qte_rondas, seq: newQteSeq(c.qte_flechas), idx: 0, time: c.qte_tiempo_s * 60, timeMax: c.qte_tiempo_s * 60, bad: 0, good: 0, t: 0, end: 0 };
+                s.finger = null; lasers = lasers.filter(l => l.owner !== meteor);
+                isFiring = false; keysDown.clear();
+                floatingTexts.push({ x: meteor.x, y: meteor.y - meteor.r - 100, text: "¡SUPERNOVA!", icon: "burst", iconBoth: true, color: "#FFFFFF", life: 120, size: 50 });
+                playSfx("bh_death", 2.5);
+            }
+            function sunQteActive() { return LV.jefe.tipo === 'sol' && meteor && meteor.sun && meteor.sun.qte && gameState === 'playing'; }
+            function handleQteKey(code) {
+                const q = meteor.sun.qte; if (q.end > 0) return;
+                const map = { ArrowUp: 'up', KeyW: 'up', ArrowDown: 'down', KeyS: 'down', ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right' };
+                const d = map[code]; if (!d) return;
+                if (d === q.seq[q.idx]) {
+                    q.idx++; q.good = 6; playAbilitySfx('ping');
+                    if (q.idx >= q.seq.length) {
+                        q.round++;
+                        if (q.round >= q.rounds) { q.end = 90; playAbilitySfx('shield'); floatingTexts.push({ x: player.x, y: player.y - 60, text: "¡ESQUIVASTE LA SUPERNOVA!", color: "#33FF66", life: 120, size: 30 }); }
+                        else { q.seq = newQteSeq(sunCfg().qte_flechas); q.idx = 0; q.time = q.timeMax; playAbilitySfx('shield'); }
+                    }
+                } else { q.idx = 0; q.bad = 12; playAbilitySfx('metal'); }   // error: la ronda vuelve a empezar
+            }
+            function updateSunQTE() {
+                const s = meteor.sun, q = s.qte;
+                q.t++;
+                particles.forEach(p => { p.x += p.vx || 0; p.y += p.vy || 0; p.life--; }); particles = particles.filter(p => p.life > 0);
+                floatingTexts.forEach(ft => { ft.y -= 0.6; ft.life--; }); floatingTexts = floatingTexts.filter(ft => ft.life > 0);
+                if (q.t % 3 === 0) { const a = Math.random() * Math.PI * 2, sp = 3 + Math.random() * 8; particles.push({ x: meteor.x, y: meteor.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, color: ["#FFFFFF", "#FFE600", "#FF8C00", "#FF3B30"][q.t % 4], life: 60 }); }
+                if (q.bad > 0) q.bad--; if (q.good > 0) q.good--;
+                if (q.end > 0) {
+                    q.end--;
+                    if (q.end === 0) { s.qte = null; s.qteDone = true; keysDown.clear(); meteor.hp = 0.5; playAbilitySfx('boom'); damageMeteor(1); }
+                    return;
+                }
+                q.time--;
+                if (q.time <= 0) {
+                    // la explosión te alcanza
+                    playAbilitySfx('boom');
+                    if (playerLives <= 1) { s.qte = null; player.hp = 0; player.dead = true; handlePlayerDeath(); return; }
+                    playerLives--;
+                    floatingTexts.push({ x: player.x, y: player.y - 60, text: "¡LA EXPLOSIÓN TE ALCANZÓ! -1 VIDA", color: "#FF3B30", life: 120, size: 26 });
+                    q.round = 0; q.seq = newQteSeq(sunCfg().qte_flechas); q.idx = 0; q.time = q.timeMax; q.bad = 20;
+                }
+            }
+            function drawQteArrow(cx, cy, size, dir, fill) {
+                const rot = { up: -Math.PI / 2, down: Math.PI / 2, left: Math.PI, right: 0 }[dir];
+                ctx.save(); ctx.translate(cx, cy); ctx.rotate(rot);
+                ctx.fillStyle = fill; ctx.beginPath();
+                ctx.moveTo(size * 0.5, 0); ctx.lineTo(0, -size * 0.42); ctx.lineTo(0, -size * 0.16); ctx.lineTo(-size * 0.45, -size * 0.16);
+                ctx.lineTo(-size * 0.45, size * 0.16); ctx.lineTo(0, size * 0.16); ctx.lineTo(0, size * 0.42); ctx.closePath(); ctx.fill();
+                ctx.restore();
+            }
+            function drawSunQTEOverlay() {
+                if (!sunQteActive()) return;
+                const q = meteor.sun.qte, W = canvas.width, H = canvas.height;
+                ctx.save();
+                ctx.fillStyle = q.bad > 0 ? "rgba(120, 0, 0, 0.45)" : "rgba(40, 10, 0, " + (0.35 + 0.1 * Math.sin(q.t / 6)) + ")"; ctx.fillRect(0, 0, W, H);
+                if (q.end > 0) { ctx.fillStyle = "rgba(255, 255, 255, " + Math.min(1, (90 - q.end) / 30) * 0.85 + ")"; ctx.fillRect(0, 0, W, H); ctx.restore(); return; }
+                ctx.textAlign = "center"; ctx.fillStyle = "#FFE600"; ctx.font = "bold 34px sans-serif";
+                ctx.fillText("¡EL SOL VA A EXPLOTAR! ESQUIVA", W / 2, H * 0.3);
+                ctx.fillStyle = "#FFFFFF"; ctx.font = "bold 18px sans-serif";
+                ctx.fillText(`RONDA ${q.round + 1}/${q.rounds}  ·  Usa las FLECHAS o WASD`, W / 2, H * 0.3 + 32);
+                const n = q.seq.length, box = Math.min(78, (W * 0.8) / n - 10), gap = 12, total = n * box + (n - 1) * gap, x0 = (W - total) / 2, y = H * 0.45;
+                q.seq.forEach((d, i) => {
+                    const x = x0 + i * (box + gap);
+                    const done = i < q.idx, cur = i === q.idx;
+                    ctx.fillStyle = done ? "rgba(51, 255, 102, 0.25)" : "rgba(0, 0, 0, 0.6)"; ctx.fillRect(x, y, box, box);
+                    ctx.strokeStyle = q.bad > 0 ? "#FF3B30" : (cur ? "#FFE600" : (done ? "#33FF66" : "#888")); ctx.lineWidth = cur ? 4 + Math.sin(q.t / 4) * 1.5 : 2; ctx.strokeRect(x, y, box, box);
+                    drawQteArrow(x + box / 2, y + box / 2, box * 0.7, d, done ? "#33FF66" : (cur ? "#FFE600" : "#FFFFFF"));
+                });
+                const pct = Math.max(0, q.time / q.timeMax);
+                ctx.fillStyle = "rgba(0,0,0,0.6)"; ctx.fillRect(x0, y + box + 18, total, 12);
+                ctx.fillStyle = pct < 0.3 ? "#FF3B30" : "#FFB300"; ctx.fillRect(x0, y + box + 18, total * pct, 12);
+                ctx.restore();
+            }
+            function drawPlanetProjectile(l) {
+                ctx.save(); ctx.translate(l.x, l.y);
+                ctx.fillStyle = l.color + "33"; ctx.beginPath(); ctx.arc(0, 0, l.r * 1.6, 0, Math.PI * 2); ctx.fill();   // brillo cósmico
+                const g = ctx.createRadialGradient(-l.r * 0.35, -l.r * 0.35, l.r * 0.1, 0, 0, l.r);
+                g.addColorStop(0, "#FFFFFF"); g.addColorStop(0.25, l.color); g.addColorStop(1, l.dark);
+                ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, l.r, 0, Math.PI * 2); ctx.fill();
+                ctx.save(); ctx.beginPath(); ctx.arc(0, 0, l.r, 0, Math.PI * 2); ctx.clip();
+                ctx.rotate(l.spin + Date.now() / 900); ctx.fillStyle = "rgba(255,255,255,0.18)";
+                for (let i = -2; i <= 2; i++) ctx.fillRect(-l.r, i * l.r * 0.32 - l.r * 0.06, l.r * 2, l.r * 0.12);
+                ctx.restore();
+                if (l.ring) { ctx.strokeStyle = "rgba(255, 240, 200, 0.75)"; ctx.lineWidth = Math.max(3, l.r * 0.12); ctx.beginPath(); ctx.ellipse(0, 0, l.r * 1.6, l.r * 0.45, -0.4, 0, Math.PI * 2); ctx.stroke(); }
+                const tw = Date.now() / 150 + l.spin;   // destellos
+                ctx.fillStyle = "#FFFFFF"; for (let i = 0; i < 3; i++) { const a = tw + i * 2.1; ctx.fillRect(Math.cos(a) * l.r * 1.4 - 2, Math.sin(a) * l.r * 1.4 - 2, 4, 4); }
+                ctx.restore();
+            }
+            function drawFingerLasers() {
+                const s = meteor.sun; if (!s || !s.finger) return;
+                const AV = 40, beams = fingerBeams();
+                ctx.save(); ctx.lineCap = "round";
+                beams.forEach(b => {
+                    if (s.finger.t <= AV) {
+                        ctx.globalAlpha = 0.35 + 0.45 * (Math.floor(s.finger.t / 5) % 2); ctx.strokeStyle = b.col; ctx.lineWidth = 3; ctx.setLineDash([14, 10]);
+                        ctx.beginPath(); ctx.moveTo(b.x1, b.y1); ctx.lineTo(b.x2, b.y2); ctx.stroke(); ctx.setLineDash([]);
+                    } else {
+                        ctx.globalAlpha = 0.3; ctx.strokeStyle = b.col; ctx.lineWidth = 34; ctx.beginPath(); ctx.moveTo(b.x1, b.y1); ctx.lineTo(b.x2, b.y2); ctx.stroke();
+                        ctx.globalAlpha = 1; ctx.lineWidth = 14; ctx.stroke();
+                        ctx.strokeStyle = "#FFFFFF"; ctx.lineWidth = 4; ctx.stroke();
+                    }
+                });
+                ctx.restore();
+            }
+
+            // Sol furioso: más grande, rojo, lentes oscuros angulares de estrella de cine de acción
+            function drawFuriousSun() {
+                const r = meteor.r, x = meteor.x, y = meteor.y, s = meteor.sun, now = Date.now(), q = s.qte;
+                const pulse = q ? 1 + Math.sin(now / 40) * 0.06 + Math.min(0.25, q.t / 600) : 1;
+                ctx.save(); ctx.translate(x + (q ? (Math.random() - 0.5) * 10 : 0), y + (q ? (Math.random() - 0.5) * 10 : 0)); ctx.scale(pulse, pulse);
+                const halo = ctx.createRadialGradient(0, 0, r * 0.8, 0, 0, r * 2.1);
+                halo.addColorStop(0, q ? "rgba(255, 255, 255, 0.8)" : "rgba(255, 80, 30, 0.6)"); halo.addColorStop(1, "rgba(255, 40, 0, 0)");
+                ctx.fillStyle = halo; ctx.beginPath(); ctx.arc(0, 0, r * 2.1, 0, Math.PI * 2); ctx.fill();
+                // rayos en llamas
+                ctx.save(); ctx.rotate(now / 600);
+                for (let i = 0; i < 18; i++) {
+                    const a = i * Math.PI * 2 / 18, len = r * (i % 2 ? 1.4 : 1.7) + Math.sin(now / 90 + i) * r * 0.08;
+                    ctx.fillStyle = i % 3 === 0 ? "#FFE600" : (i % 3 === 1 ? "#FF7A00" : "#FF3B30");
+                    ctx.beginPath(); ctx.moveTo(Math.cos(a - 0.12) * r * 0.95, Math.sin(a - 0.12) * r * 0.95); ctx.lineTo(Math.cos(a) * len, Math.sin(a) * len); ctx.lineTo(Math.cos(a + 0.12) * r * 0.95, Math.sin(a + 0.12) * r * 0.95); ctx.fill();
+                }
+                ctx.restore();
+                const body = ctx.createRadialGradient(-r * 0.3, -r * 0.3, r * 0.1, 0, 0, r);
+                if (q) { body.addColorStop(0, "#FFFFFF"); body.addColorStop(0.6, "#FFF2A0"); body.addColorStop(1, "#FF8C00"); }
+                else { body.addColorStop(0, "#FFE9A8"); body.addColorStop(0.5, "#FF8A1F"); body.addColorStop(1, "#D9261C"); }
+                ctx.fillStyle = body; ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill();
+                ctx.strokeStyle = "#8A1A0A"; ctx.lineWidth = Math.max(3, r * 0.025); ctx.stroke();
+                // vena de enojo
+                ctx.strokeStyle = "#B3122E"; ctx.lineWidth = r * 0.025;
+                ctx.beginPath(); ctx.moveTo(r * 0.45, -r * 0.62); ctx.lineTo(r * 0.55, -r * 0.52); ctx.moveTo(r * 0.6, -r * 0.65); ctx.lineTo(r * 0.5, -r * 0.55);
+                ctx.moveTo(r * 0.42, -r * 0.5); ctx.lineTo(r * 0.52, -r * 0.6); ctx.stroke();
+                // cejas enojadas
+                ctx.strokeStyle = "#4A0A00"; ctx.lineWidth = r * 0.06; ctx.lineCap = "round";
+                ctx.beginPath(); ctx.moveTo(-r * 0.55, -r * 0.48); ctx.lineTo(-r * 0.12, -r * 0.32); ctx.moveTo(r * 0.55, -r * 0.48); ctx.lineTo(r * 0.12, -r * 0.32); ctx.stroke();
+                // lentes oscuros angulares (aparecen bajando durante la transformación)
+                const drop = s.furyAnim > 40 ? (s.furyAnim - 40) / 110 : 0;
+                ctx.save(); ctx.translate(0, -drop * r * 1.4); ctx.globalAlpha = 1 - drop * 0.5;
+                ctx.fillStyle = "#0A0A0F";
+                ctx.beginPath();
+                ctx.moveTo(-r * 0.72, -r * 0.3); ctx.lineTo(r * 0.72, -r * 0.3); ctx.lineTo(r * 0.66, -r * 0.12); ctx.lineTo(r * 0.38, -r * 0.02);
+                ctx.lineTo(r * 0.1, -r * 0.1); ctx.lineTo(0, -r * 0.18); ctx.lineTo(-r * 0.1, -r * 0.1); ctx.lineTo(-r * 0.38, -r * 0.02); ctx.lineTo(-r * 0.66, -r * 0.12); ctx.closePath(); ctx.fill();
+                ctx.fillStyle = "#2A2A3A"; ctx.fillRect(-r * 0.76, -r * 0.33, r * 1.52, r * 0.05);
+                ctx.strokeStyle = "rgba(255,255,255,0.75)"; ctx.lineWidth = r * 0.025;
+                ctx.beginPath(); ctx.moveTo(-r * 0.58, -r * 0.24); ctx.lineTo(-r * 0.36, -r * 0.08); ctx.moveTo(r * 0.24, -r * 0.24); ctx.lineTo(r * 0.44, -r * 0.08); ctx.stroke();
+                ctx.restore();
+                // dientes apretados
+                ctx.fillStyle = "#3A0A00"; ctx.fillRect(-r * 0.36, r * 0.22, r * 0.72, r * 0.22);
+                ctx.fillStyle = "#FFFFFF"; ctx.fillRect(-r * 0.33, r * 0.25, r * 0.66, r * 0.16);
+                ctx.strokeStyle = "#3A0A00"; ctx.lineWidth = r * 0.018; ctx.beginPath();
+                for (let i = -3; i <= 3; i++) { ctx.moveTo(i * r * 0.09, r * 0.25); ctx.lineTo(i * r * 0.09, r * 0.41); }
+                ctx.moveTo(-r * 0.33, r * 0.33); ctx.lineTo(r * 0.33, r * 0.33); ctx.stroke();
+                // sombrero de sheriff saliendo volando
+                if (s.furyAnim > 0) {
+                    const p = 1 - s.furyAnim / 150;
+                    ctx.save(); ctx.translate(r * 1.5 * p, -r * 0.9 - r * 2.5 * p); ctx.rotate(p * 5); ctx.globalAlpha = 1 - p;
+                    ctx.fillStyle = "#7A4A1E"; ctx.beginPath(); ctx.ellipse(0, 0, r * 0.9, r * 0.18, 0, 0, Math.PI * 2); ctx.fill();
+                    ctx.fillRect(-r * 0.45, -r * 0.45, r * 0.9, r * 0.45);
+                    ctx.restore();
+                }
+                ctx.restore();
+                // manos abiertas (o temblando en la supernova)
+                [-1, 1].forEach(side => {
+                    const hp = sunHandPos(side);
+                    const aim = s.finger ? s.finger.base : Math.atan2(player.y - hp.y, player.x - hp.x);
+                    drawOpenHand(hp.x + (q ? (Math.random() - 0.5) * 8 : 0), hp.y, r * 0.3, aim);
+                });
+                // ondas de la supernova
+                if (q) {
+                    ctx.save(); ctx.lineWidth = 10;
+                    for (let i = 0; i < 3; i++) {
+                        const rr = r * 1.2 + ((q.t * 8 + i * 160) % 480);
+                        ctx.strokeStyle = `rgba(255, ${200 - i * 50}, 80, ${0.6 - ((q.t * 8 + i * 160) % 480) / 900})`;
+                        ctx.beginPath(); ctx.arc(x, y, rr, 0, Math.PI * 2); ctx.stroke();
+                    }
+                    ctx.restore();
+                }
+                // barra de vida
+                if (!q) {
+                    ctx.save(); ctx.translate(x, y);
+                    const pct = Math.max(0, meteor.hp / meteor.maxHp), barW = 300, barH = 16, top = -r * 1.75 - 40;
+                    ctx.fillStyle = "rgba(0,0,0,0.7)"; ctx.fillRect(-barW / 2, top, barW, barH);
+                    ctx.fillStyle = s.furyHalf ? "#FF3B30" : "#FF7A00"; ctx.fillRect(-barW / 2 + 1, top + 1, (barW - 2) * pct, barH - 2);
+                    ctx.strokeStyle = "#FFFFFF"; ctx.lineWidth = 2; ctx.strokeRect(-barW / 2, top, barW, barH);
+                    ctx.fillStyle = "#FFD700"; ctx.font = "bold 18px sans-serif"; ctx.textAlign = "center";
+                    ctx.fillText(`${LV.jefe.nombre_furioso || 'SOL FURIOSO'}: ${Math.ceil(meteor.hp)} / ${meteor.maxHp} HP`, 0, top - 8);
                     ctx.restore();
                 }
             }
@@ -2707,6 +3045,7 @@ codigo_juego_template = """
             }
 
             function update() {
+                if (sunQteActive()) { updateSunQTE(); return; }
                 if (victoryTimer > 0) { victoryTimer--; if (victoryTimer === 0 && !isGameOver) showVictory(); }
                 if(Math.random() < 0.003 && boxes.length < 5) spawnBox();
                 if(Math.random() < 0.0015 && redBoxes.length < 2) spawnRedBox();
@@ -2884,7 +3223,7 @@ codigo_juego_template = """
 
                     if(meteor.isBoss && !meteor.dead && l.owner !== meteor && Math.hypot(l.x - meteor.x, l.y - meteor.y) < meteor.r) {
                         meteor.hp -= dmg; hit = true;
-                        if(meteor.hp <= 0 && !meteor.dead) {
+                        if(meteor.hp <= 0 && !meteor.dead && !sunInterceptDeath()) {
                             meteor.dead = true; playSfx("bh_death", 2.5); 
                             floatingTexts.push({ x: meteor.x, y: meteor.y, text: "VICTORIA GALÁCTICA", icon: "star", iconBoth: true, color: "#FFD700", life: 300, size: 50 }); onBossDefeated();
                             if (bgMusic && audioSrc) { bgMusic.pause(); bgMusic.src = audioSrc; usingBossTrack = false; bgMusic.currentTime = 0; bgMusic.play().catch(e => console.log(e)); }
@@ -3215,7 +3554,7 @@ codigo_juego_template = """
                     }
                 }
 
-                if(!meteor.dead && LV.jefe.tipo === 'sol') { drawSunBoss(); }
+                if(!meteor.dead && LV.jefe.tipo === 'sol') { drawFingerLasers(); drawSunBoss(); }
                 else if(!meteor.dead) {
                     ctx.save(); ctx.translate(meteor.x, meteor.y); ctx.rotate(meteor.angle); ctx.beginPath(); ctx.arc(0, 0, meteor.r, 0, Math.PI * 2); 
                     ctx.fillStyle = meteor.isBoss ? (meteor.isPhase2 ? LV.jefe.color_fase2 : LV.jefe.color) : "#A9A9A9"; 
@@ -3356,6 +3695,7 @@ codigo_juego_template = """
                 if(player.continuousLaserTimer > 0) { buffSeg('dot', `LÁSER CONTINUO: ${(player.continuousLaserTimer/60).toFixed(1)}s`); }
                 ctx.restore();
                 drawAbilityBar();
+                drawSunQTEOverlay();
                 ctx.save(); ctx.textAlign = "center"; ctx.font = "bold 14px sans-serif"; ctx.fillStyle = "#FFD700";
                 ctx.fillText(`NIVEL ${levelIndex + 1}/${LEVELS.length}: ${String(LV.nombre).toUpperCase()}`, canvas.width / 2, 22);
                 ctx.fillStyle = DIFFS[difficulty].color; ctx.font = "bold 12px sans-serif";
